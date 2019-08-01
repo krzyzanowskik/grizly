@@ -3,12 +3,13 @@ import sqlparse
 from ..api import QFrame, union, join
 from ..io.sqlbuilder import write, build_column_strings, get_sql
 import os
+from ..io.etl import *
 
 
 
 def write_out(out):
     with open(
-        os.getcwd() + "\\grizly\\tests\\output.sql",
+        os.getcwd() + "\\grizly\\grizly\\tests\\output.sql",
         "w",
     ) as f:
         f.write(out)
@@ -67,7 +68,7 @@ def test_from_dict_2():
 
 def test_read_excel():
     q = QFrame().read_excel(
-        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
+        os.getcwd() + "\\grizly\\grizly\\tests\\tables.xlsx",
         sheet_name="orders",
     )
     assert q.data["fields"]["Order"] == {
@@ -165,16 +166,27 @@ def test_write_sql_table():
 
 def test_to_sql():
     q = QFrame().read_excel(
-        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
+        os.getcwd() + "\\grizly\\grizly\\tests\\tables.xlsx",
         sheet_name="cb_invoices",
     )
-    engine = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
+    engine = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
     q.assign(sales="Quantity*UnitPrice")
     q.groupby(["TrackId"])[("Quantity")].agg("sum")
     q.get_sql()
     df = q.to_sql(engine_string=engine)
-    testdata = str({'fields': {'InvoiceLineId': {'type': 'dim', 'group_by': ''}, 'InvoiceId': {'type': 'dim', 'group_by': ''}, 'TrackId': {'type': 'dim', 'group_by': 'group'}, 'UnitPrice': {'type': 'num', 'group_by': ''}, 'Quantity': {'type': 'num', 'group_by': 'sum', 'as': 'sum_Quantity'}, 'sales': {'type': 'num', 'as': 'sales', 'group_by': '', 'expression': 'invoice_items.Quantity*invoice_items.UnitPrice'}}, 'schema': '', 'table': 'invoice_items', 
-    'sql_blocks': {'select_names': ['invoice_items.InvoiceLineId', 'invoice_items.InvoiceId', 'invoice_items.TrackId', 'invoice_items.UnitPrice', 'invoice_items.Quantity*invoice_items.UnitPrice as sales'], 'select_aliases': ['InvoiceLineId', 'InvoiceId', 'TrackId', 'UnitPrice', 'sales'], 'group_dimensions': ['invoice_items.TrackId'], 'group_values': ['sum(invoice_items.Quantity) as sum_Quantity']}})
+    testdata = str({'fields': {'InvoiceLineId': {'type': 'dim', 'group_by': ''}, 
+            'InvoiceId': {'type': 'dim', 'group_by': ''}, 'TrackId': {'type': 'dim', 'group_by': 'group'}, 
+            'UnitPrice': {'type': 'num', 'group_by': ''}, 
+            'Quantity': {'type': 'num', 'group_by': 'sum', 'as': 'sum_Quantity'}, 
+            'sales': {'type': 'num', 'as': 'sales', 'group_by': '', 'expression': 'invoice_items.Quantity*invoice_items.UnitPrice'}}, 
+            'schema': '', 
+            'table': 'invoice_items', 
+        'sql_blocks': {'select_names': ['invoice_items.InvoiceLineId', 'invoice_items.InvoiceId', 'invoice_items.TrackId', 'invoice_items.UnitPrice', 'sum(invoice_items.Quantity) as sum_Quantity', 'invoice_items.Quantity*invoice_items.UnitPrice as sales'], 
+            'select_aliases': ['InvoiceLineId', 'InvoiceId', 'TrackId', 'UnitPrice', 'sum_Quantity', 'sales'], 
+            'group_dimensions': ['invoice_items.TrackId'], 
+            'group_values': ['sum(invoice_items.Quantity) as sum_Quantity'], 
+            'types': ['VARCHAR(500)', 'VARCHAR(500)', 'VARCHAR(500)', 'FLOAT(53)', 'FLOAT(53)', 'FLOAT(53)']}})
+    
     # write_out(str(q.data))
     assert testdata == str(q.data)
 
@@ -201,7 +213,7 @@ def test_build_column_strings():
     }
     q = QFrame().from_dict(orders)
     assert build_column_strings(q).data["sql_blocks"]["select_names"] == ["Orders.Order_Nr as Bookings","Orders.Value", "Orders.Value/100 as Value_div"]
-    assert build_column_strings(q).data["sql_blocks"]["select_aliases"] == ["Order_Nr", "Value","Value_div"]
+    assert build_column_strings(q).data["sql_blocks"]["select_aliases"] == ["Bookings", "Value","Value_div"]
 
 def test_create_sql_blocks():
     orders = {
@@ -247,11 +259,11 @@ def test_get_sql():
     testsql = """SELECT Orders.Order_Nr AS Bookings,
                     Orders.Part AS Part,
                     Orders.Customer,
+                    sum(Orders.Value) AS sum_Value,
                     CASE
                         WHEN Bookings = 100 THEN 1
                         ELSE 0
-                    END AS New_case,
-                    sum(Orders.Value) AS sum_Value
+                    END AS New_case
                 FROM Orders
                 GROUP BY Orders.Order_Nr,
                         Orders.Part,
@@ -264,24 +276,29 @@ def test_get_sql():
 
 def test_get_sql_with_select_attr():
     q = QFrame().read_excel(
-        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
+        os.getcwd() + "\\grizly\\grizly\\tests\\tables.xlsx",
         sheet_name="orders",
     )
     testsql = """
-                SELECT orders.Order AS
-            ORDER Number, orders.Part,
-                        orders.CustomerID_1,
-                        CASE
-                            WHEN CustomerID_1 <> NULL THEN CustomerID_1
-                            ELSE CustomerID_2
-                        END AS CustomerID,
-                        sum(orders.Value) AS sum_Value
-            FROM orders_schema.orders
-            GROUP BY orders.Order,
-                    orders.Part,
-                    orders.CustomerID_1,
-                    orders.CustomerID_2
+        SELECT orders.Order AS ORDER Number, 
+                orders.Part,
+                orders.CustomerID_1,
+                sum(orders.Value) AS sum_Value,
+                CASE
+                    WHEN CustomerID_1 <> NULL THEN CustomerID_1
+                    ELSE CustomerID_2
+                END AS CustomerID
+        FROM orders_schema.orders
+        GROUP BY orders.Order,
+                orders.Part,
+                orders.CustomerID_1,
+                orders.CustomerID_2
             """
+
     sql = q.get_sql().sql
-    assert clean_testexpr(sql) == clean_testexpr(testsql)
     # write_out(str(sql))
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+
+
+def test_check_if_exists():
+    assert check_if_exists('fiscal_calendar_weeks','baseviews') == True

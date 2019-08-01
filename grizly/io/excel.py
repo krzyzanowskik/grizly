@@ -6,8 +6,8 @@ def read_excel(excel_path, sheet_name="", query=""):
         fields = pandas.read_excel(excel_path, sheet_name=sheet_name).fillna("")
     else:
         fields = pandas.read_excel(excel_path).fillna("")
-    if "schema" in fields:
-        schema = fields["schema"][0]
+
+    schema = "" if "schema" not in fields else fields["schema"][0]
     table = fields["table"][0]
 
     if query != "":
@@ -34,8 +34,10 @@ def read_excel(excel_path, sheet_name="", query=""):
                 columns_qf[attr]["select"] = row["select"]
         except:
             pass
+        try:
+            if row["custom_type"] != "":
+                columns_qf[attr]["custom_type"] = row["custom_type"]
+        except:
+            pass
            
-    if "schema" in fields:
-        return schema, table, columns_qf
-    else:
-        return "", table, columns_qf
+    return schema, table, columns_qf
