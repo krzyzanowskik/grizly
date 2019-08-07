@@ -77,7 +77,7 @@ FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
 ```
-* Aggregation
+* Aggregating fields
 ``` python
 
 q.groupby(['Customer_ID', 'Country'])['Sales']agg('sum')
@@ -94,7 +94,7 @@ WHERE Country IN ('France',
 GROUP BY ID,
          Territory
 ```
-* Expressions
+* Adding expressions
 ```python
 q.assign(type='num', group_by='sum', Sales_div="Sales/100")
 q.get_sql()
@@ -111,6 +111,22 @@ WHERE Country IN ('France',
 GROUP BY ID,
          Territory
 ```
+* Adding DISTINCT statement
+```python
+q.distinct()
+```
+```sql
+SELECT DISTINCT Customer_ID AS ID,
+                Country AS Territory,
+                sum(Sales) AS Sales,
+                sum(Sales/100) AS Sales_div
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory
+```
+
 ### But why?
 Currently Pandas does not support building interactive SQL queries with its api. Pandas is a great library with a great api so why not use the same api to generate SQL statements? This would make the data ecosystem more consistent for analysts and reduce their cognitive load when moving from databases to dataframes. And so here we are.
 
