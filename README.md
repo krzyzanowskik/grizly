@@ -1,35 +1,127 @@
-Grizly is a highly experimental library to generate SQL statements using the python pandas api. You can do this:
+Grizly is a highly experimental library to generate SQL statements using the python pandas api. 
+
+
+# **Getting started**
+The main class in grizly is called QFrame. You can load basic table information using a dictionary or an excel file.
 
 ```python
-columns = {'FY18_Sales':{'type':'num'}, 'FY19_Sales':{'type':'num'}
-           , 'Country':{'type':'dim'}, 'Year':{'type':'dum'}
+from grizly import QFrame
+```
+### Loading data from dictionary
+
+```python
+data = {'select': {
+           'fields': {
+                      'Customer_ID': {'type': 'dim', 'as': 'ID'},
+                      'Customer_Name': {'type': 'dim'},
+                      'Country': {'type': 'dim'},
+                      'Cur_Year':{'type': 'dim'},
+                      'FY18_Sales': {'type': 'num'}, 
+                      'FY19_Sales': {'type': 'num'}
+            },
+           'schema': 'sales_schema',
+           'table': 'sales_table'
+           }
           }
 
-q = QFrame(schema='sales_schema', table='sales_table').from_dict(columns)
-
-q['FY18_Orders'] = {'type':'num'} #add new column
-
-q.groupby(['Country'])['FY18_Sales', 'FY19_Sales'].agg('sum')
-q[((q['Country'] != 'France') & (q['Year'] != 2016))]
-sql(q)
+q = QFrame().from_dict(data)
+q.get_sql()
+print(q.sql)
 ```
+
+
 Which will generate this SQL:
 ```sql
-SELECT FY18_Sales, FY19_Sales, Country, Year, FY18_Orders, sum(sales_table.FY18_Sales), sum(sales_table.FY19_Sales) 
-FROM sales_schema.sales_table 
-WHERE Country<>'France' and Year<>2016 
-GROUP BY sales_table.Country
+SELECT Customer_ID AS ID,
+       Customer_Name,
+       Country,
+       Cur_Year,
+       FY18_Sales,
+       FY19_Sales
+FROM sales_schema.sales_table
 ```
-You can also do simple column calculations like so:
-
+### Data manipulation
+* Renaming fields
 ```python
-q['YoY_Sales'] = q['FY18_Sales'] - q['FY19_Sales']
-q.fields['YoY_Sales']['expr']
+q.rename({'Country': 'Territory', 'Cur_Year': 'Fiscal_Year'})
+q.get_sql()
+print(q.sql)
 ```
-Which for now does not generate valid SQL but will be in the future. For now it generates this expression:
-
 ```sql
-sales_table.FY18_Sales - sales_table.FY19_Sales
+SELECT Customer_ID AS ID,
+       Customer_Name,
+       Country AS Territory,
+       Cur_Year AS Fiscal_Year,
+       FY18_Sales,
+       FY19_Sales
+FROM sales_schema.sales_table
+```
+* Removing fields
+```python
+q.remove(['Customer_Name','Cur_Year'])
+q.get_sql()
+print(q.sql)
+```
+```sql
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       FY18_Sales,
+       FY19_Sales
+FROM sales_schema.sales_table 
+```
+* Adding WHERE clause
+``` python
+q.query("Country IN ('France', 'Germany')")
+q.get_sql()
+print(q.sql)
+```
+```sql
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       FY18_Sales,
+       FY19_Sales
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+```
+* Aggregation
+``` python
+
+q.groupby(['Customer_ID', 'Country'])['FY18_Sales'].agg('sum')['FY19_Sales'].agg('sum')
+q.get_sql()
+print(q.sql)
+```
+```sql
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       sum(FY18_Sales) AS FY18_Sales,
+       sum(FY19_Sales) AS FY19_Sales
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory
+```
+* Expressions
+```python
+q.assign(type='num', group_by='sum',FY18_Sales_France="CASE WHEN Country='France' THEN FY18_Sales ELSE 0 END" )
+q.get_sql()
+print(q.sql)
+```
+```sql
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       sum(FY18_Sales) AS FY18_Sales,
+       sum(FY19_Sales) AS FY19_Sales,
+       sum(CASE
+               WHEN Country='France' THEN FY18_Sales
+               ELSE 0
+           END) AS FY18_Sales_France
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory
 ```
 ### But why?
 Currently Pandas does not support building interactive SQL queries with its api. Pandas is a great library with a great api so why not use the same api to generate SQL statements? This would make the data ecosystem more consistent for analysts and reduce their cognitive load when moving from databases to dataframes. And so here we are.
