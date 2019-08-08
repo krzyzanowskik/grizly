@@ -126,18 +126,19 @@ FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
 GROUP BY ID,
-         Territory
+         Territory,
+         Customer
 ```
 * Adding DISTINCT statement
 ```python
 q.distinct()
 ```
 ```sql
-SELECT Customer_ID AS ID,
-       Country AS Territory,
-       sum(Sales) AS Sales,
-       sum(Sales/100) AS Sales_div,
-       Customer_Name || '_' || Customer_ID AS Customer
+SELECT DISTINCT Customer_ID AS ID,
+                Country AS Territory,
+                sum(Sales) AS Sales,
+                sum(Sales/100) AS Sales_div,
+                Customer_Name || '_' || Customer_ID AS Customer
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
