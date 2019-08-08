@@ -111,20 +111,39 @@ WHERE Country IN ('France',
 GROUP BY ID,
          Territory
 ```
-* Adding DISTINCT statement
 ```python
-q.distinct()
+q.assign(group_by='group', Customer="Customer_Name || '_' || Customer_ID")
+q.get_sql()
+print(q.sql)
 ```
 ```sql
-SELECT DISTINCT Customer_ID AS ID,
-                Country AS Territory,
-                sum(Sales) AS Sales,
-                sum(Sales/100) AS Sales_div
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       sum(Sales) AS Sales,
+       sum(Sales/100) AS Sales_div,
+       Customer_Name || '_' || Customer_ID AS Customer
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
 GROUP BY ID,
          Territory
+```
+* Adding DISTINCT statement
+```python
+q.distinct()
+```
+```sql
+SELECT Customer_ID AS ID,
+       Country AS Territory,
+       sum(Sales) AS Sales,
+       sum(Sales/100) AS Sales_div,
+       Customer_Name || '_' || Customer_ID AS Customer
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory,
+         Customer
 ```
 
 ### But why?
