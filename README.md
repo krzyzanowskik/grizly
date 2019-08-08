@@ -112,7 +112,7 @@ GROUP BY ID,
          Territory
 ```
 ```python
-q.assign(group_by='group', Customer="Customer_Name || '_' || Customer_ID")
+q.assign(group_by='group', Sales_Positive="CASE WHEN Sales>0 THEN 1 ELSE 0 END")
 q.get_sql()
 print(q.sql)
 ```
@@ -120,14 +120,17 @@ print(q.sql)
 SELECT Customer_ID AS ID,
        Country AS Territory,
        sum(Sales) AS Sales,
-       sum(Sales/100) AS Sales_div,
-       Customer_Name || '_' || Customer_ID AS Customer
+       sum(Sales/100) AS Sales_Div,
+       CASE
+           WHEN Sales>0 THEN 1
+           ELSE 0
+       END AS Sales_Positive
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
 GROUP BY ID,
          Territory,
-         Customer
+         Sales_Positive
 ```
 * Adding DISTINCT statement
 ```python
@@ -137,14 +140,60 @@ q.distinct()
 SELECT DISTINCT Customer_ID AS ID,
                 Country AS Territory,
                 sum(Sales) AS Sales,
-                sum(Sales/100) AS Sales_div,
-                Customer_Name || '_' || Customer_ID AS Customer
+                sum(Sales/100) AS Sales_Div,
+                CASE
+                    WHEN Sales>0 THEN 1
+                    ELSE 0
+                END AS Sales_Positive
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
 GROUP BY ID,
          Territory,
-         Customer
+         Sales_Positive
+
+```
+* Adding ORDER BY statement
+```python
+q.orderby("Sales")
+```
+```sql
+SELECT DISTINCT Customer_ID AS ID,
+                Country AS Territory,
+                sum(Sales) AS Sales,
+                sum(Sales/100) AS Sales_Div,
+                CASE
+                    WHEN Sales>0 THEN 1
+                    ELSE 0
+                END AS Sales_Positive
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory,
+         Sales_Positive
+ORDER BY Sales
+```
+```python
+q.orderby(["Country", "Sales"], False)
+```
+```sql
+SELECT DISTINCT Customer_ID AS ID,
+                Country AS Territory,
+                sum(Sales) AS Sales,
+                sum(Sales/100) AS Sales_Div,
+                CASE
+                    WHEN Sales>0 THEN 1
+                    ELSE 0
+                END AS Sales_Positive
+FROM sales_schema.sales_table
+WHERE Country IN ('France',
+                  'Germany')
+GROUP BY ID,
+         Territory,
+         Sales_Positive
+ORDER BY Territory DESC,
+         Sales DESC
 ```
 
 ### But why?
