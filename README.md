@@ -15,7 +15,7 @@ data = {'select': {
                       'CustomerId': {'type': 'dim', 'as': 'ID'},
                       'CustomerName': {'type': 'dim'},
                       'Country': {'type': 'dim'},
-                      'CurrentYear':{'type': 'dim'},
+                      'FiscalYear':{'type': 'dim'},
                       'Sales': {'type': 'num'}
             },
            'schema': 'sales_schema',
@@ -31,14 +31,14 @@ print(q.sql)
 SELECT CustomerId AS Id,
        CustomerName,
        Country,
-       CurrentYear,
+       FiscalYear,
        Sales
 FROM sales_schema.sales_table
 ```
 ### SQL manipulation
 * Renaming fields
 ```python
-q.rename({'Country': 'Territory', 'CurrentYear': 'CurrentFiscalYear'})
+q.rename({'Country': 'Territory', 'FiscalYear': 'FY'})
 q.get_sql()
 print(q.sql)
 ```
@@ -46,13 +46,13 @@ print(q.sql)
 SELECT CustomerId AS Id,
        CustomerName,
        Country AS Territory,
-       CurrentYear AS CurrentFiscalYear,
+       FiscalYear AS FY,
        Sales
 FROM sales_schema.sales_table
 ```
 * Removing fields
 ```python
-q.remove(['CustomerName', 'CurrentYear'])
+q.remove(['CustomerName', 'FiscalYear'])
 q.get_sql()
 print(q.sql)
 ```
