@@ -7,15 +7,15 @@ The main class in grizly is called QFrame. You can load basic table information 
 ```python
 from grizly import QFrame
 ```
-### Loading data from dictionary
+## Loading data from dictionary
 
 ```python
 data = {'select': {
            'fields': {
-                      'Customer_ID': {'type': 'dim', 'as': 'ID'},
-                      'Customer_Name': {'type': 'dim'},
+                      'CustomerId': {'type': 'dim', 'as': 'ID'},
+                      'CustomerName': {'type': 'dim'},
                       'Country': {'type': 'dim'},
-                      'Current_Year':{'type': 'dim'},
+                      'CurrentYear':{'type': 'dim'},
                       'Sales': {'type': 'num'}
             },
            'schema': 'sales_schema',
@@ -28,37 +28,37 @@ q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
-       Customer_Name,
+SELECT CustomerId AS Id,
+       CustomerName,
        Country,
-       Current_Year,
+       CurrentYear,
        Sales
 FROM sales_schema.sales_table
 ```
 ### SQL manipulation
 * Renaming fields
 ```python
-q.rename({'Country': 'Territory', 'Current_Year': 'Fiscal_Year'})
+q.rename({'Country': 'Territory', 'CurrentYear': 'CurrentFiscalYear'})
 q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
-       Customer_Name,
+SELECT CustomerId AS ID,
+       CustomerName,
        Country AS Territory,
-       Current_Year AS Fiscal_Year,
+       CurrentYear AS CurrentFiscalYear,
        Sales
 FROM sales_schema.sales_table
 ```
 * Removing fields
 ```python
-q.remove(['Customer_Name', 'Current_Year'])
+q.remove(['CustomerName', 'CurrentYear'])
 q.get_sql()
 print(q.sql)
 ```
 ```sql
 
-SELECT Customer_ID AS ID,
+SELECT CustomerId AS Id,
        Country AS Territory,
        Sales
 FROM sales_schema.sales_table
@@ -70,7 +70,7 @@ q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
+SELECT CustomerId AS Id,
        Country AS Territory,
        Sales
 FROM sales_schema.sales_table
@@ -80,35 +80,35 @@ WHERE Country IN ('France',
 * Aggregating fields
 ``` python
 
-q.groupby(['Customer_ID', 'Country'])['Sales']agg('sum')
+q.groupby(['CustomerId', 'Country'])['Sales']agg('sum')
 q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
+SELECT CustomerId AS Id,
        Country AS Territory,
        sum(Sales) AS Sales
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory
 ```
 * Adding expressions
 ```python
-q.assign(type='num', group_by='sum', Sales_div="Sales/100")
+q.assign(type='num', group_by='sum', Sales_Div="Sales/100")
 q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
+SELECT CustomerId AS Id,
        Country AS Territory,
        sum(Sales) AS Sales,
-       sum(Sales/100) AS Sales_div
+       sum(Sales/100) AS Sales_Div
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory
 ```
 ```python
@@ -117,7 +117,7 @@ q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT Customer_ID AS ID,
+SELECT CustomerId AS Id,
        Country AS Territory,
        sum(Sales) AS Sales,
        sum(Sales/100) AS Sales_Div,
@@ -128,7 +128,7 @@ SELECT Customer_ID AS ID,
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory,
          Sales_Positive
 ```
@@ -137,7 +137,7 @@ GROUP BY ID,
 q.distinct()
 ```
 ```sql
-SELECT DISTINCT Customer_ID AS ID,
+SELECT DISTINCT CustomerId AS Id,
                 Country AS Territory,
                 sum(Sales) AS Sales,
                 sum(Sales/100) AS Sales_Div,
@@ -148,7 +148,7 @@ SELECT DISTINCT Customer_ID AS ID,
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory,
          Sales_Positive
 
@@ -158,7 +158,7 @@ GROUP BY ID,
 q.orderby("Sales")
 ```
 ```sql
-SELECT DISTINCT Customer_ID AS ID,
+SELECT DISTINCT CustomerId AS Id,
                 Country AS Territory,
                 sum(Sales) AS Sales,
                 sum(Sales/100) AS Sales_Div,
@@ -169,7 +169,7 @@ SELECT DISTINCT Customer_ID AS ID,
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory,
          Sales_Positive
 ORDER BY Sales
@@ -178,7 +178,7 @@ ORDER BY Sales
 q.orderby(["Country", "Sales"], False)
 ```
 ```sql
-SELECT DISTINCT Customer_ID AS ID,
+SELECT DISTINCT CustomerId AS Id,
                 Country AS Territory,
                 sum(Sales) AS Sales,
                 sum(Sales/100) AS Sales_Div,
@@ -189,11 +189,70 @@ SELECT DISTINCT Customer_ID AS ID,
 FROM sales_schema.sales_table
 WHERE Country IN ('France',
                   'Germany')
-GROUP BY ID,
+GROUP BY Id,
          Territory,
          Sales_Positive
 ORDER BY Territory DESC,
          Sales DESC
+```
+
+## Loading data from excel file
+Now we will be loading fields information from excel file. Your excel file must contain following columns:
+* **column** - Name of the column in **table**.
+* **column_type** - Type of the column. Possibilities:
+
+     * **dim** - VARCHAR(500)  
+     * **num** - FLOAT
+     
+     Every column has to have specified type. If you want to sepcify another type check **custom_type**.
+* **expression** - Expression, eg. CASE statement, column operation, CONCAT statement, ... . In the case of expression **column** should be empty and the alias (name) of the expression should be placed in **column_as**.
+* **column_as** - Column alias (name).
+* **group_by** - Aggregation type. Possibilities:
+
+     * **group** - This field will go to GROUP BY statement.
+     * **{sum, count, min, max, avg}** - This field will by aggregated in specified way.
+     
+     Please make sure that every field that is placed in SELECT statement (**select** !=0) is also placed in GROUP BY. 
+     If you don't want to aggregate fields leave **group_by** empty.
+* **select** - Set 0 to remove this field from SELECT statement.
+* **custom_type** - Specify custom SQL data type, eg. DATE.
+* **schema** - Name of the schema. Always in the first row.
+* **table** - Name of the table. Always in the first row.
+
+Now let's take a look at following example.
+
+![alt text](https://github.com/kfk/grizly/blob/0.2/grizly/docs/sales_fields_excel.png)
+
+In this case we also have a column **scope** which is used to filter rows in excel file and in that we are be able to create two different QFrames using **sales_table**. First QFrame contains information about the customer:
+```python
+customer_qf = QFrame().read_excel('sales_fields.xlsx', sheet_name='sales', query="scope == 'customer'")
+customer_qf.get_sql()
+print(customer_qf.sql)
+```
+```sql
+SELECT CustomerId AS Id,
+       LastName || FirstName AS CustomerName,
+       Email,
+       Country
+FROM sales_schema.sales_table
+```
+Second QFrame contains information about the customer's sales:
+```python
+sales_qf = QFrame().read_excel('sales_fields.xlsx', sheet_name='sales', query="scope == 'sales'")
+sales_qf.get_sql()
+print(sales_qf.sql)
+```
+```sql
+SELECT CustomerId AS Id,
+       TransactionDate,
+       sum(Sales) AS Sales,
+       count(CASE
+                 WHEN Sales > 0 THEN 1
+                 ELSE 0
+             END) AS Sales_Positive
+FROM sales_schema.sales_table
+GROUP BY Id,
+         TransactionDate
 ```
 
 ### But why?
@@ -203,6 +262,5 @@ Currently Pandas does not support building interactive SQL queries with its api.
 
 Of course any contribution is welcome, but right now it is all very experimental. Ideally in the future we:
 
-* add more sql capabilities (expressions, joins, etc.)
 * add support for various databases (now it's only tested on redshift)
 * add some visualizations with Altair
