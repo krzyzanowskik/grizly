@@ -43,7 +43,7 @@ q.get_sql()
 print(q.sql)
 ```
 ```sql
-SELECT CustomerId AS ID,
+SELECT CustomerId AS Id,
        CustomerName,
        Country AS Territory,
        CurrentYear AS CurrentFiscalYear,
