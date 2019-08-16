@@ -80,7 +80,7 @@ WHERE Country IN ('France',
 * Aggregating fields
 ``` python
 
-q.groupby(['CustomerId', 'Country'])['Sales']agg('sum')
+q.groupby(['CustomerId', 'Country'])['Sales'].agg('sum')
 q.get_sql()
 print(q.sql)
 ```
