@@ -623,7 +623,6 @@ class QFrame:
             >>> print(sql)
         """
         self.create_sql_blocks()
-
         self.sql = get_sql(self.data)
 
         print(self.sql)
@@ -660,6 +659,7 @@ class QFrame:
         """
 
         self.create_sql_blocks()
+        self.sql = get_sql(self.data)
 
         to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
         return self
@@ -742,7 +742,6 @@ class QFrame:
         QFrame
         """
         self.create_sql_blocks()
-
         self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
@@ -774,7 +773,6 @@ class QFrame:
         TODO: DataFarme types should correspond to types defined in QFrame data.
         """
         self.create_sql_blocks()
-
         self.sql = get_sql(self.data)
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
@@ -785,7 +783,7 @@ class QFrame:
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """
-        Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.read_sql.
+        Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
 
         Parameters
         ----------
@@ -1115,9 +1113,9 @@ def _validate_data(data):
                 raise AttributeError(f"""Field '{field}' has invalid attribute '{key_attr}'. Valid attributes:
                                         'type', 'as', 'group_by', 'order_by', 'expression', 'select', 'custom_type'""")
         if "type" in fields[field]:
-            type_ = fields[field]["type"]
-            if type_ not in ["dim", "num"]:
-                raise ValueError(f"""Field '{field}' has invalid value in type: '{type_}'. Valid values: 'dim', 'num'.""")
+            field_type = fields[field]["type"]
+            if field_type not in ["dim", "num"]:
+                raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
         else:
             raise AttributeError(f"Missing type attribute in field '{field}'.")
             
@@ -1128,8 +1126,8 @@ def _validate_data(data):
             group_by = fields[field]["group_by"]
             if group_by.upper() not in ["GROUP", "SUM", "COUNT", "MAX", "MIN", "AVG"]:
                 raise ValueError(f"""Field '{field}' has invalid value in  group_by: '{group_by}'. Valid values: '', 'group', 'sum', 'count', 'max', 'min', 'avg'""")
-            elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"] and type_ != 'num':
-                raise ValueError(f"Field '{field}' has value '{_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")          
+            elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"] and field_type != 'num':
+                raise ValueError(f"Field '{field}' has value '{field_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")          
                 
         if "order_by" in fields[field] and fields[field]["order_by"] != "":
             order_by = fields[field]["order_by"]
