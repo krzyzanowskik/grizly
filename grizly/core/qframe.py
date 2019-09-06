@@ -524,9 +524,12 @@ class QFrame:
                 print(f"Field {field} is not selected in subquery.")
 
             else:
-                alias = field if "as" not in sq_fields[field] else sq_fields[field]["as"]
+                if "as" in sq_fields[field] and sq_fields[field]["as"] != '':
+                    alias = sq_fields[field]["as"] 
+                else:
+                    alias = field
                 new_fields[f"sq.{alias}"] = {"type": sq_fields[field]["type"], "as": alias}
-                if "custom_type" in sq_fields[field]:
+                if "custom_type" in sq_fields[field] and sq_fields[field]['custom_type'] !='':
                     new_fields[f"sq.{alias}"]["custom_type"] = sq_fields[field]["custom_type"]
 
         if new_fields:
@@ -622,6 +625,9 @@ class QFrame:
         self.create_sql_blocks()
 
         self.sql = get_sql(self.data)
+
+        print(self.sql)
+
         return self
 
 
@@ -653,7 +659,7 @@ class QFrame:
             If specified, return an iterator where chunksize is the number of rows to include in each chunk.
         """
 
-        self.get_sql()
+        self.create_sql_blocks()
 
         to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
         return self
@@ -735,7 +741,9 @@ class QFrame:
         -------
         QFrame
         """
-        self.get_sql()
+        self.create_sql_blocks()
+
+        self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
         csv_to_s3(csv_path)
@@ -765,7 +773,9 @@ class QFrame:
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
         """
-        self.get_sql()
+        self.create_sql_blocks()
+
+        self.sql = get_sql(self.data)
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = pandas.read_sql(sql=self.sql, con=con)
@@ -998,7 +1008,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
                 for field in sq["fields"]:
                     if field == alias or "as" in sq["fields"][field] and sq["fields"][field]["as"] == alias:
                         data["select"]["fields"][f"sq{iterator}.{alias}"] = {"type": sq["fields"][field]["type"], "as": alias}
-                        if "custom_type" in sq["fields"][field]:
+                        if "custom_type" in sq["fields"][field] and sq["fields"][field]["custom_type"] != "":
                             data["select"]["fields"][f"sq{iterator}.{alias}"]["custom_type"] = sq["fields"][field]["custom_type"]
                         break
 
@@ -1066,9 +1076,13 @@ def union(qframes=[], union_type=None):
         if "select" in fields[field] and fields[field]["select"] == 0:
             continue
         else:
-            alias = field if "as" not in fields[field] else fields[field]["as"]
+            if "as" in fields[field] and fields[field]["as"] != "":
+                alias = fields[field]["as"]
+            else:
+                alias = field
+
             data["select"]["fields"][alias] = {"type": fields[field]["type"]}
-            if "custom_type" in fields[field]:
+            if "custom_type" in fields[field] and fields[field]["custom_type"] != "":
                 data["select"]["fields"][alias]["custom_type"] = fields[field]["custom_type"]
 
     data["select"]["union"] = {"union_type": union_type}
