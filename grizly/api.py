@@ -1,7 +1,8 @@
 from .core.qframe import (
     QFrame, 
     union, 
-    join
+    join,
+    initiate
 )
 
 from .core.utils import (

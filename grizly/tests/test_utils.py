@@ -2,7 +2,6 @@ import pytest
 import sqlparse
 import os
 from copy import deepcopy
-from grizly.core.utils import set_cwd
 
 from grizly.io.etl import (
     to_csv,
@@ -15,7 +14,8 @@ from grizly.io.etl import (
 from grizly.core.utils import (
     read_config,
     check_if_exists,
-    delete_where
+    delete_where,
+    set_cwd
 )
 
 

@@ -8,7 +8,8 @@ from pandas import read_sql, read_csv, merge, concat
 from grizly.core.qframe import (
     QFrame,
     union,
-    join
+    join,
+    initiate
 )
 
 from grizly.io.sqlbuilder import (
@@ -541,3 +542,21 @@ def test_union():
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
+
+
+def test_initiate():
+    columns = ['customer', 'billings']
+    json = 'test.json'
+    sq='test'
+    initiate(table='test_table', schema='test_schema', columns=columns, json_path=json, subquery=sq)
+    q = QFrame().read_json(json_path=json, subquery=sq)
+    os.remove('test.json')
+
+    testsql = """
+        SELECT customer,
+            billings
+        FROM test_schema.test_table
+        """
+
+    sql = q.get_sql().sql
+    assert clean_testexpr(testsql) == clean_testexpr(testsql) 

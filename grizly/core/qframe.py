@@ -138,9 +138,9 @@ class QFrame:
             data = json.load(f)
             if data != {}:
                 if subquery == '':
-                    data = self.validate_data(data)
+                    self.data = self.validate_data(data)
                 else:
-                    data = self.validate_data(data[subquery])
+                    self.data = self.validate_data(data[subquery])
             else:
                 self.data = data
         return self
@@ -191,8 +191,12 @@ class QFrame:
 
 
     def create_sql_blocks(self):
-        self.data['select']['sql_blocks'] = build_column_strings(self.data)
-        return self
+        if self.data == {}:
+            print("Your QFrame is empty.")
+            return self
+        else:
+            self.data['select']['sql_blocks'] = build_column_strings(self.data)
+            return self
 
 
     def rename(self, fields):
@@ -255,8 +259,8 @@ class QFrame:
         return self
 
 
-    def query(self, query, if_exists='append', operator='and' ):
-        """Creates a "where" attribute inside the data dictionary.
+    def query(self, query, if_exists='append', operator='and'):
+        """Adds WHERE statement.
         
         Examples
         --------
@@ -265,7 +269,7 @@ class QFrame:
         Parameters
         ----------
         query : str
-            [description]
+            Where statement.
         if_exists : {'append', 'replace'}, optional
             How to behave when the where clause already exists, by default 'append'
         operator : {'and', 'or'}, optional
@@ -275,6 +279,11 @@ class QFrame:
         -------
         QFrame
         """
+        if if_exists not in ["append", "replace"]:
+            raise ValueError("Invalid value in if_exists. Valid values: 'append', 'replace'.")
+        if operator not in ['and', 'or']:
+            raise ValueError("Invalid value in operator. Valid values: 'and', 'or'.")
+
         if "union" in self.data["select"]:
             print("You can't add where clause inside union. Use select() method first.")
         else:
@@ -284,28 +293,32 @@ class QFrame:
                 self.data["select"]["where"] += f" {operator} {query}"
         return self
 
-    def having(self, having, if_exists='append', operator='and' ):
-        """
-        HAVING
-        -----
-        Creates a "having" attribute inside the data dictionary.
-        Prepends the table name to each column field.
-        So Country = 'Italy' becomes Orders.Country = 'Italy'
-        >>> orders = dict with order table fields
-        >>> q = QFrame().from_dict(orders)
-        >>> expr = q.having("sum(Value)>1000 and count(Customer)<=65")
-        >>> assert expr.data["having"] == "sum(Value)>1000) and count(Customer)<=65"
+
+    def having(self, having, if_exists='append', operator='and'):
+        """Adds HAVING statement.
+        
+        Examples
+        --------
+        >>> q.having("sum(Value)>1000 and count(Customer)<=65")      
+
         Parameters
-        -----
-        having : string
-        if_exists :  {'append', 'replace'}
-            How to behave when the having clause already exists.
-        operator : {'and', 'or'}
-            How to add another condition to existing one.
+        ----------
+        having : str
+            Having statement.
+        if_exists : {'append', 'replace'}, optional
+            How to behave when the having clause already exists, by default 'append'
+        operator : {'and', 'or'}, optional
+            How to add another condition to existing one, by default 'and'
         """
+        if if_exists not in ["append", "replace"]:
+            raise ValueError("Invalid value in if_exists. Valid values: 'append', 'replace'.")
+        if operator not in ['and', 'or']:
+            raise ValueError("Invalid value in operator. Valid values: 'and', 'or'.")
+
         if "union" in self.data["select"]:
             print("""You can't add having clause inside union. Use select() method first.
             (The GROUP BY and HAVING clauses are applied to each individual query, not the final result set.)""")
+
         else:
             if 'having' not in self.data['select'] or if_exists=='replace':
                 self.data["select"]["having"] = having
@@ -314,21 +327,31 @@ class QFrame:
         return self
 
     def assign(self, type="dim", group_by="", **kwargs):
-        """
-        Assigns expressions.
-
-        Parameters:
-        ----------
-        type: {'dim', 'num'}, default 'dim
-            Column type.
-            * dim: VARCHAR(500)
-            * num: FLOAT(53)
-        group_by : {group, sum, count, min, max, avg, ""}, default ""
-
-        Examples:
+        """Assigns expressions.
+        
+        Examples
         --------
         >>> q.assign(value_x_two="Value * 2")
+
+        Parameters
+        ----------
+        type : {'dim', 'num'}, optional
+            Column type, by default "dim"
+
+            * dim: VARCHAR(500)
+            * num: FLOAT(53)
+        group_by : {group, sum, count, min, max, avg, ""}, optional
+            [description], by default ""
+        
+        Returns
+        -------
+        QFrame
         """
+        if type not in ["dim", "num"]:
+            raise ValueError("Invalid value in type. Valid values: 'dim', 'num'.")
+        if group_by.lower() not in ["group", "sum", "count", "min", "max", "avg", ""]:
+            raise ValueError("Invalid value in group_by. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg', ''.")
+
         if "union" in self.data["select"]:
             print("You can't assign expressions inside union. Use select() method first.")
         else:
@@ -345,22 +368,23 @@ class QFrame:
 
 
     def groupby(self, fields):
-        """
-        Adds GROUP BY statement.
+        """Adds GROUP BY statement.
+        
+        Examples
+        --------
+        >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
 
-        Parameters:
+        >>> q.groupby("Order")["Value"].agg("sum")
+
+        Parameters
         ----------
         fields : list or string
             List of fields or a field.
             NOTE : You have to pass the name of the field not the alias.
-
-        Examples:
-        --------
-            >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
-
-        --------
-        >>> q.groupby("Order")["Value"].agg("sum")
-
+        
+        Returns
+        -------
+        QFrame
         """
         assert "union" not in self.data["select"], "You can't group by inside union. Use select() method first."
 
@@ -369,82 +393,62 @@ class QFrame:
         for field in fields:
             self.data["select"]["fields"][field]["group_by"] = "group"
 
-
         return self
 
 
     def agg(self, aggtype):
-        """
-        Aggregates fields.
+        """Aggregates fields.
 
-        Parameters:
+        Examples
+        --------
+        >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
+
+        Parameters
         ----------
         aggtype : {'sum', 'count', 'min', 'max', 'avg'}
             Aggregation type.
 
-        Examples:
-        --------
-                >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
-
+        Returns
+        -------
+        QFrame
         """
+        if aggtype.lower() not in ["group", "sum", "count", "min", "max", "avg"]:
+            raise ValueError("Invalid value in aggtype. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg'.")
+
         if "union" in self.data["select"]:
             print("You can't aggregate inside union. Use select() method first.")
         else:
             if isinstance(*self.getfields, tuple):
                 self.getfields = list(*self.getfields)
 
-            if aggtype in ["sum", "count", "min", "max", "avg"]:
-                for field in self.getfields:
-                    if field in self.data["select"]["fields"]:
-                        self.data["select"]["fields"][field]["group_by"] = aggtype
-                    else:
-                        print("Field not found.")
-            else:
-                return print("Aggregation type must be sum, count, min, max or avg.")
+            for field in self.getfields:
+                if field in self.data["select"]["fields"]:
+                    self.data["select"]["fields"][field]["group_by"] = aggtype
+                else:
+                    print("Field not found.")
 
         return self
 
 
     def orderby(self, fields, ascending=True):
-        """
-        Adds ORDER BY statement.
-
-        Parameters:
-        ----------
-        fields : list or string
-            Fields in list or field as a string.
-        ascending : boolean or list, default True
-            Sort ascending vs. descending. Specify list for multiple sort orders.
-
-        Examples:
+        """Adds ORDER BY statement.
+        
+        Examples
         --------
-            qframe:
-            q ->    fields : customer_id, date, bookings
-                    table : orders
+        >>> q.orderby(["customer_id", "date"], [False, True])
 
-                >>> q.orderby(["customer_id", "date"], [False, True])
-                >>> q.get_sql()
-                >>> print(q.sql)
-                    SELECT  customer_id,
-                            date,
-                            bookings
-                    FROM
-                        orders
-                    ORDER BY
-                        customer_id DESC,
-                        date
-            --------
+        >>> q.orderby("customer_id")
 
-                >>> q.orderby("customer_id")
-                >>> q.get_sql()
-                >>> print(q.sql)
-                    SELECT  customer_id,
-                            date,
-                            bookings
-                    FROM
-                        orders
-                    ORDER BY
-                        customer_id
+        Parameters
+        ----------
+        fields : list or str
+            Fields in list or field as a string.
+        ascending : bool or list, optional
+            Sort ascending vs. descending. Specify list for multiple sort orders, by default True
+        
+        Returns
+        -------
+        QFrame
         """
         if isinstance(fields, str) : fields = [fields]
         if isinstance(ascending, bool) : ascending = [ascending for item in fields]
@@ -465,16 +469,16 @@ class QFrame:
 
 
     def limit(self, limit):
-        """
-        Adds LIMIT statement.
+        """Adds LIMIT statement.
 
-        Parameters:
+        Examples
+        --------
+        >>> q.limit(100)
+
+        Parameters
         ----------
         limit : int or str
             Number of rows to select.
-        Examples:
-        --------
-                >>> q.limit(100)
         """
         self.data["select"]["limit"] = str(limit)
 
@@ -482,26 +486,30 @@ class QFrame:
 
 
     def select(self, fields):
-        """
-        Creates a subquery that looks like "select sq.col1, sq.col2 from (some sql) sq.
+        """Creates a subquery that looks like "SELECT sq.col1, sq.col2 FROM (some sql) sq".
 
         NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created
         as a concat of "sq." and alias in the parent QFrame.
-
-        Parameters:
-        ----------
-        fields : list or string
-            Fields in list or field as a string.
-
-        Examples:
+        
+        Examples
         --------
-            qframe :
-            q -> fields : customer_id as 'customer', date, order
+        qframe :
+        q -> fields : customer_id as 'customer', date, order
 
-            >>> q.select(["customer_id", "order"])
+        >>> q.select(["customer_id", "order"])
 
-            q -> fields : sq.customer_id, sq.order
+        q -> fields : sq.customer_id, sq.order
+
+        Parameters
+        ----------
+        fields : list or str
+            Fields in list or field as a string.
+        
+        Returns
+        -------
+        QFrame
         """
+
         self.create_sql_blocks()
         sq_fields = deepcopy(self.data["select"]["fields"])
         new_fields = {}
@@ -635,10 +643,9 @@ class QFrame:
 
 
     def to_csv(self, csv_path, chunksize=None):
-        """
-        Writes QFrame table to csv file.
+        """Writes QFrame table to csv file.
 
-        Parameters:
+        Parameters
         ----------
         csv_path : string
             Path to csv file.
@@ -1133,3 +1140,65 @@ def _validate_data(data):
             raise ValueError(f"""Limit attribute has invalid value: '{limit}'.  Valid values: '', integer """)
             
     return data
+
+
+def initiate(table, schema, columns, json_path, subquery=''):
+    """Creates a dictionary with fields information for a Qframe and saves the data in json file.
+    
+    Parameters
+    ----------
+    table : str
+        Name of table.
+    schema : str
+        Name of schema.
+    columns : list
+        List of columns.
+    json_path : str
+        Path to output json file.
+    subquery : str, optional
+        Name of the query in json file. If this name already exists it will be overwritten, by default ''
+    """
+    if os.path.isfile(json_path):
+        with open(json_path, 'r') as f:
+            json_data = json.load(f)
+            if json_data =="":
+                json_data = {} 
+    else:
+        json_data = {}
+
+    fields = {}
+    
+    for col in columns:
+        field = {
+                    "type": "dim",
+                    "as": "",
+                    "group_by": "",
+                    "order_by": "",
+                    "expression": "",
+                    "select": "",
+                    "custom_type": ""
+                }
+        fields[col] = field
+
+    data = {
+            "select": {
+                "table": table,
+                "schema": schema,
+                "fields": fields,
+                "where": "",
+                "distinct": "",
+                "having": "",
+                "limit": "" 
+            }
+            }
+    
+    
+    if subquery != '':
+        json_data[subquery] = data
+    else:
+        json_data = data
+
+    with open(json_path, 'w') as f:
+        json.dump(json_data, f)
+        
+    print(f"Data saved in {json_path}")

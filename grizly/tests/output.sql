@@ -1,1 +1,3 @@
-{'select': {'fields': {'Order': {'type': 'dim', 'as': 'Bookings'}, 'Part': {'type': 'dim', 'as': 'Part'}, 'Customer': {'type': 'dim', 'as': 'ABC_DEF'}, 'Value': {'type': 'num'}}, 'table': 'Orders'}}
+SELECT customer,
+       billings
+FROM test_schema.test_table
