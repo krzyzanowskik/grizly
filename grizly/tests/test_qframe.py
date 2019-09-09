@@ -548,7 +548,7 @@ def test_initiate():
     columns = ['customer', 'billings']
     json = 'test.json'
     sq='test'
-    initiate(table='test_table', schema='test_schema', columns=columns, json_path=json, subquery=sq)
+    initiate(columns=columns, schema='test_schema', table='test_table', json_path=json, subquery=sq)
     q = QFrame().read_json(json_path=json, subquery=sq)
     os.remove('test.json')
 

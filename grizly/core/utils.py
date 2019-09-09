@@ -28,15 +28,15 @@ os.environ["HTTPS_PROXY"] = config["https"]
 #     return "Columns saved in excel."
 
 
-def get_columns(table, schema):
+def get_columns(schema, table):
     """Get columns from Denodo view.
     
     Parameters
     ----------
-    table : str
-        Name of table.
     schema : str
         Name of schema.
+    table : str
+        Name of table.
     """
     sql = f"""
         SELECT column_name
@@ -150,3 +150,11 @@ def set_cwd(*args):
     cwd = os.path.join(cwd, *args)
     return cwd
 
+
+def get_path(*args):
+    try:
+        cwd = os.environ['USERPROFILE']
+    except KeyError:
+        cwd = "Error with UserProfile"
+    cwd = os.path.join(cwd, *args)
+    return cwd

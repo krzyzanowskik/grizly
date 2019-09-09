@@ -11,7 +11,8 @@ from .core.utils import (
     delete_where,
     get_columns,
     copy_table,
-    set_cwd
+    set_cwd,
+    get_path
 )
 
 from .io.etl import (

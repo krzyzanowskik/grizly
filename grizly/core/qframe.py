@@ -47,23 +47,10 @@ class QFrame:
         Dictionary structure holding fields, schema, table, sql information.
 
     engine : str
-        Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC"
-
-    field : Each field is a dictionary with these keys. For instance, a
-            query field inside fields definition could look like
-
-            data = {"Country":{"as":"country_name", "group_by":"group"
-            , "table":"countries", "schema":"salestables"}}
-
-            In the above case "Country" is a field inside the data
-            dictionary
-
-            Field attributes (keys):
-            * as: the 'as' of the database column
-            * group_by: If this column is grouped. If it's a dim it's always a
-            group. If it's a num it can be any group agg (sum, count, max, min, etc.)
-            * expression: if this is a calculated field, this is an sql expression like
-            column_name * 2 or 'string_value' etc.
+        Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC".
+        Other engine strings:
+        * Redshift: "mssql+pyodbc://Redshift",
+        * MariaDB: "mssql+pyodbc://retool_dev_db"
     """
 
     def __init__(self, data={}, engine='', sql='', getfields=[]):
@@ -77,7 +64,7 @@ class QFrame:
 
 
     def validate_data(self, data):
-        """Validate loaded data.
+        """Validates loaded data.
         
         Parameters
         ----------
@@ -247,12 +234,11 @@ class QFrame:
 
 
     def distinct(self):
-        """
-        Adds DISTINCT statement.
+        """Adds DISTINCT statement.
 
-        Examples:
+        Examples
         --------
-            >>> q.distinct()
+        >>> q.distinct()
         """
         self.data["select"]["distinct"] = 1
 
@@ -287,7 +273,7 @@ class QFrame:
         if "union" in self.data["select"]:
             print("You can't add where clause inside union. Use select() method first.")
         else:
-            if 'where' not in self.data['select'] or if_exists=='replace':
+            if 'where' not in self.data['select'] or self.data['select']['where'] == '' or if_exists=='replace':
                 self.data["select"]["where"] = query
             elif if_exists=='append':
                 self.data["select"]["where"] += f" {operator} {query}"
@@ -320,7 +306,7 @@ class QFrame:
             (The GROUP BY and HAVING clauses are applied to each individual query, not the final result set.)""")
 
         else:
-            if 'having' not in self.data['select'] or if_exists=='replace':
+            if 'having' not in self.data['select'] and self.data['select']['having'] != '' or if_exists=='replace':
                 self.data["select"]["having"] = having
             elif if_exists=='append':
                 self.data["select"]["having"] += f" {operator} {having}"
@@ -540,8 +526,7 @@ class QFrame:
 
 
     def show_duplicated_columns(self):
-        """
-        Shows duplicated columns.
+        """Shows duplicated columns.
         """
         columns = {}
         fields = self.data["select"]["fields"]
@@ -570,21 +555,19 @@ class QFrame:
 
     
     def rearrange(self, fields):
-        """
-        Changes order of the columns.
+        """Changes order of the columns.
 
-        Parameters:
-        ----------
-        fields : list or string
-            Fields in list or field as a string.
-
-        Examples:
+        Examples
         ---------
-            qframe :
-            q -> fields : customer_id, date, order
+        qframe :
+        q -> fields : customer_id, date, order
 
-            >>> q.rearrange(["customer_id", "order", "date])
+        >>> q.rearrange(["customer_id", "order", "date])
 
+        Parameters
+        ----------
+        fields : list or str
+            Fields in list or field as a string.
         """
         
         if isinstance(fields, str) : fields = [fields]
@@ -603,24 +586,22 @@ class QFrame:
         return self
 
     def get_fields(self):
-        """
-        Returns list of fields names.
+        """Returns list of fields names.
         """ 
         fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields 
 
     def get_sql(self):
-        """
-        Overwrites the sql statement inside the class.
+        """Overwrites the SQL statement inside the class and prints saved string.
 
-        Examples:
+        Examples
         --------
 
-            >>> q = QFrame().read_excel(excel_path, sheet_name, query)
-            >>> q.get_sql()
-            >>> sql = q.sql
-            >>> print(sql)
+        >>> q = QFrame().read_excel(excel_path, sheet_name, query)
+        >>> q.get_sql()
+        >>> sql = q.sql
+        >>> print(sql)
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
@@ -631,16 +612,15 @@ class QFrame:
 
 
     def create_table(self, table, engine, schema=''):
-        """
-        Creates a new empty QFrame table in database if the table doesn't exist.
+        """Creates a new empty QFrame table in database if the table doesn't exist.
 
-        Parameters:
+        Parameters
         ----------
-        table : string
+        table : str
             Name of SQL table.
-        engine : string
+        engine : str
             Engine string (where we want to create table).
-        schema : string, optional
+        schema : str, optional
             Specify the schema.
         """
         create_table(qf=self, table=table, engine=engine, schema=schema)
@@ -652,7 +632,7 @@ class QFrame:
 
         Parameters
         ----------
-        csv_path : string
+        csv_path : str
             Path to csv file.
         chunksize : int, default None
             If specified, return an iterator where chunksize is the number of rows to include in each chunk.
@@ -666,12 +646,11 @@ class QFrame:
 
 
     def csv_to_s3(self, csv_path):
-        """
-        Writes csv file to s3 in 'teis-data' bucket.
+        """Writes csv file to s3 in 'teis-data' bucket.
 
-        Parameters:
+        Parameters
         ----------
-        csv_path : string
+        csv_path : str
             Path to csv file.
         """
         csv_to_s3(csv_path)
@@ -679,21 +658,22 @@ class QFrame:
 
 
     def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
-        """
-        Writes s3 to Redshift database.
+        """Writes s3 to Redshift database.
 
-        Parameters:
+        Parameters
         -----------
-        table : string
+        table : str
             Name of SQL table.
-        schema : string, optional
+        schema : str, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
             How to behave if the table already exists.
+
             * fail: Raise a ValueError.
             * replace: Clean table before inserting new values.
             * append: Insert new values to the existing table.
-        sep : string, default '\t'
+
+        sep : str, default '\t'
             Separator/delimiter in csv file.
         """
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
@@ -753,22 +733,23 @@ class QFrame:
         return self
 
     def write_to(self, table, schema=''):
-        """
-        Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+        """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
 
-        Parameters:
-        -----
+        Parameters
+        ----------
         qf: QFrame object
-        table: string
-        schema: string
+
+        table: str
+
+        schema: str
+
         """
         write_to(qf=self,table=table,schema=schema)
         return self
 
 
     def to_df(self):
-        """
-        Writes QFrame to DataFrame. Uses pandas.read_sql. Returns DataFrame.
+        """Writes QFrame to DataFrame. Uses pandas.read_sql. Returns DataFrame.
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
         """
@@ -782,12 +763,11 @@ class QFrame:
 
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
-        """
-        Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
+        """Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
 
         Parameters
         ----------
-        table : string
+        table : str
             Name of SQL table.
         engine : str
             Engine string.
@@ -803,7 +783,7 @@ class QFrame:
         index : bool, default True
             Write DataFrame index as a column. Uses `index_label` as the column
             name in the table.
-        index_label : string or sequence, default None
+        index_label : str or sequence, default None
             Column label for index column(s). If None is given (default) and
             `index` is True, then the index names are used.
             A sequence should be given if the DataFrame uses MultiIndex.
@@ -830,7 +810,7 @@ class QFrame:
 
 
     def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
-        """[summary]
+        """Saves data to Excel file.
         
         Parameters
         ----------
@@ -860,8 +840,7 @@ class QFrame:
     
     
     def copy(self):
-        """
-        Copies QFrame.
+        """Makes a copy of QFrame.
         """
         data = deepcopy(self.data)
         engine = deepcopy(self.engine)
@@ -906,7 +885,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
     which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns set unique_col=False and
     after performing join please remove fields with the same aliases or rename the aliases.
 
-    Parameters:
+    Parameters
     ----------
     qframes : list
         List of qframes
@@ -924,7 +903,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
     TODO: Add validations on engines. QFarmes engines have to be the same.
 
-    Examples:
+    Examples
     --------
         qframes:
         q1 -> fields: customer_id, orders
@@ -1028,14 +1007,14 @@ def union(qframes=[], union_type=None):
     TODO: Add validations on columns and an option to check unioned columns.
     TODO: Add validations on engines.
 
-    Parameters:
+    Parameters
     ----------
     qframes : list
         List of qframes
     union_type : str or list
         Type or list of union types. Valid types: 'UNION', 'UNION ALL'.
 
-    Examples:
+    Examples
     --------
         qframes:
         q1 -> fields: customer_id, customer_name, orders
@@ -1154,17 +1133,17 @@ def _validate_data(data):
     return data
 
 
-def initiate(table, schema, columns, json_path, subquery=''):
+def initiate(columns, schema, table, json_path, subquery=""):
     """Creates a dictionary with fields information for a Qframe and saves the data in json file.
     
     Parameters
     ----------
-    table : str
-        Name of table.
-    schema : str
-        Name of schema.
     columns : list
         List of columns.
+    schema : str
+        Name of schema.
+    table : str
+        Name of table.
     json_path : str
         Path to output json file.
     subquery : str, optional
@@ -1181,8 +1160,9 @@ def initiate(table, schema, columns, json_path, subquery=''):
     fields = {}
     
     for col in columns:
+        type = "num" if "budget_rate" in col else "dim"
         field = {
-                    "type": "dim",
+                    "type": type,
                     "as": "",
                     "group_by": "",
                     "order_by": "",
