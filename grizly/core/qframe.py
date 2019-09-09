@@ -709,7 +709,7 @@ class QFrame:
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
         """
-        self.get_sql()
+        sql=self.get_sql().sql
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = pandas.read_sql(sql=self.sql, con=con)
