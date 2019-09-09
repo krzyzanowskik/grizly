@@ -1,0 +1,7 @@
+__pycache__
+*.PNG
+*.ini
+*.egg-info
+build
+.pyest_cache
+*.egg
