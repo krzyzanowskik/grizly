@@ -14,7 +14,8 @@ from grizly.io.etl import (
 from grizly.core.utils import (
     read_config,
     check_if_exists,
-    delete_where
+    delete_where,
+    set_cwd
 )
 
 
@@ -22,3 +23,8 @@ def test_check_if_exists():
     assert check_if_exists('fiscal_calendar_weeks','baseviews') == True
 
 
+def test_set_cwd():
+    cwd = set_cwd("test")
+    user_cwd = os.environ['USERPROFILE']
+    user_cwd = os.path.join(user_cwd, "test")
+    assert cwd == user_cwd

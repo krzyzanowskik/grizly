@@ -8,7 +8,8 @@ from pandas import read_sql, read_csv, merge, concat
 from grizly.core.qframe import (
     QFrame,
     union,
-    join
+    join,
+    initiate
 )
 
 from grizly.io.sqlbuilder import (
@@ -50,7 +51,8 @@ customers = {
                 "type": "dim",
                 "as": "Customer"
             }
-        }
+        },
+    "table": "Customers"
     }
 }
 
@@ -72,10 +74,19 @@ def clean_testexpr(testsql):
     testsql = testsql.lower()
     return testsql
 
-def test_save_json_and_read_json():
+
+def test_save_json_and_read_json1():
     q = QFrame().from_dict(deepcopy(customers))
-    q.save_json()
-    q.read_json()
+    q.save_json('qframe_data.json')
+    q.read_json('qframe_data.json')
+    os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
+    assert q.data == customers
+
+
+def test_save_json_and_read_json2():
+    q = QFrame().from_dict(deepcopy(customers))
+    q.save_json('qframe_data.json', 'alias')
+    q.read_json('qframe_data.json', 'alias')
     os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
     assert q.data == customers
 
@@ -531,3 +542,21 @@ def test_union():
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
+
+
+def test_initiate():
+    columns = ['customer', 'billings']
+    json = 'test.json'
+    sq='test'
+    initiate(columns=columns, schema='test_schema', table='test_table', json_path=json, subquery=sq)
+    q = QFrame().read_json(json_path=json, subquery=sq)
+    os.remove('test.json')
+
+    testsql = """
+        SELECT customer,
+            billings
+        FROM test_schema.test_table
+        """
+
+    sql = q.get_sql().sql
+    assert clean_testexpr(testsql) == clean_testexpr(testsql) 

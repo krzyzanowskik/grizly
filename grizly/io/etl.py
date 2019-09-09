@@ -15,7 +15,7 @@ config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def to_csv(qf,csv_path, sql, engine, sep='\t'):
+def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None):
     """
     Writes table to csv file.
 
@@ -29,6 +29,8 @@ def to_csv(qf,csv_path, sql, engine, sep='\t'):
         Engine string.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
+    chunksize : int, default None
+        If specified, return an iterator where chunksize is the number of rows to include in each chunk.
     """
     engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
@@ -44,7 +46,22 @@ def to_csv(qf,csv_path, sql, engine, sep='\t'):
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
         writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
-        writer.writerows(cursor.fetchall())
+
+        if isinstance(chunksize, int):
+            if chunksize == 1:
+                while True:
+                    row = cursor.fetchone()
+                    if not row:
+                        break
+                    writer.writerow(row)
+            else:
+                while True:
+                    rows = cursor.fetchmany(chunksize)
+                    if not rows:
+                        break
+                    writer.writerows(rows)
+        else:
+            writer.writerows(cursor.fetchall())
 
     cursor.close()
     con.close()
@@ -88,7 +105,7 @@ def create_table(qf, table, engine, schema=''):
         print("Table {} has been created successfully.".format(table_name))
 
 
-def csv_to_s3(csv_path, s3_name):
+def csv_to_s3(csv_path):
     """
     Writes csv file to s3 in 'teis-data' bucket.
 
@@ -96,37 +113,36 @@ def csv_to_s3(csv_path, s3_name):
     ----------
     csv_path : string
         Path to csv file.
-    s3_name : string
-        Name of s3.
     """
     s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
-    if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+
+    s3_name = os.path.basename(csv_path)
 
     bucket.upload_file(csv_path, 'bulk/' + s3_name)
-    print('{} file uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
+    print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), 'bulk/' + s3_name))
 
 
-def s3_to_csv(s3_name, csv_path):
+def s3_to_csv(csv_path):
     """
     Writes s3 in 'teis-data' bucket to csv file .
 
     Parameters:
     ----------
-    s3_name : string
-        Name of s3.
     csv_path : string
         Path to csv file.
     """
     s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
-    if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+    s3_name = os.path.basename(csv_path)
 
     with open(csv_path, 'wb') as data:
         bucket.download_fileobj('bulk/' + s3_name, data)
-    print('{} uploaded to {}'.format(s3_name, csv_path))
+    print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
 
@@ -247,7 +263,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     table : string
         Name of SQL table.
     s3_name : string
-        Name of s3.
+    
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -260,6 +276,9 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     use_col_names : boolean, default True
         If True the data will be loaded by the names of columns.
     """
+    if if_exists not in ("fail", "replace", "append"):
+        raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
+
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}'
@@ -280,7 +299,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
     col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
-    print("Loading {} data into {} ...".format(s3_name,table_name))
+    print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
 
     sql = """
         COPY {} {} FROM 's3://teis-data/bulk/{}'
@@ -297,7 +316,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
+def s3_to_rds(table, schema='', if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
 
@@ -305,8 +324,6 @@ def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
     -----------
     table : string
         Name of SQL table.
-    s3_name : string
-        Name of s3.
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -317,6 +334,9 @@ def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
+    if if_exists not in ("fail", "replace", "append"):
+        raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
+
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}'
@@ -331,9 +351,9 @@ def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
         else:
             pass
 
-    if s3_name[-4:] != '.csv': s3_name += '.csv'
+    s3_name = os.path.basename(csv_path)
 
-    print("Loading {} data into {} ...".format(s3_name,table_name))
+    print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
 
     sql = """
         COPY {} FROM 's3://teis-data/bulk/{}'
