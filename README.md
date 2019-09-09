@@ -4,8 +4,6 @@ Grizly is a highly experimental library to generate SQL statements using the pyt
 <<<<<<< HEAD
 # **Getting started!**
 =======
-# **Getting started**
->>>>>>> b2fd2ee9a20a4abf2922b8aff641d668ae882c57
 The main class in grizly is called QFrame. You can load basic table information using a dictionary or an excel file.
 
 ```python
