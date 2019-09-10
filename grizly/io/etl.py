@@ -263,7 +263,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     table : string
         Name of SQL table.
     s3_name : string
-    
+
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -369,7 +369,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
 
     engine.execute(sql)
     print(f'Data has been copied to {table_name}')
-    
+
 
 def write_to(qf, table, schema):
     """
