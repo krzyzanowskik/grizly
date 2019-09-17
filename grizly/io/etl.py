@@ -249,6 +249,9 @@ def df_clean(df):
     )
     df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
 
+    bool_cols = df.select_dtypes(bool).columns
+    df[bool_cols] = df[bool_cols].astype(int)
+
     return df
 
 
