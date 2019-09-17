@@ -146,7 +146,7 @@ def s3_to_csv(csv_path):
 
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, if_exists="fail", keep_csv=False):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, if_exists="fail", keep_csv=False):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
