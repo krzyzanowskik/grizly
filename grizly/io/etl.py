@@ -288,6 +288,9 @@ def df_clean(df):
     )
     df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
 
+    bool_cols = df.select_dtypes(bool).columns
+    df[bool_cols] = df[bool_cols].astype(int)
+
     return df
 
 
@@ -302,7 +305,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     table : string
         Name of SQL table.
     s3_name : string
-    
+
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -355,14 +358,15 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def s3_to_rds(table, schema='', if_exists='fail', sep='\t'):
+def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
-
     Parameters:
     -----------
-    table : string
-        Name of SQL table.
+    file_name : string
+        Name of the file to be uploaded.
+    table_name : string, optional
+        The name of the table. By default, equal to file_name.
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -373,40 +377,41 @@ def s3_to_rds(table, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
+
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
 
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    
+    if not table_name:
+        table_name = file_name
 
-    table_name = f'{schema}.{table}' if schema else f'{table}'
-
-    if check_if_exists(table, schema):
+    if check_if_exists(table_name, schema):
         if if_exists == 'fail':
-            raise ValueError("Table {} already exists".format(table_name))
+            raise ValueError(f"Table {table_name} already exists")
         elif if_exists == 'replace':
-            sql ="DELETE FROM {}".format(table_name)
+            sql = f"DELETE FROM {schema}.{table_name}"
             engine.execute(sql)
-            print('SQL table has been cleaned up successfully.')
+            print(f'Table {table_name} has been cleaned up successfully.')
         else:
             pass
 
-    s3_name = os.path.basename(csv_path)
 
-    print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
-
-    sql = """
-        COPY {} FROM 's3://teis-data/bulk/{}'
-        access_key_id '{}'
-        secret_access_key '{}'
-        delimiter '{}'
+    print(f"Loading data into {table_name}...")
+    sql = f"""
+        COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'
+        access_key_id '{config["akey"]}'
+        secret_access_key '{config["skey"]}'
+        delimiter '{sep}'
         NULL ''
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, s3_name, config["akey"], config["skey"], sep)
+        """
 
     engine.execute(sql)
-    print('Data has been copied to {}'.format(table_name))
+    print(f'Data has been copied to {table_name}')
+
 
 def write_to(qf, table, schema):
     """
