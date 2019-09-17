@@ -185,7 +185,7 @@ def s3_to_csv(csv_path):
 
 
 
-def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, clean_df=False, keep_csv=False):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, if_exists="fail", keep_csv=False):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -199,12 +199,12 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, clean_df=F
         change the column type, this needs to be changed TODO
     """
 
-    ACCESS_KEY = config['akey']
-    SECRET_KEY = config['skey']
-    REGION = config['region']
+    ACCESS_KEY = config["akey"]
+    SECRET_KEY = config["skey"]
+    REGION = config["region"]
 
     if engine is None:
-        engine = create_engine("mssql+pyodbc://Redshift", poolclass=NullPool)
+        engine = create_engine('mssql+pyodbc://Redshift')
 
     s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
     bucket = s3.Bucket('teis-data')
@@ -212,12 +212,18 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, clean_df=F
     filename = table_name + '.csv'
     filepath = os.path.join(os.getcwd(), filename)
 
+    if delete_first:
+        remove_from_s3(table_name)
+        s3_file = s3.Object('teis-data', filename)
+        s3_file.delete()
+
     if clean_df:
         df = df_clean(df)
+
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
 
-    df.to_csv(filepath, sep=sep, encoding='utf-8', index=False)
+    df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=100000)
     print(f'{filename} created in {filepath}')
 
     bucket.upload_file(filepath, f"bulk/{filename}")
@@ -227,14 +233,22 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, clean_df=F
         raise ValueError("Table already exists. Use if_exists='drop' or 'append' to override the table.")
     elif if_exists == "drop":
         engine.execute(f"DROP TABLE IF EXISTS {schema}.{table_name}")
-        try:
-            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
-        except:
-            pass
+        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
     elif if_exists == "append":
-        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype, if_exists="append")
+        pass
     else:
         raise ValueError("Please choose what to do in case the table exists. One of: drop/append.")
+
+    if not keep_csv:
+        os.remove(filepath)
+
+
+def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
+    """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
+
+    os.system(f"SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156 && aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}")
+
+    return None
 
 
 def clean_colnames(df):
@@ -382,7 +396,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
         raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
 
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
-    
+
     if not table_name:
         table_name = file_name
 
