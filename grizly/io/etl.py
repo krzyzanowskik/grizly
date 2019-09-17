@@ -214,6 +214,8 @@ def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
 
 def clean_colnames(df):
 
+    reserved_words = ["user"]
+
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
     df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
 
