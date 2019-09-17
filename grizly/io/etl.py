@@ -343,7 +343,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
         raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
 
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
-
+    
     if not table_name:
         table_name = file_name
 
