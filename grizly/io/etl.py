@@ -204,6 +204,14 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
         os.remove(filepath)
 
 
+def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
+    """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
+
+    os.system(f"SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156 && aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}")
+
+    return None
+
+
 def clean_colnames(df):
 
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
