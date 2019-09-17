@@ -19,7 +19,7 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None):
     """
     Writes table to csv file.
 
-    Parameters:
+    Parameters
     ----------
     csv_path : string
         Path to csv file.
@@ -71,7 +71,7 @@ def create_table(qf, table, engine, schema=''):
     """
     Creates a new table in database if the table doesn't exist.
 
-    Parameters:
+    Parameters
     ----------
     qf : QFrame object
     table : string
@@ -105,11 +105,50 @@ def create_table(qf, table, engine, schema=''):
         print("Table {} has been created successfully.".format(table_name))
 
 
+def to_s3(file_path: str, s3_name: str):
+    """Writes local file to s3 in 'teis-data' bucket with prefix 'bulk/'.
+
+    Examples
+    --------
+    >>> to_s3('emea_daily.xlsx', 'dbb/ENG_EMEA/emea_daily.xlsx')
+    
+    Parameters
+    ----------
+    file_path : str
+        Path to the file.
+    s3_name : str
+        Name of s3_file. Should be: 'repo_name/file_name'.
+    """
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    bucket = s3.Bucket('teis-data')
+
+    bucket.upload_file(file_path, 'bulk/' + s3_name)
+    print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), 'bulk/' + s3_name))
+
+
+def read_s3(file_path: str, s3_name: str):
+    """Downloads s3 file from 'teis-data' bucket with prefix 'bulk/' to local file.
+    
+    Parameters
+    ----------
+    file_path : str
+        Path to the file.
+    s3_name : str
+        Name of s3_file.
+    """
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    bucket = s3.Bucket('teis-data')
+
+    with open(file_path, 'wb') as data:
+        bucket.download_fileobj('bulk/' + s3_name, data)
+    print('{} uploaded to {}'.format('bulk/' + s3_name, os.path.basename(file_path)))
+
+
 def csv_to_s3(csv_path):
     """
     Writes csv file to s3 in 'teis-data' bucket.
 
-    Parameters:
+    Parameters
     ----------
     csv_path : string
         Path to csv file.
@@ -129,7 +168,7 @@ def s3_to_csv(csv_path):
     """
     Writes s3 in 'teis-data' bucket to csv file .
 
-    Parameters:
+    Parameters
     ----------
     csv_path : string
         Path to csv file.

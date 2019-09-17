@@ -228,7 +228,6 @@ class QFrame:
         Returns
         -------
         QFrame
-
         """
         if isinstance(fields, str) : fields = [fields]
 
@@ -244,6 +243,10 @@ class QFrame:
         Examples
         --------
         >>> q.distinct()
+
+        Returns
+        -------
+        QFrame
         """
         self.data["select"]["distinct"] = 1
 
@@ -300,6 +303,10 @@ class QFrame:
             How to behave when the having clause already exists, by default 'append'
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
+
+        Returns
+        -------
+        QFrame
         """
         if if_exists not in ["append", "replace"]:
             raise ValueError("Invalid value in if_exists. Valid values: 'append', 'replace'.")
@@ -470,6 +477,10 @@ class QFrame:
         ----------
         limit : int or str
             Number of rows to select.
+
+        Returns
+        -------
+        QFrame
         """
         self.data["select"]["limit"] = str(limit)
 
@@ -532,6 +543,10 @@ class QFrame:
 
     def show_duplicated_columns(self):
         """Shows duplicated columns.
+
+        Returns
+        -------
+        QFrame
         """
         columns = {}
         fields = self.data["select"]["fields"]
@@ -573,6 +588,10 @@ class QFrame:
         ----------
         fields : list or str
             Fields in list or field as a string.
+
+        Returns
+        -------
+        QFrame
         """
 
         if isinstance(fields, str) : fields = [fields]
@@ -591,8 +610,14 @@ class QFrame:
         return self
 
     def get_fields(self):
-        """Returns list of fields names.
+        """Gets list of QFrame fields.
+        
+        Returns
+        -------
+        list
+            List of fields names
         """
+            
         fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields
@@ -602,11 +627,11 @@ class QFrame:
 
         Examples
         --------
-
-        >>> q = QFrame().read_excel(excel_path, sheet_name, query)
         >>> q.get_sql()
-        >>> sql = q.sql
-        >>> print(sql)
+
+        Returns
+        -------
+        QFrame
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
@@ -627,6 +652,10 @@ class QFrame:
             Engine string (where we want to create table).
         schema : str, optional
             Specify the schema.
+
+        Returns
+        -------
+        QFrame
         """
         create_table(qf=self, table=table, engine=engine, schema=schema)
         return self
@@ -641,6 +670,10 @@ class QFrame:
             Path to csv file.
         chunksize : int, default None
             If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+
+        Returns
+        -------
+        QFrame
         """
 
         self.create_sql_blocks()
@@ -651,12 +684,16 @@ class QFrame:
 
 
     def csv_to_s3(self, csv_path):
-        """Writes csv file to s3 in 'teis-data' bucket.
+        """Writes csv file to s3 in 'teis-data/bulk' bucket.
 
         Parameters
         ----------
         csv_path : str
             Path to csv file.
+
+        Returns
+        -------
+        QFrame
         """
         csv_to_s3(csv_path)
         return self
@@ -666,9 +703,11 @@ class QFrame:
         """Writes s3 to Redshift database.
 
         Parameters
-        -----------
+        ----------
         table : str
             Name of SQL table.
+        s3_name : str
+            Name of s3 file from which we want to load data.
         schema : str, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -680,6 +719,10 @@ class QFrame:
 
         sep : str, default '\t'
             Separator/delimiter in csv file.
+
+        Returns
+        -------
+        QFrame
         """
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
@@ -742,21 +785,28 @@ class QFrame:
 
         Parameters
         ----------
-        qf: QFrame object
-
         table: str
-
+            Name of SQL table
         schema: str
+            Specify the schema
 
+        Returns
+        -------
+        QFrame
         """
         write_to(qf=self,table=table,schema=schema)
         return self
 
 
     def to_df(self):
-        """Writes QFrame to DataFrame. Uses pandas.read_sql. Returns DataFrame.
+        """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
+
+        Returns
+        -------
+        DataFrame
+            Data generated from sql.
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
@@ -846,6 +896,10 @@ class QFrame:
 
     def copy(self):
         """Makes a copy of QFrame.
+
+        Returns
+        -------
+        QFrame
         """
         data = deepcopy(self.data)
         engine = deepcopy(self.engine)
@@ -880,8 +934,7 @@ class QFrame:
 
 
 def join(qframes=[], join_type=None, on=None, unique_col=True):
-    """
-    Joins QFrame objects. Returns QFrame.
+    """Joins QFrame objects. Returns QFrame.
 
     Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame.
     If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFrame.
@@ -889,6 +942,64 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
     By default the joined QFrame will contain all fields from the first QFrame and all fields from the other QFrames
     which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns set unique_col=False and
     after performing join please remove fields with the same aliases or rename the aliases.
+
+    Examples
+    --------
+    qframes:
+    q1 -> fields: customer_id, orders
+    q2 -> fields: customer_id, orders as 'ord'
+
+    >>> q_joined = join(qframes=[q1,q2], join_type="LEFT JOIN", on="sq1.customer_id=sq2.customer_id")
+
+    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
+                        sq2.ord as 'ord'
+
+    >>> q_joined.get_sql()
+        SELECT  sq1.customer_id as 'customer_id',
+                sq1.orders as 'orders',
+                sq2.ord as 'ord'
+        FROM
+            (q1.sql) sq1
+        LEFT JOIN
+            (q2.sql) sq2
+        ON sq1.customer_id=sq2.customer_id
+
+    
+    qframes:
+    q1 -> fields: customer_id, orders
+    q2 -> fields: customer_id, orders as 'ord'
+    q3 -> fields: id, orders, date
+
+    >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", "inner join"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
+
+    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
+                        sq2.customer_id as 'customer_id', sq2.ord as 'ord',
+                        sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
+
+    >>> q_joined.show_duplicated_columns()
+        DUPLICATED COLUMNS:
+            customer_id : ['sq1.customer_id', 'sq2.customer_id']
+            orders : ['sq1.orders', 'sq3.orders']
+
+    >>> q_joined.remove(['sq2.customer_id', 'sq3.id'])
+    >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})
+
+    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1',
+                        sq2.ord as 'orders_2',
+                        sq3.orders as 'orders_3', sq3.date as 'date
+
+    >>> q_joined.get_sql()
+        SELECT  sq1.customer_id as 'customer_id',
+                sq1.orders as 'orders_1',
+                sq2.ord as 'orders_2',
+                sq3.orders as 'orders_3',
+                sq3.date as 'date
+        FROM
+            (q1.sql) sq1
+        CROSS JOIN
+            (q2.sql) sq2
+        INNER JOIN
+            (q3.sql) sq3 ON sq2.customer_id=sq3.id
 
     Parameters
     ----------
@@ -908,66 +1019,9 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
     TODO: Add validations on engines. QFarmes engines have to be the same.
 
-    Examples
-    --------
-        qframes:
-        q1 -> fields: customer_id, orders
-        q2 -> fields: customer_id, orders as 'ord'
-
-        >>> q_joined = join(qframes=[q1,q2], join_type="LEFT JOIN", on="sq1.customer_id=sq2.customer_id")
-
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
-                            sq2.ord as 'ord'
-
-        >>> q_joined.get_sql()
-        >>> print(q_joined.sql)
-            SELECT  sq1.customer_id as 'customer_id',
-                    sq1.orders as 'orders',
-                    sq2.ord as 'ord'
-            FROM
-                (q1.sql) sq1
-            LEFT JOIN
-                (q2.sql) sq2
-            ON sq1.customer_id=sq2.customer_id
-
-        ------------------------
-        qframes:
-        q1 -> fields: customer_id, orders
-        q2 -> fields: customer_id, orders as 'ord'
-        q3 -> fields: id, orders, date
-
-        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", "inner join"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
-
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
-                            sq2.customer_id as 'customer_id', sq2.ord as 'ord',
-                            sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
-
-        >>> q_joined.show_duplicated_columns()
-            DUPLICATED COLUMNS:
-                customer_id : ['sq1.customer_id', 'sq2.customer_id']
-                orders : ['sq1.orders', 'sq3.orders']
-
-        >>> q_joined.remove(['sq2.customer_id', 'sq3.id'])
-        >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})
-
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1',
-                            sq2.ord as 'orders_2',
-                            sq3.orders as 'orders_3', sq3.date as 'date
-
-        >>> q_joined.get_sql()
-        >>> print(q_joined.sql)
-            SELECT  sq1.customer_id as 'customer_id',
-                    sq1.orders as 'orders_1',
-                    sq2.ord as 'orders_2',
-                    sq3.orders as 'orders_3',
-                    sq3.date as 'date
-            FROM
-                (q1.sql) sq1
-            CROSS JOIN
-                (q2.sql) sq2
-            INNER JOIN
-                (q3.sql) sq3 ON sq2.customer_id=sq3.id
-
+    Returns
+    -------
+    QFrame
     """
     assert len(qframes) == len(join_type)+1 or len(qframes)==2 and isinstance(join_type,str), "Incorrect list size."
     assert len(qframes)==2 and isinstance(on,(int,str)) or len(join_type) == len(on) , "Incorrect list size."
@@ -1006,11 +1060,21 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
 
 def union(qframes=[], union_type=None):
-    """
-    Unions QFrame objects. Returns QFrame.
+    """Unions QFrame objects. Returns QFrame.
 
     TODO: Add validations on columns and an option to check unioned columns.
     TODO: Add validations on engines.
+
+    Examples
+    --------
+    >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
+    >>> q_unioned.get_sql()
+
+        q1.sql
+        UNION ALL
+        q2.sql
+        UNION
+        q3.sql
 
     Parameters
     ----------
@@ -1019,26 +1083,9 @@ def union(qframes=[], union_type=None):
     union_type : str or list
         Type or list of union types. Valid types: 'UNION', 'UNION ALL'.
 
-    Examples
-    --------
-        qframes:
-        q1 -> fields: customer_id, customer_name, orders
-        q2 -> fields: customer_id, customer, orders
-        q2 -> fields: id, customer, orders
-
-        >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
-
-        q_unioned -> fields: customer_id, customer_name, orders
-
-        >>> q_unioned.get_sql()
-        >>> print(q_unioned.sql)
-
-            q1.sql
-            UNION ALL
-            q2.sql
-            UNION
-            q3.sql
-
+    Returns
+    -------
+    QFrame
     """
     if isinstance(union_type, str) : union_type = [union_type]
 
