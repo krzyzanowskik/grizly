@@ -296,7 +296,10 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         if if_exists == 'fail':
             raise ValueError("Table {} already exists".format(table_name))
         elif if_exists == 'replace':
-            sql = f"DELETE FROM {schema}.{table}"
+            if schema:
+                sql = f"DELETE FROM {schema}.{table}"
+            else:
+                sql = f"DELETE FROM {table}"
             engine.execute(sql)
             print('SQL table has been cleaned up successfully.')
         else:
