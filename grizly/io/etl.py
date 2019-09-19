@@ -185,7 +185,7 @@ def s3_to_csv(csv_path):
 
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, if_exists="fail", keep_csv=False):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -228,16 +228,6 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
 
     bucket.upload_file(filepath, f"bulk/{filename}")
     print(f'bulk/{filename} file uploaded to s3')
-
-    if if_exists == "fail":
-        raise ValueError("Table already exists. Use if_exists='drop' or 'append' to override the table.")
-    elif if_exists == "drop":
-        engine.execute(f"DROP TABLE IF EXISTS {schema}.{table_name}")
-        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
-    elif if_exists == "append":
-        pass
-    else:
-        raise ValueError("Please choose what to do in case the table exists. One of: drop/append.")
 
     if not keep_csv:
         os.remove(filepath)
