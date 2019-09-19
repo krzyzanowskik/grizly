@@ -15,7 +15,7 @@ config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None):
+def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     """
     Writes table to csv file.
 
@@ -185,7 +185,7 @@ def s3_to_csv(csv_path):
 
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="append"):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -222,12 +222,15 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
 
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
-
-    df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=100000)
+    
+    df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
     bucket.upload_file(filepath, f"bulk/{filename}")
     print(f'bulk/{filename} file uploaded to s3')
+
+    if if_exists != "append":
+        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
 
     if not keep_csv:
         os.remove(filepath)
@@ -390,7 +393,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
 
     if not table_name:
-        table_name = file_name
+        table_name = file_name.replace(".csv", "")
 
     if check_if_exists(table_name, schema):
         if if_exists == 'fail':
