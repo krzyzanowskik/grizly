@@ -16,6 +16,8 @@ from .core.utils import (
 )
 
 from .io.etl import (
+    to_s3,
+    read_s3,
     csv_to_s3,
     s3_to_csv,
     s3_to_rds,
@@ -24,6 +26,10 @@ from .io.etl import (
 
 from .io.excel import (
     copy_df_to_excel
+)
+
+from .core.tools import (
+    Excel
 )
 
 

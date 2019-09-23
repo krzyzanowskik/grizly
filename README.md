@@ -1,7 +1,13 @@
 Grizly is a highly experimental library to generate SQL statements using the python pandas api. 
 
 
-# **Getting started**
+<<<<<<< HEAD
+# **Getting started!**
+=======
+
+# **Getting started!**
+
+>>>>>>> bba8b8ba45ac1daabd173b5145f93b58157c90d8
 The main class in grizly is called QFrame. You can load basic table information using a dictionary or an excel file.
 
 ```python
