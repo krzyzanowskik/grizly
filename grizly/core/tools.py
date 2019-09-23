@@ -25,9 +25,9 @@ class Excel:
         else:
             self.output_excel_path = os.path.join(os.path.split(excel_path)[0], 
                                         os.path.splitext(self.filename)[0] + '_working' + os.path.splitext(self.filename)[1])
-            
+        #self.book = book = openpyxl.load_workbook(self.input_excel_path)
     
-    def read_df(self, df, sheet, row=1, col=1, index=False, header=False):
+    def write_df(self, df, sheet, row=1, col=1, index=False, header=False):
         """Saves DatFrame in Excel file.
         
         Parameters
@@ -63,8 +63,39 @@ class Excel:
 
         return self
         
+    def write_value(self, sheet, row, col, value):
+        """Writes cell value to Excel file.
+        
+        Parameters
+        ----------
+        sheet : str
+            Name of sheet
+        row : int
+            Cell row
+        col : int
+            Cell column
 
-    def extract_value(self, sheet, row, col):
+        Returns
+        -------
+        float
+            Cell value
+        """
+        book = openpyxl.load_workbook(self.input_excel_path)
+
+        worksheet = book.get_sheet_by_name(sheet)
+        worksheet.cell(row=row, column=col, value=value)
+        book.save(filename = self.output_excel_path)
+        
+        print("Written value {} in sheet {}".format(value, sheet))
+
+        return self
+     
+    def save(self):
+        """save to workbook"""
+        #self.book.save()
+        pass
+
+    def get_value(self, sheet, row, col):
         """Extracts cell value from Excel file.
         
         Parameters
@@ -89,4 +120,34 @@ class Excel:
         xlApp.Quit()
         
         return value
+
+    def open(self, input=False):
+
+        if input == False:
+            path = self.input_excel_path
+        else:
+            path = self.output_excel_path
+
+        try:
+            excel = win32.gencache.EnsureDispatch('Excel.Application')
+            try:
+                xlwb = excel.Workbooks(path)
+            except Exception as e:
+                try:
+                    xlwb = excel.Workbooks.Open(path)
+                except Exception as e:
+                    print(e)
+                    xlwb = None
+            ws = wb.Worksheets('blaaaa') 
+            excel.Visible = True
+
+        except Exception as e:
+            print(e)
+
+        finally:
+            ws = None
+            wb = None
+            excel = None
+
+        return self
 
