@@ -18,8 +18,13 @@ from grizly.io.excel import (
     copy_df_to_excel
 )
 
-from grizly.io.etl import *
-from grizly.core.utils import *
+from grizly.io.etl import (
+    to_csv,
+    create_table,
+    csv_to_s3,
+    s3_to_rds_qf,
+    write_to
+)
 
 import openpyxl
 
@@ -65,12 +70,12 @@ class QFrame:
 
     def validate_data(self, data):
         """Validates loaded data.
-        
+
         Parameters
         ----------
         data : dict
             Dictionary structure holding fields, schema, table, sql information.
-        
+
         Returns
         -------
         dict
@@ -81,19 +86,19 @@ class QFrame:
 
     def save_json(self, json_path, subquery=''):
         """Saves QFrame.data to json file.
-        
+
         Parameters
         ----------
         json_path : str
             Path to json file.
         subquery : str, optional
-            [description], by default ''   
+            [description], by default ''
         """
         if os.path.isfile(json_path):
             with open(json_path, 'r') as f:
                 json_data = json.load(f)
                 if json_data =="":
-                    json_data = {} 
+                    json_data = {}
         else:
             json_data = {}
 
@@ -109,14 +114,14 @@ class QFrame:
 
     def read_json(self, json_path, subquery=''):
         """Reads QFrame.data from json file.
-        
+
         Parameters
         ----------
         json_path : str
             Path to json file.
         subquery : str, optional
             [description], by default ''
-        
+
         Returns
         -------
         QFrame
@@ -135,12 +140,12 @@ class QFrame:
 
     def from_dict(self, data):
         """Reads QFrame.data from dictionary.
-        
+
         Parameters
         ----------
         data : dict
             Dictionary structure holding fields, schema, table, sql information.
-        
+
         Returns
         -------
         QFrame
@@ -151,7 +156,7 @@ class QFrame:
 
     def read_excel(self, excel_path, sheet_name="", query=""):
         """Reads fields information from excel file.
-        
+
         Parameters
         ----------
         excel_path : str
@@ -160,7 +165,7 @@ class QFrame:
             Sheet name, by default ""
         query : str, optional
             Filter for rows in excel file, by default ""
-        
+
         Returns
         -------
         QFrame
@@ -188,16 +193,16 @@ class QFrame:
 
     def rename(self, fields):
         """Renames columns.
-        
+
         Examples
         --------
         >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
-        
+
         Parameters
         ----------
         fields : dict
             Dictionary of columns and their new names.
-        
+
         Returns
         -------
         QFrame
@@ -219,7 +224,7 @@ class QFrame:
         ----------
         fields : list
             List of fields to remove.
-        
+
         Returns
         -------
         QFrame
@@ -250,7 +255,7 @@ class QFrame:
 
     def query(self, query, if_exists='append', operator='and'):
         """Adds WHERE statement.
-        
+
         Examples
         --------
         >>> q.query("country!='Italy'")
@@ -263,7 +268,7 @@ class QFrame:
             How to behave when the where clause already exists, by default 'append'
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
-        
+
         Returns
         -------
         QFrame
@@ -285,10 +290,10 @@ class QFrame:
 
     def having(self, having, if_exists='append', operator='and'):
         """Adds HAVING statement.
-        
+
         Examples
         --------
-        >>> q.having("sum(Value)>1000 and count(Customer)<=65")      
+        >>> q.having("sum(Value)>1000 and count(Customer)<=65")
 
         Parameters
         ----------
@@ -321,7 +326,7 @@ class QFrame:
 
     def assign(self, type="dim", group_by="", **kwargs):
         """Assigns expressions.
-        
+
         Examples
         --------
         >>> q.assign(value_x_two="Value * 2")
@@ -335,7 +340,7 @@ class QFrame:
             * num: FLOAT(53)
         group_by : {group, sum, count, min, max, avg, ""}, optional
             [description], by default ""
-        
+
         Returns
         -------
         QFrame
@@ -352,9 +357,9 @@ class QFrame:
                 for key in kwargs:
                     expression = kwargs[key]
                     self.data["select"]["fields"][key] = {
-                        "type": type, 
-                        "as": key, 
-                        "group_by": group_by, 
+                        "type": type,
+                        "as": key,
+                        "group_by": group_by,
                         "expression": expression}
 
         return self
@@ -362,7 +367,7 @@ class QFrame:
 
     def groupby(self, fields):
         """Adds GROUP BY statement.
-        
+
         Examples
         --------
         >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
@@ -374,7 +379,7 @@ class QFrame:
         fields : list or string
             List of fields or a field.
             NOTE : You have to pass the name of the field not the alias.
-        
+
         Returns
         -------
         QFrame
@@ -425,7 +430,7 @@ class QFrame:
 
     def orderby(self, fields, ascending=True):
         """Adds ORDER BY statement.
-        
+
         Examples
         --------
         >>> q.orderby(["customer_id", "date"], [False, True])
@@ -438,7 +443,7 @@ class QFrame:
             Fields in list or field as a string.
         ascending : bool or list, optional
             Sort ascending vs. descending. Specify list for multiple sort orders, by default True
-        
+
         Returns
         -------
         QFrame
@@ -487,7 +492,7 @@ class QFrame:
 
         NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created
         as a concat of "sq." and alias in the parent QFrame.
-        
+
         Examples
         --------
         qframe :
@@ -501,7 +506,7 @@ class QFrame:
         ----------
         fields : list or str
             Fields in list or field as a string.
-        
+
         Returns
         -------
         QFrame
@@ -522,7 +527,7 @@ class QFrame:
 
             else:
                 if "as" in sq_fields[field] and sq_fields[field]["as"] != '':
-                    alias = sq_fields[field]["as"] 
+                    alias = sq_fields[field]["as"]
                 else:
                     alias = field
                 new_fields[f"sq.{alias}"] = {"type": sq_fields[field]["type"], "as": alias}
@@ -568,7 +573,7 @@ class QFrame:
             print("There are no duplicated columns.")
         return self
 
-    
+
     def rearrange(self, fields):
         """Changes order of the columns.
 
@@ -588,7 +593,7 @@ class QFrame:
         -------
         QFrame
         """
-        
+
         if isinstance(fields, str) : fields = [fields]
 
         old_fields = deepcopy(self.data['select']['fields'])
@@ -612,16 +617,22 @@ class QFrame:
         list
             List of fields names
         """
+            
         fields = list(self.data['select']['fields'].keys()) if self.data else []
 
-        return fields 
+        return fields
 
-    def get_sql(self):
+    def get_sql(self, print=True):
         """Overwrites the SQL statement inside the class and prints saved string.
 
         Examples
         --------
         >>> q.get_sql()
+
+        Parameters
+        ----------
+        print : bool, optional
+            If True prints generated SQL statement.
 
         Returns
         -------
@@ -630,7 +641,8 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        print(self.sql)
+        if print:
+            print(self.sql)
 
         return self
 
@@ -758,7 +770,7 @@ class QFrame:
             If True the data will be loaded by the names of columns, by default True
         chunksize : int, optional
             If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
-        
+
         Returns
         -------
         QFrame
@@ -860,7 +872,7 @@ class QFrame:
 
     def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
         """Saves data to Excel file.
-        
+
         Parameters
         ----------
         input_excel_path : [type]
@@ -877,7 +889,7 @@ class QFrame:
             [description], by default False
         header : bool, optional
             [description], by default False
-        
+
         Returns
         -------
         QFrame
@@ -886,8 +898,8 @@ class QFrame:
         copy_df_to_excel(df=df, input_excel_path=input_excel_path, output_excel_path=output_excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol,index=index, header=header)
 
         return df
-    
-    
+
+
     def copy(self):
         """Makes a copy of QFrame.
 
@@ -1120,15 +1132,15 @@ def _validate_data(data):
 
     if "select" not in data:
         raise AttributeError("Missing 'select' attribute.")
-        
+
     select = data["select"]
 
     if "table" not in select and "join" not in select and "union" not in select and "sq" not in data:
         raise AttributeError("Missing 'table' attribute.")
-    
+
     if "fields" not in select:
         raise AttributeError("Missing 'fields' attribute.")
-        
+
     fields = select["fields"]
 
 
@@ -1143,45 +1155,45 @@ def _validate_data(data):
                 raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
         else:
             raise AttributeError(f"Missing type attribute in field '{field}'.")
-            
+
         if "as" in fields[field]:
             fields[field]["as"] = fields[field]["as"].replace(" ", "_")
-            
+
         if "group_by" in fields[field] and fields[field]["group_by"] != "":
             group_by = fields[field]["group_by"]
             if group_by.upper() not in ["GROUP", "SUM", "COUNT", "MAX", "MIN", "AVG"]:
                 raise ValueError(f"""Field '{field}' has invalid value in  group_by: '{group_by}'. Valid values: '', 'group', 'sum', 'count', 'max', 'min', 'avg'""")
             elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"] and field_type != 'num':
-                raise ValueError(f"Field '{field}' has value '{field_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")          
-                
+                raise ValueError(f"Field '{field}' has value '{field_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")
+
         if "order_by" in fields[field] and fields[field]["order_by"] != "":
             order_by = fields[field]["order_by"]
             if order_by.upper() not in ["DESC", "ASC"]:
                 raise ValueError(f"""Field '{field}' has invalid value in order_by: '{order_by}'. Valid values: '', 'desc', 'asc'""")
-                
+
         if "select" in fields[field] and fields[field]["select"] != "":
             is_selected = fields[field]["select"]
             if str(int(is_selected)) != "0":
                 raise ValueError(f"""Field '{field}' has invalid value in select: '{is_selected}'.  Valid values: '', '0'""")
-                
+
     if "distinct" in select and select["distinct"] != "":
         distinct = select["distinct"]
         if str(int(distinct)) != "1":
             raise ValueError(f"""Distinct attribute has invalid value: '{distinct}'.  Valid values: '', '1'""")
-            
+
     if "limit" in select and select["limit"] != "":
         limit = select["limit"]
         try:
             int(limit)
         except:
             raise ValueError(f"""Limit attribute has invalid value: '{limit}'.  Valid values: '', integer """)
-            
+
     return data
 
 
 def initiate(columns, schema, table, json_path, subquery=""):
     """Creates a dictionary with fields information for a Qframe and saves the data in json file.
-    
+
     Parameters
     ----------
     columns : list
@@ -1199,14 +1211,14 @@ def initiate(columns, schema, table, json_path, subquery=""):
         with open(json_path, 'r') as f:
             json_data = json.load(f)
             if json_data =="":
-                json_data = {} 
+                json_data = {}
     else:
         json_data = {}
 
     fields = {}
-    
+
     for col in columns:
-        type = "num" if "budget_rate" in col else "dim"
+        type = "num" if "amount" in col else "dim"
         field = {
                     "type": type,
                     "as": "",
@@ -1226,11 +1238,11 @@ def initiate(columns, schema, table, json_path, subquery=""):
                 "where": "",
                 "distinct": "",
                 "having": "",
-                "limit": "" 
+                "limit": ""
             }
             }
-    
-    
+
+
     if subquery != '':
         json_data[subquery] = data
     else:
@@ -1238,5 +1250,5 @@ def initiate(columns, schema, table, json_path, subquery=""):
 
     with open(json_path, 'w') as f:
         json.dump(json_data, f)
-        
+
     print(f"Data saved in {json_path}")
