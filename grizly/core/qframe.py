@@ -622,7 +622,7 @@ class QFrame:
 
         return fields
 
-    def get_sql(self, print=True):
+    def get_sql(self, print_sql=True):
         """Overwrites the SQL statement inside the class and prints saved string.
 
         Examples
@@ -631,7 +631,7 @@ class QFrame:
 
         Parameters
         ----------
-        print : bool, optional
+        print_sql : bool, optional
             If True prints generated SQL statement.
 
         Returns
@@ -641,7 +641,7 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        if print:
+        if print_sql:
             print(self.sql)
 
         return self
