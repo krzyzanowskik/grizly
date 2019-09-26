@@ -1153,7 +1153,7 @@ def _validate_data(data):
             if "custom_type" in fields[field]:
                 field_custom_type = fields[field]["custom_type"]
                 if field_type not in ["dim", "num"] and field_custom_type=='':
-                    raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
+                    raise ValueError(f"""Field '{field}' doesn't have custom_type and has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
             else:
                 if field_type not in ["dim", "num"]:
                     raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
