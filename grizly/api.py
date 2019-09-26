@@ -29,7 +29,8 @@ from .io.excel import (
 )
 
 from .core.tools import (
-    Excel
+    Excel,
+    AWS
 )
 
 

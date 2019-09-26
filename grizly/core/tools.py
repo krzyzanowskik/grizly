@@ -1,9 +1,18 @@
+import boto3
 import os
 from pandas import (
     ExcelWriter
 )
 import openpyxl
 import win32com.client as win32
+from grizly.core.utils import (
+    get_path,
+    read_config
+)
+from pandas import DataFrame
+
+config = read_config()
+os.environ["HTTPS_PROXY"] = config["https"]
 
 class Excel:
     """Class which deals with Excel files.
@@ -17,7 +26,6 @@ class Excel:
         output_excel_path : str, optional
             Path to output Excel.
         """
-
         self.input_excel_path = excel_path
         self.filename = os.path.basename(self.input_excel_path)
         if output_excel_path != '':
@@ -27,6 +35,7 @@ class Excel:
                                         os.path.splitext(self.filename)[0] + '_working' + os.path.splitext(self.filename)[1])
         #self.book = book = openpyxl.load_workbook(self.input_excel_path)
     
+
     def write_df(self, df, sheet, row=1, col=1, index=False, header=False):
         """Saves DatFrame in Excel file.
         
@@ -63,6 +72,7 @@ class Excel:
 
         return self
         
+
     def write_value(self, sheet, row, col, value):
         """Writes cell value to Excel file.
         
@@ -90,10 +100,12 @@ class Excel:
 
         return self
      
+
     def save(self):
         """save to workbook"""
         #self.book.save()
         pass
+
 
     def get_value(self, sheet, row, col):
         """Extracts cell value from Excel file.
@@ -121,7 +133,20 @@ class Excel:
         
         return value
 
+
     def open(self, input=False):
+        """[summary]
+        
+        Parameters
+        ----------
+        input : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        [type]
+            [description]
+        """
 
         if input == False:
             path = self.input_excel_path
@@ -138,7 +163,7 @@ class Excel:
                 except Exception as e:
                     print(e)
                     xlwb = None
-            ws = wb.Worksheets('blaaaa') 
+            ws = xlwb.Worksheets('blaaaa') 
             excel.Visible = True
 
         except Exception as e:
@@ -151,3 +176,115 @@ class Excel:
 
         return self
 
+
+
+class AWS:
+    """Class that represents s3 file.
+    """
+    def __init__(self, file_name: str = None, s3_key: str = 'bulk/', bucket: str = 'teis-data', file_dir: str = None):
+        """
+        Examples
+        --------
+        >>> from grizly import get_path, AWS
+        >>> s3 = AWS('emea_daily.xlsx', s3_key='dbb/ENG_EMEA/', file_dir=get_path('acoe_projects', 'dbb', 'ENG_EMEA'))
+
+        Parameters
+        ----------
+        file_name : str, optional
+            Name of the file, if None then: 'test.csv'
+        s3_key : str, optional
+            Name of s3 key, by default 'bulk/'
+        bucket : str, optional
+            Bucket name, by default 'teis-data'
+        file_dir : str, optional
+            Path to local folder to store the file, if None then: 'C:\\Users\\your_id\\s3_loads'
+        """
+        self.file_name = file_name if file_name else 'test.csv'
+        self.s3_key = s3_key
+        self.bucket = bucket
+        self.file_dir = file_dir if file_dir else get_path('s3_loads')
+
+        os.makedirs(self.file_dir, exist_ok=True)
+
+    def info(self):
+        """Print a concise summary of a AWS.
+
+        Examples
+        --------
+        >>> AWS().info()
+        """
+        print(f"\033[1m file_name: \033[0m\t'{self.file_name}'")
+        print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
+        print(f"\033[1m bucket: \033[0m\t'{self.bucket}'")
+        print(f"\033[1m file_dir: \033[0m\t'{self.file_dir}'")
+
+
+    def file_to_s3(self):
+        """Writes local file to s3.
+
+        Examples
+        --------
+        >>> from grizly import get_path
+        >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
+        >>> aws = AWS('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
+        >>> aws.file_to_s3()
+        """
+        file_path = os.path.join(self.file_dir, self.file_name)
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File '{file_path}' does not exist.")
+
+        s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+        bucket = s3.Bucket(self.bucket)
+
+        s3_file = self.s3_key + self.file_name
+        bucket.upload_file(file_path, s3_file)
+
+        print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_file}'")
+
+
+    def s3_to_file(self):
+        """Writes s3 to local file.
+
+        Examples
+        --------
+        >>> aws = AWS()
+        >>> aws.file_to_s3()
+        """
+        s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+        bucket = s3.Bucket(self.bucket)
+
+        s3_file = self.s3_key + self.file_name
+        file_path = os.path.join(self.file_dir, self.file_name)
+
+        with open(file_path, 'wb') as data:
+            bucket.download_fileobj(s3_file, data)
+        print(f"'{s3_file}' uploaded to '{self.file_name}'")
+
+
+    def df_to_s3(self, df: DataFrame):
+        """Saves DataFrame in s3.
+        
+        Examples
+        --------
+        >>> from pandas import DataFrame
+        >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
+        >>> AWS().df_to_s3(df)
+
+        Parameters
+        ----------
+        df : DataFrame
+            DataFrame object.
+        """
+        if not isinstance(df, DataFrame):
+            raise ValueError("'df' must be DataFrame object")
+
+        file_path = os.path.join(self.file_dir, self.file_name)
+
+        if not file_path.endswith('.csv'):
+            raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
+
+        df.to_csv(file_path)
+        print(f"DataFrame saved in '{file_path}'")
+
+        self.file_to_s3()
