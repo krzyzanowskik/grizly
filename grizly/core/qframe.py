@@ -622,18 +622,15 @@ class QFrame:
 
         return fields
 
-    def get_sql(self, print=True):
+    def get_sql(self, print_sql=True):
         """Overwrites the SQL statement inside the class and prints saved string.
-
         Examples
         --------
         >>> q.get_sql()
-
         Parameters
         ----------
-        print : bool, optional
+        print_sql : bool, optional
             If True prints generated SQL statement.
-
         Returns
         -------
         QFrame
@@ -641,7 +638,7 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        if print:
+        if print_sql:
             print(self.sql)
 
         return self
@@ -814,12 +811,10 @@ class QFrame:
         DataFrame
             Data generated from sql.
         """
-<<<<<<< HEAD
-        sql=self.get_sql().sql
-=======
+
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
->>>>>>> b2fd2ee9a20a4abf2922b8aff641d668ae882c57
+
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = pandas.read_sql(sql=self.sql, con=con)
@@ -1155,8 +1150,13 @@ def _validate_data(data):
                                         'type', 'as', 'group_by', 'order_by', 'expression', 'select', 'custom_type'""")
         if "type" in fields[field]:
             field_type = fields[field]["type"]
-            if field_type not in ["dim", "num"]:
-                raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
+            if "custom_type" in fields[field]:
+                field_custom_type = fields[field]["custom_type"]
+                if field_type not in ["dim", "num"] and field_custom_type=='':
+                    raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
+            else:
+                if field_type not in ["dim", "num"]:
+                    raise ValueError(f"""Field '{field}' has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
         else:
             raise AttributeError(f"Missing type attribute in field '{field}'.")
 
@@ -1195,7 +1195,7 @@ def _validate_data(data):
     return data
 
 
-def initiate(columns, schema, table, json_path, subquery=""):
+def initiate(columns, schema, table, json_path, subquery="", col_types=None):
     """Creates a dictionary with fields information for a Qframe and saves the data in json file.
 
     Parameters
@@ -1210,6 +1210,8 @@ def initiate(columns, schema, table, json_path, subquery=""):
         Path to output json file.
     subquery : str, optional
         Name of the query in json file. If this name already exists it will be overwritten, by default ''
+    col_type : list
+        List of data types of columns (in 'columns' list)
     """
     if os.path.isfile(json_path):
         with open(json_path, 'r') as f:
@@ -1221,18 +1223,33 @@ def initiate(columns, schema, table, json_path, subquery=""):
 
     fields = {}
 
-    for col in columns:
-        type = "num" if "amount" in col else "dim"
-        field = {
-                    "type": type,
-                    "as": "",
-                    "group_by": "",
-                    "order_by": "",
-                    "expression": "",
-                    "select": "",
-                    "custom_type": ""
-                }
-        fields[col] = field
+    if col_types == None:
+        for col in columns:
+            type = "num" if "amount" in col else "dim"
+            field = {
+                        "type": type,
+                        "as": "",
+                        "group_by": "",
+                        "order_by": "",
+                        "expression": "",
+                        "select": "",
+                        "custom_type": ""
+                    }
+            fields[col] = field
+
+    elif isinstance(col_types, list):
+        for index, col in enumerate(columns):
+            custom_type = col_types[index]
+            field = {
+                        "type": "",
+                        "as": "",
+                        "group_by": "",
+                        "order_by": "",
+                        "expression": "",
+                        "select": "",
+                        "custom_type": custom_type
+                    }
+            fields[col] = field
 
     data = {
             "select": {
