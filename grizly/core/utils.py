@@ -28,8 +28,8 @@ os.environ["HTTPS_PROXY"] = config["https"]
 #     return "Columns saved in excel."
 
 
-def get_columns(schema, table):
-    """Get columns from Denodo view.
+def get_columns(schema, table, column_types=False, date_format="DATE"):
+    """Get columns (or also columns types) from Denodo view.
     
     Parameters
     ----------
@@ -37,13 +37,25 @@ def get_columns(schema, table):
         Name of schema.
     table : str
         Name of table.
+    column_types : bool
+        True means user wants to get also data types.
+    date_format : str
+        Denodo date format differs from those from other databases. User can choose which format is desired.
     """
-    sql = f"""
-        SELECT column_name
-        FROM get_view_columns()
-        WHERE view_name = '{table}'
+    if column_types==False:
+        sql = f"""
+            SELECT column_name
+            FROM get_view_columns()
+            WHERE view_name = '{table}'
+                AND database_name = '{schema}'
+            """
+    else:
+        sql = f"""
+            SELECT distinct column_name,  column_sql_type, column_size
+            FROM get_view_columns()
+            WHERE view_name = '{table}'
             AND database_name = '{schema}'
-        """
+    """
     engine = create_engine("mssql+pyodbc://DenodoODBC")
 
     try:
@@ -56,16 +68,32 @@ def get_columns(schema, table):
         cursor.execute(sql)
 
     col_names = []
-    while True:
-        column = cursor.fetchone()
-        if not column:
-            break
-        col_names.append(column[0])
 
-    cursor.close()
-    con.close()
-
-    return col_names
+    if column_types==False:
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_names.append(column[0])
+        cursor.close()
+        con.close()
+        return col_names
+    else:
+        col_types = []
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_names.append(column[0])
+            if column[1] in ( 'VARCHAR', 'NVARCHAR'):
+                col_types.append(column[1]+'('+str(min(column[2],1000))+')')
+            elif column[1] == 'DATE' :
+                col_types.append(date_format)
+            else:
+                col_types.append(column[1])
+        cursor.close()
+        con.close()
+        return col_names, col_types
 
 
 def check_if_exists(table, schema=''):
