@@ -166,13 +166,24 @@ def test_assign():
     q = QFrame().from_dict(deepcopy(orders))
     value_x_two = "Value * 2"
     q.assign(value_x_two=value_x_two, type='num')
-    q.assign(Value_div="Value/100", type='num')
+    q.assign(extract_date="format('yyyy-MM-dd', '2019-04-05 13:00:09')", custom_type='date')
+    q.assign(Value_div="Value/100", type='num', order_by='DESC')
     assert q.data["select"]["fields"]["value_x_two"]["expression"] == "Value * 2"
     assert q.data["select"]["fields"]["Value_div"] == {
         "type": "num",
         "as": "Value_div",
         "group_by": "",
+        "order_by": "DESC",
+        "custom_type": "",
         "expression": "Value/100"
+        }
+    assert q.data["select"]["fields"]["extract_date"] == {
+        "type": "dim",
+        "as": "extract_date",
+        "group_by": "",
+        "custom_type": "date",
+        "order_by": "",
+        "expression": "format('yyyy-MM-dd', '2019-04-05 13:00:09')"
         }
 
 
