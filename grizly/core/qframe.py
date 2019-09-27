@@ -324,7 +324,7 @@ class QFrame:
                 self.data["select"]["having"] += f" {operator} {having}"
         return self
 
-    def assign(self, type="dim", group_by="", **kwargs):
+    def assign(self, type="dim", group_by="", order_by='', custom_type='',  **kwargs):
         """Assigns expressions.
 
         Examples
@@ -335,21 +335,25 @@ class QFrame:
         ----------
         type : {'dim', 'num'}, optional
             Column type, by default "dim"
-
             * dim: VARCHAR(500)
             * num: FLOAT(53)
         group_by : {group, sum, count, min, max, avg, ""}, optional
             [description], by default ""
+        order_by : {'ASC','DESC'}, optional
+            [description], by default ""
+        custom_type : str, optional
+            Column type.
 
         Returns
         -------
         QFrame
         """
-        if type not in ["dim", "num"]:
-            raise ValueError("Invalid value in type. Valid values: 'dim', 'num'.")
+        if type not in ["dim", "num"] and custom_type=='':
+            raise ValueError("Custom type is not provided and invalid value in type. Valid values: 'dim', 'num'.")
         if group_by.lower() not in ["group", "sum", "count", "min", "max", "avg", ""]:
             raise ValueError("Invalid value in group_by. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg', ''.")
-
+        if order_by.lower() not in ["asc", "desc", ""]:
+            raise ValueError("Invalid value in order_by. Valid values: 'ASC', 'DESC', ''.")
         if "union" in self.data["select"]:
             print("You can't assign expressions inside union. Use select() method first.")
         else:
@@ -360,8 +364,11 @@ class QFrame:
                         "type": type,
                         "as": key,
                         "group_by": group_by,
-                        "expression": expression}
-
+                         "order_by": order_by,
+                        "expression": expression,
+                        "custom_type": custom_type
+                        }
+                        
         return self
 
 
