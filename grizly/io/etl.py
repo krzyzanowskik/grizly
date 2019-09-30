@@ -405,7 +405,6 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
         else:
             pass
 
-
     print(f"Loading data into {table_name}...")
     sql = f"""
         COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'

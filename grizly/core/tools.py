@@ -7,12 +7,14 @@ import openpyxl
 import win32com.client as win32
 from grizly.core.utils import (
     get_path,
-    read_config
+    read_config,
+    check_if_exists
 )
 from pandas import DataFrame
+from sqlalchemy import create_engine
 
-config = read_config()
-os.environ["HTTPS_PROXY"] = config["https"]
+grizly_config = read_config()
+os.environ["HTTPS_PROXY"] = grizly_config["https"]
 
 class Excel:
     """Class which deals with Excel files.
@@ -177,11 +179,16 @@ class Excel:
         return self
 
 
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
 
 class AWS:
-    """Class that represents s3 file.
+    """Class that represents a file in S3.
     """
-    def __init__(self, file_name: str = None, s3_key: str = 'bulk/', bucket: str = 'teis-data', file_dir: str = None):
+    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, config=None):
         """
         Examples
         --------
@@ -191,18 +198,33 @@ class AWS:
         Parameters
         ----------
         file_name : str, optional
-            Name of the file, if None then: 'test.csv'
+            Name of the file, if None then 'test.csv'
         s3_key : str, optional
-            Name of s3 key, by default 'bulk/'
+            Name of s3 key, if None then 'bulk/'
         bucket : str, optional
-            Bucket name, by default 'teis-data'
+            Bucket name, if None then 'teis-data'
         file_dir : str, optional
-            Path to local folder to store the file, if None then: 'C:\\Users\\your_id\\s3_loads'
+            Path to local folder to store the file, if None then 'C:\\Users\\your_id\\s3_loads'
+        config : module, optional
+            Config module (imported .py file), by default None
         """
-        self.file_name = file_name if file_name else 'test.csv'
-        self.s3_key = s3_key
-        self.bucket = bucket
-        self.file_dir = file_dir if file_dir else get_path('s3_loads')
+        if not config:
+            config = AttrDict()
+            config.update({
+                        'file_name': 'test.csv', 
+                        's3_key' : 'bulk/',
+                        'bucket' : 'teis-data',
+                        'file_dir' : get_path('s3_loads')
+                        })
+
+        self.file_name = file_name if file_name else config.file_name
+        self.s3_key = s3_key if s3_key else config.s3_key
+        self.bucket = bucket if bucket else config.bucket
+        self.file_dir = file_dir if file_dir else config.file_dir
+        self.s3_resource = boto3.resource('s3', 
+                            aws_access_key_id=grizly_config["akey"], 
+                            aws_secret_access_key=grizly_config["skey"], 
+                            region_name=grizly_config["region"])
 
         os.makedirs(self.file_dir, exist_ok=True)
 
@@ -234,13 +256,11 @@ class AWS:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File '{file_path}' does not exist.")
 
-        s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
-        bucket = s3.Bucket(self.bucket)
+        s3_key = self.s3_key + self.file_name
+        s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        s3_file.upload_file(file_path)
 
-        s3_file = self.s3_key + self.file_name
-        bucket.upload_file(file_path, s3_file)
-
-        print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_file}'")
+        print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
 
     def s3_to_file(self):
@@ -249,20 +269,18 @@ class AWS:
         Examples
         --------
         >>> aws = AWS()
-        >>> aws.file_to_s3()
+        >>> aws.s3_to_file()
         """
-        s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
-        bucket = s3.Bucket(self.bucket)
-
-        s3_file = self.s3_key + self.file_name
         file_path = os.path.join(self.file_dir, self.file_name)
 
-        with open(file_path, 'wb') as data:
-            bucket.download_fileobj(s3_file, data)
-        print(f"'{s3_file}' uploaded to '{self.file_name}'")
+        s3_key = self.s3_key + self.file_name
+        s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        s3_file.download_file(file_path)
+
+        print(f"'{s3_key}' uploaded to '{file_path}'")
 
 
-    def df_to_s3(self, df: DataFrame):
+    def df_to_s3(self, df:DataFrame):
         """Saves DataFrame in s3.
         
         Examples
@@ -274,7 +292,7 @@ class AWS:
         Parameters
         ----------
         df : DataFrame
-            DataFrame object.
+            DataFrame object
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
@@ -288,3 +306,68 @@ class AWS:
         print(f"DataFrame saved in '{file_path}'")
 
         self.file_to_s3()
+
+
+    def s3_to_rds(self, table:str, schema:str=None, sep:str='\t'):
+        """Writes S3 file to Redshift table. If table exists then the records will be overwritten.
+        
+        Parameters
+        ----------
+        table : str
+            Table name
+        schema : str, optional
+            Schame name, by default None
+        sep : str, optional
+            Separator, by default '\t'
+        """
+        table_name = f'{schema}.{table}' if schema else f'{table}'
+
+        assert check_if_exists(table, schema), f"Table {table_name} doesn't exist. Create it before using this method."
+
+        engine = create_engine("mssql+pyodbc://Redshift")
+
+        sql = f"DELETE FROM {table_name}"
+        engine.execute(sql)
+        print(f'Table {table_name} has been cleaned up successfully.')
+
+        s3_key = self.s3_key + self.file_name
+
+        sql = f"""
+            COPY {table_name} FROM 's3://teis-data/{s3_key}'
+            access_key_id '{grizly_config["akey"]}'
+            secret_access_key '{grizly_config["skey"]}'
+            delimiter '{sep}'
+            NULL ''
+            IGNOREHEADER 1
+            REMOVEQUOTES
+            ;commit;
+            """
+
+        engine.execute(sql)
+        print(f'Data has been copied to {table_name}')
+
+
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, sep:str='\t'):
+        """Writes DataFrame to Redshift.
+        
+        Parameters
+        ----------
+        df : DataFrame
+            DataFrame object
+        table : str
+            Table name
+        schema : str, optional
+            Schema name, by default None
+        sep : str, optional
+            Separator, by default '\t'
+        """
+        self.df_to_s3(df)
+
+        engine = create_engine("mssql+pyodbc://Redshift")
+
+        if not check_if_exists(table, schema):
+            df.head(1).to_sql(table, schema=schema, index=False, con=engine)
+            table_name = f'{schema}.{table}' if schema else f'{table}'
+            print(f'Table {table_name} has been created.')
+
+        self.s3_to_rds(table, schema, sep=sep)
