@@ -13,8 +13,8 @@ from grizly.core.utils import (
 from pandas import DataFrame
 from sqlalchemy import create_engine
 
-config = read_config()
-os.environ["HTTPS_PROXY"] = config["https"]
+grizly_config = read_config()
+os.environ["HTTPS_PROXY"] = grizly_config["https"]
 
 class Excel:
     """Class which deals with Excel files.
@@ -179,11 +179,16 @@ class Excel:
         return self
 
 
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
 
 class AWS:
     """Class that represents a file in S3.
     """
-    def __init__(self, file_name: str = None, s3_key: str = 'bulk/', bucket: str = 'teis-data', file_dir: str = None):
+    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, config=None):
         """
         Examples
         --------
@@ -193,22 +198,33 @@ class AWS:
         Parameters
         ----------
         file_name : str, optional
-            Name of the file, if None then: 'test.csv'
+            Name of the file, if None then 'test.csv'
         s3_key : str, optional
-            Name of s3 key, by default 'bulk/'
+            Name of s3 key, if None then 'bulk/'
         bucket : str, optional
-            Bucket name, by default 'teis-data'
+            Bucket name, if None then 'teis-data'
         file_dir : str, optional
-            Path to local folder to store the file, if None then: 'C:\\Users\\your_id\\s3_loads'
+            Path to local folder to store the file, if None then 'C:\\Users\\your_id\\s3_loads'
+        config : module, optional
+            Config module (imported .py file), by default None
         """
-        self.file_name = file_name if file_name else 'test.csv'
-        self.s3_key = s3_key
-        self.bucket = bucket
-        self.file_dir = file_dir if file_dir else get_path('s3_loads')
+        if not config:
+            config = AttrDict()
+            config.update({
+                        'file_name': 'test.csv', 
+                        's3_key' : 'bulk/',
+                        'bucket' : 'teis-data',
+                        'file_dir' : get_path('s3_loads')
+                        })
+
+        self.file_name = file_name if file_name else config.file_name
+        self.s3_key = s3_key if s3_key else config.s3_key
+        self.bucket = bucket if bucket else config.bucket
+        self.file_dir = file_dir if file_dir else config.file_dir
         self.s3_resource = boto3.resource('s3', 
-                            aws_access_key_id=config["akey"], 
-                            aws_secret_access_key=config["skey"], 
-                            region_name=config["region"])
+                            aws_access_key_id=grizly_config["akey"], 
+                            aws_secret_access_key=grizly_config["skey"], 
+                            region_name=grizly_config["region"])
 
         os.makedirs(self.file_dir, exist_ok=True)
 
@@ -318,8 +334,8 @@ class AWS:
 
         sql = f"""
             COPY {table_name} FROM 's3://teis-data/{s3_key}'
-            access_key_id '{config["akey"]}'
-            secret_access_key '{config["skey"]}'
+            access_key_id '{grizly_config["akey"]}'
+            secret_access_key '{grizly_config["skey"]}'
             delimiter '{sep}'
             NULL ''
             IGNOREHEADER 1
@@ -331,7 +347,7 @@ class AWS:
         print(f'Data has been copied to {table_name}')
 
 
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None):
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, sep:str='\t'):
         """Writes DataFrame to Redshift.
         
         Parameters
@@ -342,6 +358,8 @@ class AWS:
             Table name
         schema : str, optional
             Schema name, by default None
+        sep : str, optional
+            Separator, by default '\t'
         """
         self.df_to_s3(df)
 
@@ -349,6 +367,7 @@ class AWS:
 
         if not check_if_exists(table, schema):
             df.head(1).to_sql(table, schema=schema, index=False, con=engine)
+            table_name = f'{schema}.{table}' if schema else f'{table}'
             print(f'Table {table_name} has been created.')
 
-        self.s3_to_rds(table, schema)
+        self.s3_to_rds(table, schema, sep=sep)
