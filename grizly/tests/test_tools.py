@@ -3,8 +3,8 @@ import os
 from filecmp import cmp
 from grizly import (
     AWS
-    , Csv
 )
+from grizly import extract
 from grizly.tests import config
 
 def write_out(out):
@@ -30,5 +30,5 @@ def test_df_to_s3_and_s3_to_file():
     os.remove(second_file_path)
 
 def test_csv_from_sql():
-    csv = Csv(config=config).from_sql(table="artist", chunksize=100, csv_path=config.csv_path)
+    csv = extract.Csv(csv_path=config.csv_path).from_sql(table="artist", engine_str=config.engine_str, chunksize=100)
     write_out(csv.deletethis)
