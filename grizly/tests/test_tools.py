@@ -1,10 +1,18 @@
 from pandas import DataFrame
 import os
 from filecmp import cmp
-from grizly.core.tools import (
+from grizly import (
     AWS
+    , Csv
 )
+from grizly.tests import config
 
+def write_out(out):
+    with open(
+        config.tests_txt_file,
+        "w",
+    ) as f:
+        f.write(out)
 
 def test_df_to_s3_and_s3_to_file():
     aws = AWS(file_name='testing_aws_class.csv')
@@ -20,3 +28,7 @@ def test_df_to_s3_and_s3_to_file():
     assert cmp(first_file_path, second_file_path) == True
     os.remove(first_file_path)
     os.remove(second_file_path)
+
+def test_csv_from_sql():
+    csv = Csv(config=config).from_sql(table="artist", chunksize=100, csv_path=config.csv_path)
+    write_out(csv.deletethis)
