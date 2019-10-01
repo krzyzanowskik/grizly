@@ -329,7 +329,7 @@ def test_to_csv():
     q.to_csv(csv_path)
     df_from_qf = read_csv(csv_path, sep='\t')
 
-    os.remove(csv_path)
+    # os.remove(csv_path)
 
     engine = create_engine(engine_string)
     test_df = read_sql(sql=q.sql, con=engine)
