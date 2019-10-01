@@ -85,19 +85,19 @@ def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False)
     """
     engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
-    if server_chunksize:
+    if chunksize:
         iterator = 0
         limit_reached = False
         if qf.data["select"]["limit"] != '':
             row_limit = qf.data["select"]["limit"]
         while True:
-            row_limit -= server_chunksize
+            row_limit -= chunksize
             if row_limit < 0:
-                server_chunksize += row_limit
+                chunksize += row_limit
                 limit_reached = True
 
-            qf.limit(f"{server_chunksize} OFFSET {iterator}")
-            iterator += server_chunksize
+            qf.limit(f"{chunksize} OFFSET {iterator}")
+            iterator += chunksize
             qf.get_sql()
 
             try:
@@ -120,6 +120,8 @@ def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False)
 
             if limit_reached:
                 break
+    else:
+        to_csv(qf,csv_path, sql, engine, sep=sep, compress=compress)
 
 
 def create_table(qf, table, engine, schema=''):
