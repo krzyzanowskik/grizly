@@ -18,7 +18,6 @@ os.environ["HTTPS_PROXY"] = config["https"]
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     """
     Writes table to csv file.
-
     Parameters
     ----------
     csv_path : string
@@ -65,6 +64,62 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
 
     cursor.close()
     con.close()
+
+
+def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
+    """
+    Writes table to csv file.
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    sql : string
+        SQL query.
+    engine : str
+        Engine string.
+    sep : string, default '\t'
+        Separtor/delimiter in csv file.
+    chunksize : int, default None
+        If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+    """
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+    if server_chunksize:
+        iterator = 0
+        limit_reached = False
+        if qf.data["select"]["limit"] != '':
+            row_limit = qf.data["select"]["limit"]
+        while True:
+            row_limit -= server_chunksize
+            if row_limit < 0:
+                server_chunksize += row_limit
+                limit_reached = True
+
+            qf.limit(f"{server_chunksize} OFFSET {iterator}")
+            iterator += server_chunksize
+            qf.get_sql()
+
+            try:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(qf.sql)
+            except:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(qf.sql)
+
+            with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=sep)
+                writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
+
+                writer.writerows(cursor.fetchall())
+
+            cursor.close()
+            con.close()
+
+            if limit_reached:
+                break
 
 
 def create_table(qf, table, engine, schema=''):
@@ -182,7 +237,6 @@ def s3_to_csv(csv_path):
     with open(csv_path, 'wb') as data:
         bucket.download_fileobj('bulk/' + s3_name, data)
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
-
 
 
 def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="append"):
