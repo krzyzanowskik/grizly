@@ -15,6 +15,10 @@ from .core.utils import (
     get_path
 )
 
+from .core.extract import(
+    Csv
+)
+
 from .io.etl import (
     to_s3,
     read_s3,
