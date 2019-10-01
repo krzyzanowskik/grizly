@@ -14,6 +14,7 @@ from grizly.core.utils import (
 from pandas import DataFrame
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from io import StringIO
 
 grizly_config = read_config()
 os.environ["HTTPS_PROXY"] = grizly_config["https"]
@@ -354,29 +355,45 @@ class AWS:
         self.file_to_s3()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, sep:str='\t'):
-        """Writes S3 file to Redshift table. If table exists then the records will be overwritten.
-        
+    def s3_to_rds(self, table:str, schema:str=None, sep:str='\t', if_exists='fail'):
+        """Writes S3 file to Redshift table.    
+
         Parameters
         ----------
         table : str
             Table name
         schema : str, optional
             Schame name, by default None
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
         sep : str, optional
             Separator, by default '\t'
         """
-        table_name = f'{schema}.{table}' if schema else f'{table}'
+        if if_exists not in ("fail", "replace", "append"):
+            raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
-        assert check_if_exists(table, schema), f"Table {table_name} doesn't exist. Create it before using this method."
-
+        table_name = f'{schema}.{table}' if schema else table
         engine = create_engine("mssql+pyodbc://Redshift")
 
-        sql = f"DELETE FROM {table_name}"
-        engine.execute(sql)
-        print(f'Table {table_name} has been cleaned up successfully.')
+        if check_if_exists(table, schema):
+            if if_exists == 'fail':
+                raise ValueError("Table {} already exists".format(table_name))
+            elif if_exists == 'replace':
+                sql ="DELETE FROM {}".format(table_name)
+                engine.execute(sql)
+                print('SQL table has been cleaned up successfully.')
+            else:
+                pass
+        else:
+            self._create_table_like_s3(table_name, sep)
 
         s3_key = self.s3_key + self.file_name
+        print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://teis-data/{s3_key}'
@@ -417,3 +434,42 @@ class AWS:
             print(f'Table {table_name} has been created.')
 
         self.s3_to_rds(table, schema, sep=sep)
+
+
+    def _create_table_like_s3(self, table_name, sep):
+        s3_client = self.s3_resource.meta.client
+
+        obj_content = s3_client.select_object_content(
+                        Bucket=self.bucket,
+                        Key=self.s3_key + self.file_name,
+                        ExpressionType='SQL',
+                        Expression="select * from s3object limit 10",
+                        InputSerialization = {'CSV': {'FileHeaderInfo': 'None', 'FieldDelimiter': sep}},
+                        OutputSerialization = {'CSV': {}},
+                        )
+
+        records = []
+        for event in obj_content['Payload']:
+            if 'Records' in event:
+                records.append(event['Records']['Payload'])
+
+        file_str = ''.join(r.decode('utf-8') for r in records)
+
+        select_df = read_csv(StringIO(file_str))
+        columns = []
+
+        for col in select_df:
+            if select_df[col].dtype == 'int64':
+                columns.append(f"{col} INT")
+            elif select_df[col].dtype == 'float':
+                columns.append(f"{col} FLOAT")
+            else:
+                columns.append(f"{col} VARCHAR(500)")
+
+        columns_str = ", ".join(columns)
+        sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
+
+        engine = create_engine("mssql+pyodbc://Redshift")
+        engine.execute(sql)
+
+        print("Table {} has been created successfully.".format(table_name))
