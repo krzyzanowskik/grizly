@@ -1,7 +1,7 @@
 from pandas import DataFrame
 import os
 from filecmp import cmp
-from grizly.core.tools import (
+from grizly import (
     AWS
     , Csv
 )
