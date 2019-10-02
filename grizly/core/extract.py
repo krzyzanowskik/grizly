@@ -85,5 +85,28 @@ class Extract():
         """
         pass
     
-    def from_github(self):
-        pass
+    def from_github(self, username:str, username_password:str, pages:int=100):
+        proxies = {
+            "http": "http://restrictedproxy.tycoelectronics.com:80",
+            "https": "https://restrictedproxy.tycoelectronics.com:80",
+            }
+        #"325ef9913cdf7cd2b4f65be8ccaee271ac174942"
+
+        for page in range(pages):
+            page += 1
+            issues = f'https://api.github.com/orgs/tedcs/issues?page={page}&filter=all'
+            data = requests.get(issues, auth=(username,username_password), proxies = proxies)
+
+            records = []
+            for record in range(len(login.json())):
+                for item in record:
+                    try:
+                record = {}
+                record["project_name"] = login.json()[i]["repository"]["name"]
+                record["user"] = login.json()[i]["user"]["login"]
+                record["title"] = login.json()[i]["title"]
+                record["created_at"] = login.json()[i]["created_at"]
+                record["updated_at"] = login.json()[i]["updated_at"]
+                record["state"] = login.json()[i]["state"]
+                record["labels"] = ', '.join([label["name"] for label in login.json()[i]["labels"]])
+                records.append(record)
