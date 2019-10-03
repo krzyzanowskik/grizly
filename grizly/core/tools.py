@@ -11,7 +11,10 @@ from grizly.core.utils import (
     read_config,
     check_if_exists
 )
-from pandas import DataFrame
+from pandas import (
+    DataFrame,
+    read_csv
+)
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from io import StringIO
@@ -226,12 +229,6 @@ class Excel:
         return self
 
 
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-
 class AWS:
     """Class that represents a file in S3.
     """
@@ -256,7 +253,7 @@ class AWS:
             Config module (imported .py file), by default None
         """
         if not config:
-            config = AttrDict()
+            config = _AttrDict()
             config.update({
                         'file_name': 'test.csv', 
                         's3_key' : 'bulk/',
@@ -327,7 +324,7 @@ class AWS:
         print(f"'{s3_key}' uploaded to '{file_path}'")
 
 
-    def df_to_s3(self, df:DataFrame):
+    def df_to_s3(self, df:DataFrame, sep:str='\t'):
         """Saves DataFrame in s3.
         
         Examples
@@ -340,6 +337,8 @@ class AWS:
         ----------
         df : DataFrame
             DataFrame object
+        sep : str, optional
+            Separator, by default '\t'
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
@@ -349,13 +348,13 @@ class AWS:
         if not file_path.endswith('.csv'):
             raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
 
-        df.to_csv(file_path)
+        df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
         self.file_to_s3()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, sep:str='\t', if_exists='fail'):
+    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t') :
         """Writes S3 file to Redshift table.    
 
         Parameters
@@ -382,7 +381,7 @@ class AWS:
 
         if check_if_exists(table, schema):
             if if_exists == 'fail':
-                raise ValueError("Table {} already exists".format(table_name))
+                raise AssertionError("Table {} already exists".format(table_name))
             elif if_exists == 'replace':
                 sql ="DELETE FROM {}".format(table_name)
                 engine.execute(sql)
@@ -410,7 +409,7 @@ class AWS:
         print(f'Data has been copied to {table_name}')
 
 
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, sep:str='\t'):
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t'):
         """Writes DataFrame to Redshift.
         
         Parameters
@@ -421,19 +420,18 @@ class AWS:
             Table name
         schema : str, optional
             Schema name, by default None
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
         sep : str, optional
             Separator, by default '\t'
         """
-        self.df_to_s3(df)
-
-        engine = create_engine("mssql+pyodbc://Redshift")
-
-        if not check_if_exists(table, schema):
-            df.head(1).to_sql(table, schema=schema, index=False, con=engine)
-            table_name = f'{schema}.{table}' if schema else f'{table}'
-            print(f'Table {table_name} has been created.')
-
-        self.s3_to_rds(table, schema, sep=sep)
+        self.df_to_s3(df, sep=sep)
+        self.s3_to_rds(table, schema, if_exists=if_exists, sep=sep)
 
 
     def _create_table_like_s3(self, table_name, sep):
@@ -443,7 +441,7 @@ class AWS:
                         Bucket=self.bucket,
                         Key=self.s3_key + self.file_name,
                         ExpressionType='SQL',
-                        Expression="select * from s3object limit 10",
+                        Expression="SELECT * FROM s3object LIMIT 20",
                         InputSerialization = {'CSV': {'FileHeaderInfo': 'None', 'FieldDelimiter': sep}},
                         OutputSerialization = {'CSV': {}},
                         )
@@ -459,17 +457,29 @@ class AWS:
         columns = []
 
         for col in select_df:
-            if select_df[col].dtype == 'int64':
-                columns.append(f"{col} INT")
-            elif select_df[col].dtype == 'float':
+            is_float = False
+            # if the column type is int but it has NULLs then pandas change its type to float
+            if select_df[col].dtype == 'float':
+                column = select_df[col].dropna()
+                for value in column:
+                    if value%1 != 0:
+                        is_float = True
+                        break
+            if is_float:
                 columns.append(f"{col} FLOAT")
             else:
                 columns.append(f"{col} VARCHAR(500)")
 
-        columns_str = ", ".join(columns)
-        sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
+        column_str = ", ".join(columns)
+        sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
         engine = create_engine("mssql+pyodbc://Redshift")
         engine.execute(sql)
 
         print("Table {} has been created successfully.".format(table_name))
+
+
+class _AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(_AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
