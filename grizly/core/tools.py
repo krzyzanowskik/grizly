@@ -18,6 +18,7 @@ from pandas import (
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from io import StringIO
+from csv import reader
 
 grizly_config = read_config()
 os.environ["HTTPS_PROXY"] = grizly_config["https"]
@@ -452,24 +453,36 @@ class AWS:
                 records.append(event['Records']['Payload'])
 
         file_str = ''.join(r.decode('utf-8') for r in records)
+        csv_reader =  reader(StringIO(file_str))
 
-        select_df = read_csv(StringIO(file_str))
+        def isfloat(s):
+            try:
+                float(s)
+                return not s.isdigit()
+            except ValueError:
+                return False
+            
+        count = 0
+        for row in csv_reader:
+            if count == 0:
+                column_names = row
+                column_isfloat = [[] for i in row]
+            else:
+                i = 0 
+                for item in row:
+                    column_isfloat[i].append(isfloat(item))
+                    i+=1
+            count+=1
+            
         columns = []
-
-        for col in select_df:
-            is_float = False
-            # if the column type is int but it has NULLs then pandas change its type to float
-            if select_df[col].dtype == 'float':
-                column = select_df[col].dropna()
-                for value in column:
-                    if value%1 != 0:
-                        is_float = True
-                        break
-            if is_float:
+        count = 0
+        for col in column_names:
+            if set(column_isfloat[count]) == {True}:
                 columns.append(f"{col} FLOAT")
             else:
                 columns.append(f"{col} VARCHAR(500)")
-
+            count += 1
+            
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
