@@ -477,7 +477,7 @@ class AWS:
         columns = []
         count = 0
         for col in column_names:
-            if set(column_isfloat[count]) == {True}:
+            if True in set(column_isfloat[count]):
                 columns.append(f"{col} FLOAT")
             else:
                 columns.append(f"{col} VARCHAR(500)")
