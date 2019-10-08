@@ -4,6 +4,7 @@ import requests
 import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from simple_salesforce import Salesforce
 
 
 class Extract():
@@ -22,19 +23,19 @@ class Extract():
         self.rows = None
         self.extract_format = extract_format
         self.task = None
-    
+
     def get_path(self):
         return self.csv_path
 
     def write(self):
         if self.extract_format == 'csv':
-            with open(self.csv_path, 'a', newline='', encoding = 'utf-8') as csvfile:
-                        print("writing...")
-                        writer = csv.writer(csvfile, delimiter=',')
-                        writer.writerows(self.rows)
-                        print("done writing")
+            with open(self.csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+                print("writing...")
+                writer = csv.writer(csvfile, delimiter=',')
+                writer.writerows(self.rows)
+                print("done writing")
         else:
-            raise "Non supported format"
+            raise f"{self.extract_format} format not supported."
 
     def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed = False):
         """
@@ -83,7 +84,7 @@ class Extract():
     def from_qf():
         pass
 
-    def from_sfdc(self):
+    def from_sfdc(self, username, password, fields, table, where=None, env="prod"):
         """
         Writes Salesforce table to csv file.
         Parameters
@@ -93,8 +94,39 @@ class Extract():
         tablename : string
         ...?
         """
-        pass
-    
+        proxies = {
+            "http": "http://restrictedproxy.tycoelectronics.com:80",
+            "https": "http://restrictedproxy.tycoelectronics.com:80",
+        }
+
+        if env == "prod":
+            sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+        elif env == "stage":
+            sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                            organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+        else:
+            raise ValueError("Please choose one of supported environments: (prod, stage)")
+
+        query = f"SELECT {', '.join(fields)} FROM {table}"
+        if where:
+            query += f" WHERE {where}"
+
+        data = sf.query_all(query)
+
+        rows = []
+        colnames = [item for item in data["records"][0] if item != "attributes"]
+        rows.append(colnames)
+        for item in data['records']:
+            row = []
+            for field in fields:
+                row.append(item[field])
+            rows.append(row)
+
+        self.rows = rows
+        self.write()
+
+        return self
+
     def from_github(self, username:str, username_password:str, pages:int=100):
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
