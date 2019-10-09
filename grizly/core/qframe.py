@@ -734,6 +734,9 @@ class QFrame:
         -------
         QFrame
         """
+        self.create_sql_blocks()
+        self.sql = get_sql(self.data)
+        
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
