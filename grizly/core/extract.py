@@ -6,6 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 
+from grizly.core.tools import AWS
+
 
 class Extract():
     """
@@ -161,3 +163,7 @@ class Extract():
         self.rows = records
         self.write()
         return self
+
+
+        def from_s3(self):
+            pass
