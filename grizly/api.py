@@ -19,6 +19,10 @@ from .core.extract import(
     Extract
 )
 
+from .core.load import (
+    Load
+)
+
 from .io.etl import (
     to_s3,
     read_s3,

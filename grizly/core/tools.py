@@ -231,9 +231,8 @@ class Excel:
 
 
 class AWS:
-    """Class that represents a file in S3.
-    """
-    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, config=None):
+    """Class that represents a file in S3."""
+    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
         """
         Examples
         --------
@@ -250,6 +249,8 @@ class AWS:
             Bucket name, if None then 'teis-data'
         file_dir : str, optional
             Path to local folder to store the file, if None then 'C:\\Users\\your_id\\s3_loads'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
         config : module, optional
             Config module (imported .py file), by default None
         """
@@ -259,19 +260,22 @@ class AWS:
                         'file_name': 'test.csv', 
                         's3_key' : 'bulk/',
                         'bucket' : 'teis-data',
-                        'file_dir' : get_path('s3_loads')
+                        'file_dir' : get_path('s3_loads'),
+                        'redshift_str' : 'mssql+pyodbc://Redshift'
                         })
 
         self.file_name = file_name if file_name else config.file_name
         self.s3_key = s3_key if s3_key else config.s3_key
         self.bucket = bucket if bucket else config.bucket
         self.file_dir = file_dir if file_dir else config.file_dir
+        self.redshift_str = redshift_str if redshift_str else config.redshift_str
         self.s3_resource = boto3.resource('s3', 
                             aws_access_key_id=grizly_config["akey"], 
                             aws_secret_access_key=grizly_config["skey"], 
                             region_name=grizly_config["region"])
 
         os.makedirs(self.file_dir, exist_ok=True)
+
 
     def info(self):
         """Print a concise summary of a AWS.
@@ -284,6 +288,7 @@ class AWS:
         print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
         print(f"\033[1m bucket: \033[0m\t'{self.bucket}'")
         print(f"\033[1m file_dir: \033[0m\t'{self.file_dir}'")
+        print(f"\033[1m redshift_str: \033[0m\t'{self.redshift_str}'")
 
 
     def file_to_s3(self):
@@ -378,7 +383,8 @@ class AWS:
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
         table_name = f'{schema}.{table}' if schema else table
-        engine = create_engine("mssql+pyodbc://Redshift")
+
+        engine = create_engine(self.redshift_str, encoding='utf8')
 
         if check_if_exists(table, schema):
             if if_exists == 'fail':
@@ -432,7 +438,11 @@ class AWS:
             Separator, by default '\t'
         """
         self.df_to_s3(df, sep=sep)
-        self.s3_to_rds(table, schema, if_exists=if_exists, sep=sep)
+        self.s3_to_rds(
+            table=table, 
+            schema=schema, 
+            if_exists=if_exists, 
+            sep=sep)
 
 
     def _create_table_like_s3(self, table_name, sep):
@@ -442,7 +452,7 @@ class AWS:
                         Bucket=self.bucket,
                         Key=self.s3_key + self.file_name,
                         ExpressionType='SQL',
-                        Expression="SELECT * FROM s3object LIMIT 20",
+                        Expression="SELECT * FROM s3object LIMIT 21",
                         InputSerialization = {'CSV': {'FileHeaderInfo': 'None', 'FieldDelimiter': sep}},
                         OutputSerialization = {'CSV': {}},
                         )
@@ -486,7 +496,7 @@ class AWS:
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
-        engine = create_engine("mssql+pyodbc://Redshift")
+        engine = create_engine(self.redshift_str, encoding='utf8')
         engine.execute(sql)
 
         print("Table {} has been created successfully.".format(table_name))
