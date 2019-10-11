@@ -31,7 +31,7 @@ class Extract():
 
     def write(self):
         if self.extract_format == 'csv':
-            with open(self.csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+            with open(self.csv_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
                 print("writing...")
                 writer = csv.writer(csvfile, delimiter=',')
                 writer.writerows(self.rows)
