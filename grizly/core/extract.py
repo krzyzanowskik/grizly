@@ -39,7 +39,7 @@ class Extract():
         else:
             raise f"{self.extract_format} format not supported."
 
-    def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed = False):
+    def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed=False):
         """
         Writes SQL table to csv file.
         Parameters
@@ -77,7 +77,7 @@ class Extract():
                 cursor.execute(sql)
                 self.rows = cursor.fetchall()
                 self.write()
-        if delayed == False:
+        if not delayed:
             from_sql()
         else:
             self.task = dask.delayed(from_sql)()
@@ -86,7 +86,7 @@ class Extract():
     def from_qf():
         pass
 
-    def from_sfdc(self, username, password, fields, table, where=None, env="prod"):
+    def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
         Parameters
@@ -96,37 +96,43 @@ class Extract():
         tablename : string
         ...?
         """
-        proxies = {
-            "http": "http://restrictedproxy.tycoelectronics.com:80",
-            "https": "http://restrictedproxy.tycoelectronics.com:80",
-        }
 
-        if env == "prod":
-            sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
-        elif env == "stage":
-            sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                            organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+        def from_sfdc():
+            proxies = {
+                "http": "http://restrictedproxy.tycoelectronics.com:80",
+                "https": "http://restrictedproxy.tycoelectronics.com:80",
+            }
+
+            if env == "prod":
+                sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+            elif env == "stage":
+                sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                                organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+            else:
+                raise ValueError("Please choose one of supported environments: (prod, stage)")
+
+            query = f"SELECT {', '.join(fields)} FROM {table}"
+            if where:
+                query += f" WHERE {where}"
+
+            data = sf.query_all(query)
+
+            rows = []
+            colnames = [item for item in data["records"][0] if item != "attributes"]
+            rows.append(colnames)
+            for item in data['records']:
+                row = []
+                for field in fields:
+                    row.append(item[field])
+                rows.append(row)
+
+            self.rows = rows
+            self.write()
+
+        if not delayed:
+            from_sfdc()
         else:
-            raise ValueError("Please choose one of supported environments: (prod, stage)")
-
-        query = f"SELECT {', '.join(fields)} FROM {table}"
-        if where:
-            query += f" WHERE {where}"
-
-        data = sf.query_all(query)
-
-        rows = []
-        colnames = [item for item in data["records"][0] if item != "attributes"]
-        rows.append(colnames)
-        for item in data['records']:
-            row = []
-            for field in fields:
-                row.append(item[field])
-            rows.append(row)
-
-        self.rows = rows
-        self.write()
-
+            self.task = dask.delayed(from_sfdc)()
         return self
 
     def from_github(self, username:str, username_password:str, pages:int=100):
