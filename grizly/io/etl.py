@@ -168,7 +168,7 @@ def to_s3(file_path: str, s3_name: str):
     Examples
     --------
     >>> to_s3('emea_daily.xlsx', 'dbb/ENG_EMEA/emea_daily.xlsx')
-    
+
     Parameters
     ----------
     file_path : str
@@ -185,7 +185,7 @@ def to_s3(file_path: str, s3_name: str):
 
 def read_s3(file_path: str, s3_name: str):
     """Downloads s3 file from 'teis-data' bucket with prefix 'bulk/' to local file.
-    
+
     Parameters
     ----------
     file_path : str
@@ -241,7 +241,7 @@ def s3_to_csv(csv_path):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="append"):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="fail"):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -278,14 +278,23 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
 
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
-    
+
     df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
     bucket.upload_file(filepath, f"bulk/{filename}")
     print(f'bulk/{filename} file uploaded to s3')
 
-    if if_exists != "append":
+    if check_if_exists(table_name, schema):
+        if if_exists == 'fail':
+            raise ValueError(f"Table {table_name} already exists")
+        elif if_exists == 'replace':
+            sql = f"DELETE FROM {schema}.{table_name}"
+            engine.execute(sql)
+            print('SQL table has been cleaned up successfully.')
+        else:
+            pass
+    else:
         df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
 
     if not keep_csv:
@@ -322,12 +331,13 @@ def df_clean(df):
             return string
 
         if pd.notna(string):
-            if string.find("'") != -1:
-                first_quote_loc = string.find("'")
-                if string.find("'", first_quote_loc+1) != -1:
-                    second_quote_loc = string.find("'", first_quote_loc+1)
-                    string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
-                    return string_cleaned
+            if isinstance(string, str):
+                if string.find("'") != -1:
+                    first_quote_loc = string.find("'")
+                    if string.find("'", first_quote_loc+1) != -1:
+                        second_quote_loc = string.find("'", first_quote_loc+1)
+                        string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
+                        return string_cleaned
         return string
 
 
@@ -338,8 +348,9 @@ def df_clean(df):
             return string
 
         if pd.notna(string):
-            if string.startswith("'"):
-                return string[1:]
+            if isinstance(string, str):
+                if string.startswith("'"):
+                    return string[1:]
         return string
 
 
