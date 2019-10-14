@@ -4,39 +4,40 @@ import requests
 import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from simple_salesforce import Salesforce
+
+from grizly.tools import AWS
 
 
 class Extract():
     """
-        Writes to csv file.
-        Parameters
-        ----------
-        csv_path : string
-            Path to csv file.
+        Writes data to file.
     """
-    def __init__(self, config=None, csv_path:str=None, extract_format:str = 'csv'):
+    def __init__(self, config=None, file_path:str=None):
         if config == None:
-            self.csv_path = csv_path
+            self.file_path = file_path
         else:
-            self.csv_path = config.csv_path
+            self.file_path = config.file_path
         self.rows = None
-        self.extract_format = extract_format
         self.task = None
-    
+        self.config = config
+
+
     def get_path(self):
-        return self.csv_path
+        return self.file_path
+
 
     def write(self):
-        if self.extract_format == 'csv':
-            with open(self.csv_path, 'a', newline='', encoding = 'utf-8') as csvfile:
-                        print("writing...")
-                        writer = csv.writer(csvfile, delimiter=',')
-                        writer.writerows(self.rows)
-                        print("done writing")
-        else:
-            raise "Non supported format"
+        assert os.path.splitext(self.file_path)[1] == '.csv', "This method only supports csv files"
 
-    def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed = False):
+        with open(self.file_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
+            print("writing...")
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerows(self.rows)
+            print("done writing")
+
+
+    def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed=False):
         """
         Writes SQL table to csv file.
         Parameters
@@ -74,20 +75,18 @@ class Extract():
                 cursor.execute(sql)
                 self.rows = cursor.fetchall()
                 self.write()
-        if delayed == False:
+        if not delayed:
             from_sql()
         else:
             self.task = dask.delayed(from_sql)()
         return self
 
+
     def from_qf():
         pass
 
-<<<<<<< HEAD:grizly/extract.py
-    def from_sfdc(self):
-=======
-    def from_sfdc(self, username, password, fields, table, where=None, env="prod"):
->>>>>>> parent of 834cfe1... added delayed functionality to from_sfdc():grizly/core/extract.py
+
+    def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
         Parameters
@@ -97,44 +96,46 @@ class Extract():
         tablename : string
         ...?
         """
-<<<<<<< HEAD:grizly/extract.py
-        pass
-    
-=======
-        proxies = {
-            "http": "http://restrictedproxy.tycoelectronics.com:80",
-            "https": "http://restrictedproxy.tycoelectronics.com:80",
-        }
 
-        if env == "prod":
-            sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
-        elif env == "stage":
-            sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                            organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+        def from_sfdc():
+            proxies = {
+                "http": "http://restrictedproxy.tycoelectronics.com:80",
+                "https": "http://restrictedproxy.tycoelectronics.com:80",
+            }
+
+            if env == "prod":
+                sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+            elif env == "stage":
+                sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                                organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+            else:
+                raise ValueError("Please choose one of supported environments: (prod, stage)")
+
+            query = f"SELECT {', '.join(fields)} FROM {table}"
+            if where:
+                query += f" WHERE {where}"
+
+            data = sf.query_all(query)
+
+            rows = []
+            colnames = [item for item in data["records"][0] if item != "attributes"]
+            rows.append(colnames)
+            for item in data['records']:
+                row = []
+                for field in fields:
+                    row.append(item[field])
+                rows.append(row)
+
+            self.rows = rows
+            self.write()
+
+        if not delayed:
+            from_sfdc()
         else:
-            raise ValueError("Please choose one of supported environments: (prod, stage)")
-
-        query = f"SELECT {', '.join(fields)} FROM {table}"
-        if where:
-            query += f" WHERE {where}"
-
-        data = sf.query_all(query)
-
-        rows = []
-        colnames = [item for item in data["records"][0] if item != "attributes"]
-        rows.append(colnames)
-        for item in data['records']:
-            row = []
-            for field in fields:
-                row.append(item[field])
-            rows.append(row)
-
-        self.rows = rows
-        self.write()
-
+            self.task = dask.delayed(from_sfdc)()
         return self
 
->>>>>>> parent of 834cfe1... added delayed functionality to from_sfdc():grizly/core/extract.py
+
     def from_github(self, username:str, username_password:str, pages:int=100):
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
@@ -169,3 +170,18 @@ class Extract():
         self.rows = records
         self.write()
         return self
+
+
+    def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
+        file_name = os.path.basename(self.file_path)
+        file_dir = os.path.dirname(self.file_path)
+        aws = AWS(
+                file_name=file_name, 
+                s3_key=s3_key, 
+                bucket=bucket, 
+                file_dir=file_dir,
+                redshift_str=redshift_str,
+                config=self.config
+                )
+        aws.s3_to_file()
+        return aws
