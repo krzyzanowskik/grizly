@@ -1,10 +1,18 @@
-import pandas
+import os
+import dask
+from grizly.tools import AWS
+
 
 class Load():
     """Loads file to s3 or database (only csv files)"""
     def __init__(self, file_path:str=None, config=None):
         self.config = config
-        self.file_path = file_path
+        if file_path:
+             self.file_path = file_path
+        elif config:
+            self.file_path = config.file_path
+        else:
+            raise ValueError("Missing file_path argument.")
 
 
     def to_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
