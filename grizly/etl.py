@@ -18,7 +18,6 @@ os.environ["HTTPS_PROXY"] = config["https"]
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     """
     Writes table to csv file.
-
     Parameters
     ----------
     csv_path : string
@@ -67,6 +66,64 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     con.close()
 
 
+def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
+    """
+    Writes table to csv file.
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    sql : string
+        SQL query.
+    engine : str
+        Engine string.
+    sep : string, default '\t'
+        Separtor/delimiter in csv file.
+    chunksize : int, default None
+        If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+    """
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+    if chunksize:
+        iterator = 0
+        limit_reached = False
+        if qf.data["select"]["limit"] != '':
+            row_limit = qf.data["select"]["limit"]
+        while True:
+            row_limit -= chunksize
+            if row_limit < 0:
+                chunksize += row_limit
+                limit_reached = True
+
+            qf.limit(f"{chunksize} OFFSET {iterator}")
+            iterator += chunksize
+            qf.get_sql()
+
+            try:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(qf.sql)
+            except:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(qf.sql)
+
+            with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+                writer = csv.writer(csvfile, delimiter=sep)
+                writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
+
+                writer.writerows(cursor.fetchall())
+
+            cursor.close()
+            con.close()
+
+            if limit_reached:
+                break
+    else:
+        to_csv(qf,csv_path, sql, engine, sep=sep, compress=compress)
+
+
 def create_table(qf, table, engine, schema=''):
     """
     Creates a new table in database if the table doesn't exist.
@@ -111,7 +168,7 @@ def to_s3(file_path: str, s3_name: str):
     Examples
     --------
     >>> to_s3('emea_daily.xlsx', 'dbb/ENG_EMEA/emea_daily.xlsx')
-    
+
     Parameters
     ----------
     file_path : str
@@ -128,7 +185,7 @@ def to_s3(file_path: str, s3_name: str):
 
 def read_s3(file_path: str, s3_name: str):
     """Downloads s3 file from 'teis-data' bucket with prefix 'bulk/' to local file.
-    
+
     Parameters
     ----------
     file_path : str
@@ -184,8 +241,7 @@ def s3_to_csv(csv_path):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="append"):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="fail"):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -222,14 +278,23 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
 
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
-    
+
     df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
     bucket.upload_file(filepath, f"bulk/{filename}")
     print(f'bulk/{filename} file uploaded to s3')
 
-    if if_exists != "append":
+    if check_if_exists(table_name, schema):
+        if if_exists == 'fail':
+            raise ValueError(f"Table {table_name} already exists")
+        elif if_exists == 'replace':
+            sql = f"DELETE FROM {schema}.{table_name}"
+            engine.execute(sql)
+            print('SQL table has been cleaned up successfully.')
+        else:
+            pass
+    else:
         df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
 
     if not keep_csv:
@@ -266,12 +331,13 @@ def df_clean(df):
             return string
 
         if pd.notna(string):
-            if string.find("'") != -1:
-                first_quote_loc = string.find("'")
-                if string.find("'", first_quote_loc+1) != -1:
-                    second_quote_loc = string.find("'", first_quote_loc+1)
-                    string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
-                    return string_cleaned
+            if isinstance(string, str):
+                if string.find("'") != -1:
+                    first_quote_loc = string.find("'")
+                    if string.find("'", first_quote_loc+1) != -1:
+                        second_quote_loc = string.find("'", first_quote_loc+1)
+                        string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
+                        return string_cleaned
         return string
 
 
@@ -282,8 +348,9 @@ def df_clean(df):
             return string
 
         if pd.notna(string):
-            if string.startswith("'"):
-                return string[1:]
+            if isinstance(string, str):
+                if string.startswith("'"):
+                    return string[1:]
         return string
 
 

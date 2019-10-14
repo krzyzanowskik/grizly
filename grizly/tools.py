@@ -11,9 +11,14 @@ from grizly.utils import (
     read_config,
     check_if_exists
 )
-from pandas import DataFrame
+from pandas import (
+    DataFrame,
+    read_csv
+)
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from io import StringIO
+from csv import reader
 
 grizly_config = read_config()
 os.environ["HTTPS_PROXY"] = grizly_config["https"]
@@ -181,16 +186,9 @@ class Excel:
         return self
 
 
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-
 class AWS:
-    """Class that represents a file in S3.
-    """
-    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, config=None):
+    """Class that represents a file in S3."""
+    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
         """
         Examples
         --------
@@ -207,28 +205,33 @@ class AWS:
             Bucket name, if None then 'teis-data'
         file_dir : str, optional
             Path to local folder to store the file, if None then 'C:\\Users\\your_id\\s3_loads'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
         config : module, optional
             Config module (imported .py file), by default None
         """
         if not config:
-            config = AttrDict()
+            config = _AttrDict()
             config.update({
                         'file_name': 'test.csv', 
                         's3_key' : 'bulk/',
                         'bucket' : 'teis-data',
-                        'file_dir' : get_path('s3_loads')
+                        'file_dir' : get_path('s3_loads'),
+                        'redshift_str' : 'mssql+pyodbc://Redshift'
                         })
 
         self.file_name = file_name if file_name else config.file_name
         self.s3_key = s3_key if s3_key else config.s3_key
         self.bucket = bucket if bucket else config.bucket
         self.file_dir = file_dir if file_dir else config.file_dir
+        self.redshift_str = redshift_str if redshift_str else config.redshift_str
         self.s3_resource = boto3.resource('s3', 
                             aws_access_key_id=grizly_config["akey"], 
                             aws_secret_access_key=grizly_config["skey"], 
                             region_name=grizly_config["region"])
 
         os.makedirs(self.file_dir, exist_ok=True)
+
 
     def info(self):
         """Print a concise summary of a AWS.
@@ -241,6 +244,7 @@ class AWS:
         print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
         print(f"\033[1m bucket: \033[0m\t'{self.bucket}'")
         print(f"\033[1m file_dir: \033[0m\t'{self.file_dir}'")
+        print(f"\033[1m redshift_str: \033[0m\t'{self.redshift_str}'")
 
 
     def file_to_s3(self):
@@ -282,7 +286,7 @@ class AWS:
         print(f"'{s3_key}' uploaded to '{file_path}'")
 
 
-    def df_to_s3(self, df:DataFrame):
+    def df_to_s3(self, df:DataFrame, sep:str='\t'):
         """Saves DataFrame in s3.
         
         Examples
@@ -295,6 +299,8 @@ class AWS:
         ----------
         df : DataFrame
             DataFrame object
+        sep : str, optional
+            Separator, by default '\t'
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
@@ -304,35 +310,52 @@ class AWS:
         if not file_path.endswith('.csv'):
             raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
 
-        df.to_csv(file_path)
+        df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
         self.file_to_s3()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, sep:str='\t'):
-        """Writes S3 file to Redshift table. If table exists then the records will be overwritten.
-        
+    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t') :
+        """Writes S3 file to Redshift table.    
+
         Parameters
         ----------
         table : str
             Table name
         schema : str, optional
             Schame name, by default None
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
         sep : str, optional
             Separator, by default '\t'
         """
-        table_name = f'{schema}.{table}' if schema else f'{table}'
+        if if_exists not in ("fail", "replace", "append"):
+            raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
-        assert check_if_exists(table, schema), f"Table {table_name} doesn't exist. Create it before using this method."
+        table_name = f'{schema}.{table}' if schema else table
 
-        engine = create_engine("mssql+pyodbc://Redshift")
+        engine = create_engine(self.redshift_str, encoding='utf8')
 
-        sql = f"DELETE FROM {table_name}"
-        engine.execute(sql)
-        print(f'Table {table_name} has been cleaned up successfully.')
+        if check_if_exists(table, schema):
+            if if_exists == 'fail':
+                raise AssertionError("Table {} already exists".format(table_name))
+            elif if_exists == 'replace':
+                sql ="DELETE FROM {}".format(table_name)
+                engine.execute(sql)
+                print('SQL table has been cleaned up successfully.')
+            else:
+                pass
+        else:
+            self._create_table_like_s3(table_name, sep)
 
         s3_key = self.s3_key + self.file_name
+        print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://teis-data/{s3_key}'
@@ -349,7 +372,7 @@ class AWS:
         print(f'Data has been copied to {table_name}')
 
 
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, sep:str='\t'):
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t'):
         """Writes DataFrame to Redshift.
         
         Parameters
@@ -360,16 +383,82 @@ class AWS:
             Table name
         schema : str, optional
             Schema name, by default None
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
         sep : str, optional
             Separator, by default '\t'
         """
-        self.df_to_s3(df)
+        self.df_to_s3(df, sep=sep)
+        self.s3_to_rds(
+            table=table, 
+            schema=schema, 
+            if_exists=if_exists, 
+            sep=sep)
 
-        engine = create_engine("mssql+pyodbc://Redshift")
 
-        if not check_if_exists(table, schema):
-            df.head(1).to_sql(table, schema=schema, index=False, con=engine)
-            table_name = f'{schema}.{table}' if schema else f'{table}'
-            print(f'Table {table_name} has been created.')
+    def _create_table_like_s3(self, table_name, sep):
+        s3_client = self.s3_resource.meta.client
 
-        self.s3_to_rds(table, schema, sep=sep)
+        obj_content = s3_client.select_object_content(
+                        Bucket=self.bucket,
+                        Key=self.s3_key + self.file_name,
+                        ExpressionType='SQL',
+                        Expression="SELECT * FROM s3object LIMIT 21",
+                        InputSerialization = {'CSV': {'FileHeaderInfo': 'None', 'FieldDelimiter': sep}},
+                        OutputSerialization = {'CSV': {}},
+                        )
+
+        records = []
+        for event in obj_content['Payload']:
+            if 'Records' in event:
+                records.append(event['Records']['Payload'])
+
+        file_str = ''.join(r.decode('utf-8') for r in records)
+        csv_reader =  reader(StringIO(file_str))
+
+        def isfloat(s):
+            try:
+                float(s)
+                return not s.isdigit()
+            except ValueError:
+                return False
+            
+        count = 0
+        for row in csv_reader:
+            if count == 0:
+                column_names = row
+                column_isfloat = [[] for i in row]
+            else:
+                i = 0 
+                for item in row:
+                    column_isfloat[i].append(isfloat(item))
+                    i+=1
+            count+=1
+            
+        columns = []
+        count = 0
+        for col in column_names:
+            if True in set(column_isfloat[count]):
+                columns.append(f"{col} FLOAT")
+            else:
+                columns.append(f"{col} VARCHAR(500)")
+            count += 1
+            
+        column_str = ", ".join(columns)
+        sql = "CREATE TABLE {} ({})".format(table_name, column_str)
+
+        engine = create_engine(self.redshift_str, encoding='utf8')
+        engine.execute(sql)
+
+        print("Table {} has been created successfully.".format(table_name))
+
+
+class _AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(_AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
