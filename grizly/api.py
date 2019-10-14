@@ -23,10 +23,6 @@ from .load import(
     Load
 )
 
-from .pipeline import(
-    Pipeline
-)
-
 from .etl import (
     to_s3,
     read_s3,

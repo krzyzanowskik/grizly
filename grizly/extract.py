@@ -6,38 +6,37 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 
-from grizly.core.tools import AWS
+
+from grizly.tools import AWS
+
 
 
 class Extract():
     """
-        Writes to csv file.
-        Parameters
-        ----------
-        csv_path : string
-            Path to csv file.
+        Writes data to file.
     """
-    def __init__(self, config=None, csv_path:str=None, extract_format:str = 'csv'):
+    def __init__(self, config=None, file_path:str=None):
         if config == None:
-            self.csv_path = csv_path
+            self.file_path = file_path
         else:
-            self.csv_path = config.csv_path
+            self.file_path = config.file_path
         self.rows = None
-        self.extract_format = extract_format
         self.task = None
+        self.config = config
 
     def get_path(self):
-        return self.csv_path
+        return self.file_path
+
 
     def write(self):
-        if self.extract_format == 'csv':
-            with open(self.csv_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
-                print("writing...")
-                writer = csv.writer(csvfile, delimiter=',')
-                writer.writerows(self.rows)
-                print("done writing")
-        else:
-            raise f"{self.extract_format} format not supported."
+        assert os.path.splitext(self.file_path)[1] == '.csv', "This method only supports csv files"
+
+        with open(self.file_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
+            print("writing...")
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerows(self.rows)
+            print("done writing")
+
 
     def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed=False):
         """
@@ -83,9 +82,11 @@ class Extract():
             self.task = dask.delayed(from_sql)()
         return self
 
+
     def from_qf():
         pass
 
+      
     def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
@@ -135,6 +136,7 @@ class Extract():
             self.task = dask.delayed(from_sfdc)()
         return self
 
+      
     def from_github(self, username:str, username_password:str, pages:int=100):
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
@@ -171,5 +173,16 @@ class Extract():
         return self
 
 
-        def from_s3(self):
-            pass
+    def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
+        file_name = os.path.basename(self.file_path)
+        file_dir = os.path.dirname(self.file_path)
+        aws = AWS(
+                file_name=file_name, 
+                s3_key=s3_key, 
+                bucket=bucket, 
+                file_dir=file_dir,
+                redshift_str=redshift_str,
+                config=self.config
+                )
+        aws.s3_to_file()
+        return aws
