@@ -83,7 +83,11 @@ class Extract():
     def from_qf():
         pass
 
+<<<<<<< HEAD:grizly/extract.py
     def from_sfdc(self):
+=======
+    def from_sfdc(self, username, password, fields, table, where=None, env="prod"):
+>>>>>>> parent of 834cfe1... added delayed functionality to from_sfdc():grizly/core/extract.py
         """
         Writes Salesforce table to csv file.
         Parameters
@@ -93,8 +97,44 @@ class Extract():
         tablename : string
         ...?
         """
+<<<<<<< HEAD:grizly/extract.py
         pass
     
+=======
+        proxies = {
+            "http": "http://restrictedproxy.tycoelectronics.com:80",
+            "https": "http://restrictedproxy.tycoelectronics.com:80",
+        }
+
+        if env == "prod":
+            sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+        elif env == "stage":
+            sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                            organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+        else:
+            raise ValueError("Please choose one of supported environments: (prod, stage)")
+
+        query = f"SELECT {', '.join(fields)} FROM {table}"
+        if where:
+            query += f" WHERE {where}"
+
+        data = sf.query_all(query)
+
+        rows = []
+        colnames = [item for item in data["records"][0] if item != "attributes"]
+        rows.append(colnames)
+        for item in data['records']:
+            row = []
+            for field in fields:
+                row.append(item[field])
+            rows.append(row)
+
+        self.rows = rows
+        self.write()
+
+        return self
+
+>>>>>>> parent of 834cfe1... added delayed functionality to from_sfdc():grizly/core/extract.py
     def from_github(self, username:str, username_password:str, pages:int=100):
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
