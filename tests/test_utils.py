@@ -4,7 +4,7 @@ import os
 from copy import deepcopy
 from filecmp import cmp
 
-from grizly.io.etl import (
+from grizly.etl import (
     to_csv,
     create_table,
     to_s3,
@@ -14,7 +14,7 @@ from grizly.io.etl import (
     s3_to_rds
 )
 
-from grizly.core.utils import (
+from grizly.utils import (
     read_config,
     check_if_exists,
     delete_where,

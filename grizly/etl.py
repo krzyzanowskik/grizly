@@ -5,7 +5,7 @@ from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
 
-from grizly.core.utils import (
+from grizly.utils import (
     read_config,
     check_if_exists
 )

@@ -1,11 +1,11 @@
-from .core.qframe import (
+from .qframe import (
     QFrame, 
     union, 
     join,
     initiate
 )
 
-from .core.utils import (
+from .utils import (
     read_config,
     check_if_exists,
     delete_where,
@@ -15,11 +15,19 @@ from .core.utils import (
     get_path
 )
 
-from .core.extract import(
-    Csv
+from .extract import(
+    Extract
 )
 
-from .io.etl import (
+from .load import(
+    Load
+)
+
+from .pipeline import(
+    Pipeline
+)
+
+from .etl import (
     to_s3,
     read_s3,
     csv_to_s3,
@@ -28,11 +36,11 @@ from .io.etl import (
     df_to_s3
 )
 
-from .io.excel import (
+from .excel import (
     copy_df_to_excel
 )
 
-from .core.tools import (
+from .tools import (
     Excel,
     AWS
 )

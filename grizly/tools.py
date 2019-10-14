@@ -6,7 +6,7 @@ from pandas import (
 )
 import openpyxl
 import win32com.client as win32
-from grizly.core.utils import (
+from grizly.utils import (
     get_path,
     read_config,
     check_if_exists
@@ -17,50 +17,6 @@ from sqlalchemy.pool import NullPool
 
 grizly_config = read_config()
 os.environ["HTTPS_PROXY"] = grizly_config["https"]
-
-class Csv():
-    def __init__(self, config=None, engine_str:str=None):
-        if config == None:
-            self.engine_str = engine_str
-        else:
-            self.engine_str = config.engine_str
-        self.deletethis = ""
-
-    def from_sql(self, table, csv_path, schema:str=None, chunksize:int=1000):
-        engine = create_engine(self.engine_str, encoding='utf8', poolclass=NullPool)
-        conn = engine.connect().connection
-        cursor = conn.cursor()
-        sql = f"""SELECT count(*) FROM {table};"""
-        cursor.execute(sql)
-        records_count = cursor.fetchone()[0]
-        chunks = 0
-        chunks_int = records_count//chunksize
-        chunks_float = records_count/chunksize
-        if chunks_float>chunks_int:
-            chunks += chunks_int + 1
-        if chunks_float<1:
-            chunks += chunks_int + 1
-        for chunk in range(chunks):
-            offset = chunk * chunksize
-            sql = f"""SELECT * FROM {table} LIMIT {chunksize} OFFSET {offset};"""
-            cursor.execute(sql)
-            rows = cursor.fetchall()
-            if not rows:
-                break
-            if chunk == 0:
-                os.remove(csv_path)
-            with open(csv_path, 'a', newline='', encoding = 'utf-8') as csvfile:
-                writer = csv.writer(csvfile, delimiter=',')
-                writer.writerows(rows)
-        cursor.close()
-        conn.close()
-        return self
-
-    def from_sfdc(self):
-        pass
-    
-    def from_github(self):
-        pass
 
 class Excel:
     """Class which deals with Excel files.

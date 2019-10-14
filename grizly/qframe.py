@@ -8,17 +8,17 @@ import json
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
-from grizly.io.sqlbuilder import (
+from grizly.sqlbuilder import (
     get_sql,
     build_column_strings
 )
 
-from grizly.io.excel import (
+from grizly.excel import (
     read_excel,
     copy_df_to_excel
 )
 
-from grizly.io.etl import (
+from grizly.etl import (
     to_csv,
     create_table,
     csv_to_s3,
