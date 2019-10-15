@@ -5,9 +5,8 @@ import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
-
-
 from grizly.tools import AWS
+from grizly.utils import file_extension
 
 
 
@@ -29,7 +28,7 @@ class Extract():
 
 
     def write(self):
-        assert os.path.splitext(self.file_path)[1] == '.csv', "This method only supports csv files"
+        assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
         with open(self.file_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
             print("writing...")
@@ -83,7 +82,7 @@ class Extract():
         return self
 
 
-    def from_qf():
+    def from_qf(self):
         pass
 
       

@@ -1,4 +1,3 @@
-import pytest
 import sqlparse
 import os
 from copy import deepcopy

@@ -29,14 +29,6 @@ try:
 except TypeError:
     pass
 
-# def columns_to_excel(table, excel_path, schema):
-#     """
-#     Save columns names from Denodo to excel.
-#     """
-#     col_names = get_col_name(table, schema)
-#     col_names.to_excel(excel_path, index=False)
-#     return "Columns saved in excel."
-
 
 def get_columns(schema, table, column_types=False, date_format="DATE"):
     """Get columns (or also columns types) from Denodo view.
@@ -112,13 +104,60 @@ def check_if_exists(table, schema=''):
     """
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     if schema == '':
-        table_name = table
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
     else:
-        table_name = schema + '.' + table
         sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
 
     return not pd.read_sql_query(sql = sql_exists, con=engine).empty
+
+
+def check_if_valid_type(type:str):
+    """Checks if given type is valid in Redshift.
+    
+    Parameters
+    ----------
+    type : str
+        Input type
+
+    Returns
+    -------
+    bool
+        True if type is valid, False if not
+    """
+    valid_types = [
+        'SMALLINT',
+        'INT2',
+        'INTEGER',
+        'INT',
+        'INT4',
+        'BIGINT',
+        'INT8',
+        'DECIMAL',
+        'NUMERIC',
+        'REAL',
+        'FLOAT4',
+        'DOUBLE PRECISION',
+        'FLOAT8',
+        'FLOAT',
+        'BOOLEAN',
+        'BOOL',
+        'CHAR',
+        'CHARACTER',
+        'NCHAR',
+        'BPCHAR',
+        'VARCHAR',
+        'CHARACTER VARYING',
+        'NVARCHAR',
+        'TEXT',
+        'DATE',
+        'TIMESTAMP',
+        'TIMESTAMPTZ'
+        ]
+
+    for valid_type in valid_types:
+        if type.upper().startswith(valid_type):
+            return True
+    return False
 
 
 def delete_where(table, schema='', *argv):
@@ -196,3 +235,19 @@ def get_path(*args):
         cwd = "Error with UserProfile"
     cwd = os.path.join(cwd, *args)
     return cwd
+
+
+def file_extension(file_path:str):
+    """Gets extension of file.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the file
+    
+    Returns
+    -------
+    str
+        File extension, eg '.csv'
+    """
+    return os.path.splitext(file_path)[1]
