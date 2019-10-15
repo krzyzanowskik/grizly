@@ -35,9 +35,9 @@ def test_set_cwd():
 
 
 def test_to_s3_and_s3_to_file():
-    in_file_path = get_path('grizly', 'grizly', 'tests', 'tables.xlsx')
+    in_file_path = get_path('grizly', 'tests', 'tables.xlsx')
     to_s3(in_file_path, 'test/tables.xlsx')
-    out_file_path = get_path('grizly', 'grizly', 'tests', 'tables_s3.xlsx')
+    out_file_path = get_path('grizly', 'tests', 'tables_s3.xlsx')
     read_s3(out_file_path, 'test/tables.xlsx')
     assert cmp(in_file_path, out_file_path) == True
 
