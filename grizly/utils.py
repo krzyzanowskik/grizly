@@ -24,8 +24,10 @@ def read_config():
 
 
 config = read_config()
-os.environ["HTTPS_PROXY"] = config["https"]
-
+try:
+    os.environ["HTTPS_PROXY"] = config["https"]
+except TypeError:
+    pass
 
 # def columns_to_excel(table, excel_path, schema):
 #     """
