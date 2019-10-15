@@ -1,3 +1,4 @@
+python==3.7.3
 boto==2.49.0
 boto3==1.9.200
 botocore==1.12.200
@@ -16,3 +17,13 @@ xlrd==1.2.0
 XlsxWriter==1.1.8
 xlwings==0.15.8
 xlwt==1.3.0
+win32com
+
+# below are orchestrate.py dependencies
+simple-salesforce==0.74.2
+dask==2.1.0
+exchangelib==2.0.1
+pendulum==2.0.5
+croniter==0.3.30
+graphviz==2.38.0
+python-graphviz==0.12

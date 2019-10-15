@@ -6,7 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 
+
 from grizly.tools import AWS
+
 
 
 class Extract():
@@ -21,7 +23,6 @@ class Extract():
         self.rows = None
         self.task = None
         self.config = config
-
 
     def get_path(self):
         return self.file_path
@@ -85,7 +86,7 @@ class Extract():
     def from_qf():
         pass
 
-
+      
     def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
@@ -135,7 +136,7 @@ class Extract():
             self.task = dask.delayed(from_sfdc)()
         return self
 
-
+      
     def from_github(self, username:str, username_password:str, pages:int=100):
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
