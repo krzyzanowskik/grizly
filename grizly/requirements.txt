@@ -18,3 +18,4 @@ xlwings==0.15.8
 xlwt==1.3.0
 simple_salesforce
 dask
+win32com
