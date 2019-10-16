@@ -6,8 +6,7 @@ from tests import config
 from grizly import (
     AWS
 )
-# from grizly import extract
-# from grizly.tests import config
+
 
 def write_out(out):
     with open(
