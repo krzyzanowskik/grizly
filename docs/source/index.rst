@@ -7,12 +7,12 @@ Welcome to grizly's documentation!
 ==================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    content/getting_started
-   content/QFrame
-
+   content/api_QFrame
+   content/api_Extract
 
 
 Indices and tables
