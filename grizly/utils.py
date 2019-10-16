@@ -118,7 +118,7 @@ def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
         return col_names, col_types
 
 
-def get_redshift_columns(schema, table):
+def get_redshift_columns(schema, table, column_types=False):
     """Get columns and optionally other metadata from a Redshift table.
 
     Parameters
@@ -134,35 +134,38 @@ def get_redshift_columns(schema, table):
     """
     con = get_connection(db="redshift")
     cursor = con.cursor()
-    sql = f"""SELECT column_name FROM (
-                SELECT ordinal_position AS position,
-                       column_name,
-                       data_type,
-                       CASE WHEN character_maximum_length IS NOT NULL
-                            THEN character_maximum_length
-                            ELSE numeric_precision END AS max_length
-                FROM information_schema.columns
-                WHERE table_name = '{table}' AND table_schema = '{schema}'
-                ORDER BY ordinal_position
-                );"""
+    sql = f"""
+        SELECT ordinal_position AS position, column_name, data_type,
+        CASE WHEN character_maximum_length IS NOT NULL
+        THEN character_maximum_length
+        ELSE numeric_precision END AS max_length
+        FROM information_schema.columns
+        WHERE table_name = '{table}' AND table_schema = '{schema}'
+        ORDER BY ordinal_position;
+        """
     cursor.execute(sql)
 
-    column_names = []
-    columns_types = [] # to do
-    while True:
-        column = cursor.fetchone()
-        if not column:
-            break
-        column_name = column[0]
-        # column_type = column[1]
-        column_names.append(column_name)
-        # column_types.append(column_types)
-    cursor.close()
-    con.close()
+    col_names = []
 
-    # column_types = map_types(column_types)
-
-    return column_names #, column_types
+    if column_types:
+        col_types = []
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_name = column[1]
+            col_type = column[2]
+            col_names.append(col_name)
+            col_types.append(col_type)
+        return col_names, col_types
+    else:
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_name = column[1]
+            col_names.append(col_name)
+        return col_names
 
 
 def get_columns(schema, table, column_types=False, date_format="DATE", db="denodo"):
