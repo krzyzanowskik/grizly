@@ -7,7 +7,7 @@ from sqlalchemy.pool import NullPool
 class Config(dict):
     def __init__(self):
         dict.__init__(self)
-        
+
     def from_dict(self, d):
         for key in d:
             self[key] = d[key]
@@ -37,10 +37,20 @@ except TypeError:
 #     col_names.to_excel(excel_path, index=False)
 #     return "Columns saved in excel."
 
+def get_connection(db="denodo"):
 
-def get_columns(schema, table, column_types=False, date_format="DATE"):
+    engine = create_engine(config[db])
+
+    try:
+        con = engine.connect().connection
+    except:
+        con = engine.connect().connection
+
+    return con
+
+def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
     """Get columns (or also columns types) from Denodo view.
-    
+
     Parameters
     ----------
     schema : str
@@ -52,6 +62,8 @@ def get_columns(schema, table, column_types=False, date_format="DATE"):
     date_format : str
         Denodo date format differs from those from other databases. User can choose which format is desired.
     """
+
+
     if column_types==False:
         sql = f"""
             SELECT column_name
@@ -66,7 +78,7 @@ def get_columns(schema, table, column_types=False, date_format="DATE"):
             WHERE view_name = '{table}'
             AND database_name = '{schema}'
     """
-    engine = create_engine("mssql+pyodbc://DenodoODBC")
+    engine = create_engine(config["denodo"])
 
     try:
         con = engine.connect().connection
@@ -104,6 +116,64 @@ def get_columns(schema, table, column_types=False, date_format="DATE"):
         cursor.close()
         con.close()
         return col_names, col_types
+
+
+def get_redshift_columns(schema, table):
+    """Get columns and optionally other metadata from a Redshift table.
+
+    Parameters
+    ----------
+    schema : str
+        Name of schema.
+    table : str
+        Name of table.
+    column_types : bool
+        True means user wants to get also data types.
+    date_format : str
+        Denodo date format differs from those from other databases. User can choose which format is desired.
+    """
+    con = get_connection(db="redshift")
+    cursor = con.cursor()
+    sql = f"""SELECT column_name FROM (
+                SELECT ordinal_position AS position,
+                       column_name,
+                       data_type,
+                       CASE WHEN character_maximum_length IS NOT NULL
+                            THEN character_maximum_length
+                            ELSE numeric_precision END AS max_length
+                FROM information_schema.columns
+                WHERE table_name = '{table}' AND table_schema = '{schema}'
+                ORDER BY ordinal_position
+                );"""
+    cursor.execute(sql)
+
+    column_names = []
+    columns_types = [] # to do
+    while True:
+        column = cursor.fetchone()
+        if not column:
+            break
+        column_name = column[0]
+        # column_type = column[1]
+        column_names.append(column_name)
+        # column_types.append(column_types)
+    cursor.close()
+    con.close()
+
+    # column_types = map_types(column_types)
+
+    return column_names #, column_types
+
+
+def get_columns(schema, table, column_types=False, date_format="DATE", db="denodo"):
+    """ Retrieves column names and optionally other table metadata """
+    db = db.lower()
+    if db == "denodo":
+        return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format)
+    elif db == "redshift":
+        return get_redshift_columns(schema=schema, table=table)
+    else:
+        raise NotImplementedError("This db is not yet supported")
 
 
 def check_if_exists(table, schema=''):
