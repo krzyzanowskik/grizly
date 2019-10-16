@@ -490,7 +490,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
     print(f'Data has been copied to {table_name}')
 
 
-def write_to(qf, table, schema):
+def write_to(qf, table, schema, if_exists):
     """
     Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
 
@@ -506,8 +506,17 @@ def write_to(qf, table, schema):
     columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
     if schema!='':
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {schema}.{table}"
     else:
         sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {table}"
     engine = create_engine(qf.engine)
-    engine.execute(sql_statement)
-    print(f'Data has been written to {table}')
+    if if_exists=='replace':
+        engine.execute(sql__del_statement)
+        engine.execute(sql_statement)
+        print(f'Data has been owerwritten into {schema}.{table}')
+    elif if_exists=='fail':
+        raise ValueError("Table already exists")
+    elif if_exists=='append':
+        engine.execute(sql_statement)
+        print(f'Data has been appended to {table}')
