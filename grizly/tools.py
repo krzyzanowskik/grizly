@@ -142,48 +142,28 @@ class Excel:
         
         return value
 
-
-    def open(self, input=False):
-        """[summary]
+    def get_value_nowin32(self, sheet, row, col):
+        """Extracts cell value from Excel file.
         
         Parameters
         ----------
-        input : bool, optional
-            [description], by default False
-        
+        sheet : str
+            Name of sheet
+        row : int
+            Cell row
+        col : int
+            Cell column
+
         Returns
         -------
-        [type]
-            [description]
+        float
+            Cell value
         """
-
-        if input == False:
-            path = self.input_excel_path
-        else:
-            path = self.output_excel_path
-
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            try:
-                xlwb = excel.Workbooks(path)
-            except Exception as e:
-                try:
-                    xlwb = excel.Workbooks.Open(path)
-                except Exception as e:
-                    print(e)
-                    xlwb = None
-            ws = xlwb.Worksheets('blaaaa') 
-            excel.Visible = True
-
-        except Exception as e:
-            print(e)
-
-        finally:
-            ws = None
-            wb = None
-            excel = None
-
-        return self
+        
+        wb = openpyxl.load_workbook(self.input_excel_path, data_only=True)
+        sh = wb[sheet]
+        value = sh.cell(row, col).value
+        return value
 
 
 class AWS:
