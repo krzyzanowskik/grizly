@@ -157,7 +157,7 @@ def get_redshift_columns(schema, table, column_types=False):
             col_type = column[2]
             col_names.append(col_name)
             col_types.append(col_type)
-        return col_names, col_types
+        to_return = (col_names, col_types)
     else:
         while True:
             column = cursor.fetchone()
@@ -165,7 +165,12 @@ def get_redshift_columns(schema, table, column_types=False):
                 break
             col_name = column[1]
             col_names.append(col_name)
-        return col_names
+        to_return = col_names
+
+    cursor.close()
+    con.close()
+
+    return to_return
 
 
 def get_columns(schema, table, column_types=False, date_format="DATE", db="denodo"):
