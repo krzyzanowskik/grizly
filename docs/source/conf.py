@@ -32,7 +32,7 @@ release = '0.2'
 # ones.
 extensions = ['sphinx.ext.autodoc'
                 , 'sphinx.ext.napoleon'
-                , 'sphinx_automodapi.automodapi']
+            ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
