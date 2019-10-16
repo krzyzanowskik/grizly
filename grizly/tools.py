@@ -5,7 +5,6 @@ from pandas import (
     ExcelWriter
 )
 import openpyxl
-import win32com.client as win32
 from grizly.utils import (
     get_path,
     read_config,
@@ -117,32 +116,6 @@ class Excel:
 
 
     def get_value(self, sheet, row, col):
-        """Extracts cell value from Excel file.
-        
-        Parameters
-        ----------
-        sheet : str
-            Name of sheet
-        row : int
-            Cell row
-        col : int
-            Cell column
-
-        Returns
-        -------
-        float
-            Cell value
-        """
-        xlApp = win32.Dispatch('Excel.Application')
-        wb = xlApp.Workbooks.Open(self.input_excel_path)
-        ws = wb.Worksheets(sheet)
-        value = ws.Cells(row,col).Value
-        wb.Close()
-        xlApp.Quit()
-        
-        return value
-
-    def get_value_nowin32(self, sheet, row, col):
         """Extracts cell value from Excel file.
         
         Parameters
