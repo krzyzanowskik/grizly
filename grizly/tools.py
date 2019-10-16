@@ -20,7 +20,10 @@ from io import StringIO
 from csv import reader
 
 grizly_config = read_config()
-os.environ["HTTPS_PROXY"] = grizly_config["https"]
+try:
+    os.environ["HTTPS_PROXY"] = grizly_config["https"]
+except TypeError:
+    pass
 
 class Excel:
     """Class which deals with Excel files.
