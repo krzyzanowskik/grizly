@@ -512,7 +512,7 @@ def write_to(qf, table, schema, if_exists):
         sql_del_statement = f"DELETE FROM {table}"
     engine = create_engine(qf.engine)
     if if_exists=='replace':
-        engine.execute(sql__del_statement)
+        engine.execute(sql_del_statement)
         engine.execute(sql_statement)
         print(f'Data has been owerwritten into {schema}.{table}')
     elif if_exists=='fail':
