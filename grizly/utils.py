@@ -29,13 +29,6 @@ try:
 except TypeError:
     pass
 
-# def columns_to_excel(table, excel_path, schema):
-#     """
-#     Save columns names from Denodo to excel.
-#     """
-#     col_names = get_col_name(table, schema)
-#     col_names.to_excel(excel_path, index=False)
-#     return "Columns saved in excel."
 
 def get_connection(db="denodo"):
 
@@ -48,6 +41,7 @@ def get_connection(db="denodo"):
 
     return con
 
+  
 def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
     """Get columns (or also columns types) from Denodo view.
 
@@ -118,7 +112,7 @@ def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
         return col_names, col_types
 
 
-def get_redshift_columns(schema, table):
+def get_redshift_columns(schema, table, column_types=False):
     """Get columns and optionally other metadata from a Redshift table.
 
     Parameters
@@ -134,35 +128,43 @@ def get_redshift_columns(schema, table):
     """
     con = get_connection(db="redshift")
     cursor = con.cursor()
-    sql = f"""SELECT column_name FROM (
-                SELECT ordinal_position AS position,
-                       column_name,
-                       data_type,
-                       CASE WHEN character_maximum_length IS NOT NULL
-                            THEN character_maximum_length
-                            ELSE numeric_precision END AS max_length
-                FROM information_schema.columns
-                WHERE table_name = '{table}' AND table_schema = '{schema}'
-                ORDER BY ordinal_position
-                );"""
+    sql = f"""
+        SELECT ordinal_position AS position, column_name, data_type,
+        CASE WHEN character_maximum_length IS NOT NULL
+        THEN character_maximum_length
+        ELSE numeric_precision END AS max_length
+        FROM information_schema.columns
+        WHERE table_name = '{table}' AND table_schema = '{schema}'
+        ORDER BY ordinal_position;
+        """
     cursor.execute(sql)
 
-    column_names = []
-    columns_types = [] # to do
-    while True:
-        column = cursor.fetchone()
-        if not column:
-            break
-        column_name = column[0]
-        # column_type = column[1]
-        column_names.append(column_name)
-        # column_types.append(column_types)
+    col_names = []
+
+    if column_types:
+        col_types = []
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_name = column[1]
+            col_type = column[2]
+            col_names.append(col_name)
+            col_types.append(col_type)
+        to_return = (col_names, col_types)
+    else:
+        while True:
+            column = cursor.fetchone()
+            if not column:
+                break
+            col_name = column[1]
+            col_names.append(col_name)
+        to_return = col_names
+
     cursor.close()
     con.close()
 
-    # column_types = map_types(column_types)
-
-    return column_names #, column_types
+    return to_return
 
 
 def get_columns(schema, table, column_types=False, date_format="DATE", db="denodo"):
@@ -182,13 +184,60 @@ def check_if_exists(table, schema=''):
     """
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     if schema == '':
-        table_name = table
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
     else:
-        table_name = schema + '.' + table
         sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
 
     return not pd.read_sql_query(sql = sql_exists, con=engine).empty
+
+
+def check_if_valid_type(type:str):
+    """Checks if given type is valid in Redshift.
+    
+    Parameters
+    ----------
+    type : str
+        Input type
+
+    Returns
+    -------
+    bool
+        True if type is valid, False if not
+    """
+    valid_types = [
+        'SMALLINT',
+        'INT2',
+        'INTEGER',
+        'INT',
+        'INT4',
+        'BIGINT',
+        'INT8',
+        'DECIMAL',
+        'NUMERIC',
+        'REAL',
+        'FLOAT4',
+        'DOUBLE PRECISION',
+        'FLOAT8',
+        'FLOAT',
+        'BOOLEAN',
+        'BOOL',
+        'CHAR',
+        'CHARACTER',
+        'NCHAR',
+        'BPCHAR',
+        'VARCHAR',
+        'CHARACTER VARYING',
+        'NVARCHAR',
+        'TEXT',
+        'DATE',
+        'TIMESTAMP',
+        'TIMESTAMPTZ'
+        ]
+
+    for valid_type in valid_types:
+        if type.upper().startswith(valid_type):
+            return True
+    return False
 
 
 def delete_where(table, schema='', *argv):

@@ -272,7 +272,7 @@ class AWS:
         self.file_to_s3()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t') :
+    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
         """Writes S3 file to Redshift table.    
 
         Parameters
@@ -308,7 +308,7 @@ class AWS:
             else:
                 pass
         else:
-            self._create_table_like_s3(table_name, sep)
+            self._create_table_like_s3(table_name, sep, types)
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
@@ -328,7 +328,7 @@ class AWS:
         print(f'Data has been copied to {table_name}')
 
 
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t'):
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None):
         """Writes DataFrame to Redshift.
         
         Parameters
@@ -354,10 +354,11 @@ class AWS:
             table=table, 
             schema=schema, 
             if_exists=if_exists, 
-            sep=sep)
+            sep=sep,
+            types=types)
 
 
-    def _create_table_like_s3(self, table_name, sep):
+    def _create_table_like_s3(self, table_name, sep, types):
         s3_client = self.s3_resource.meta.client
 
         obj_content = s3_client.select_object_content(
@@ -395,14 +396,19 @@ class AWS:
                     column_isfloat[i].append(isfloat(item))
                     i+=1
             count+=1
-            
+
         columns = []
+
         count = 0
         for col in column_names:
-            if True in set(column_isfloat[count]):
-                columns.append(f"{col} FLOAT")
+            if types and col in types:
+                col_type = types[col].upper()
             else:
-                columns.append(f"{col} VARCHAR(500)")
+                if True in set(column_isfloat[count]):
+                    col_type = "FLOAT"
+                else:
+                    col_type = "VARCHAR(500)"
+            columns.append(f"{col} {col_type}")
             count += 1
             
         column_str = ", ".join(columns)
