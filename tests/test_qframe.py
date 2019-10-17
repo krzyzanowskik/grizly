@@ -4,7 +4,7 @@ from copy import deepcopy
 from sqlalchemy import create_engine
 from pandas import read_sql, read_csv, merge, concat
 
-from grizly import get_path
+from grizly.utils import get_path
 
 from grizly.qframe import (
     QFrame,
@@ -19,7 +19,7 @@ from grizly.sqlbuilder import (
 )
 
 excel_path = get_path("tables.xlsx", from_where="here")
-engine_string = "sqlite:///" + get_path("chinook.sqlite", from_where="here")
+engine_string = "sqlite:///" + get_path("Chinook.sqlite", from_where="here")
 
 orders = {
     "select": {
@@ -62,7 +62,7 @@ customers = {
 
 def write_out(out):
     with open(
-        get_path("grizly", "tests", "output.sql"),
+        get_path("output.sql", from_where="here"),
         "w",
     ) as f:
         f.write(out)
@@ -112,7 +112,6 @@ def test_read_dict():
 
 
 def test_read_excel():
-    excel_path = get_path("grizly", "tests", 'tables.xlsx')
     q = QFrame().read_excel(excel_path,sheet_name="orders")
     assert q.data["select"]["fields"]["Order_Nr"] == {
         "type": "dim",
@@ -300,7 +299,6 @@ def test_get_sql():
 
 
 def test_get_sql_with_select_attr():
-    excel_path = get_path('grizly', 'tests', 'tables.xlsx')
     q = QFrame().read_excel(excel_path, sheet_name="orders")
 
     testsql = """
@@ -327,7 +325,6 @@ def test_get_sql_with_select_attr():
 
 
 def test_to_csv():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
     q = QFrame(engine=engine_string,data = {'select':{
         'fields':{  'InvoiceLineId':{'type': 'dim'},
                     'InvoiceId': {'type': 'dim'},
@@ -335,7 +332,7 @@ def test_to_csv():
                     'UnitPrice': {'type': 'num'},
                     'Quantity': {'type': 'num'}
                 },
-        'table':'invoice_items'}})
+        'table':'InvoiceLine'}})
     q.assign(UnitPriceFlag='CASE WHEN UnitPrice>1 THEN 1 ELSE 0 END', type='dim')
     q.rename({'TrackId': 'Track'})
 
@@ -343,7 +340,7 @@ def test_to_csv():
     q.to_csv(csv_path)
     df_from_qf = read_csv(csv_path, sep='\t')
 
-    # os.remove(csv_path)
+    os.remove(csv_path)
 
     engine = create_engine(engine_string)
     test_df = read_sql(sql=q.sql, con=engine)
@@ -353,9 +350,8 @@ def test_to_csv():
 
 
 def test_to_df():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
     q = QFrame(engine=engine_string).read_excel(
-        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
+        excel_path,
         sheet_name="cb_invoices",
     )
     q.assign(sales="Quantity*UnitPrice", type='num')
@@ -369,7 +365,6 @@ def test_to_df():
 
 
 def test_copy():
-    excel_path = get_path('grizly', 'tests', 'tables.xlsx')
     qf = QFrame().read_excel(excel_path, sheet_name="orders")
 
     qf_copy = qf.copy()
@@ -385,7 +380,7 @@ playlists = {
             "PlaylistId": {"type" : "dim"},
             "Name": {"type" : "dim"}
         },
-        "table" : "playlists"
+        "table" : "Playlist"
     }
 }
 
@@ -396,7 +391,7 @@ playlist_track = {
             "PlaylistId": {"type" : "dim"},
             "TrackId": {"type" : "dim"}
         },
-        "table" : "playlist_track"
+        "table" : "PlaylistTrack"
     }
 }
 
@@ -413,14 +408,13 @@ tracks = {  'select': {
                     'Bytes' : {'type': 'num'},
                     'UnitPrice': {'type': 'num'}
                 },
-                'table': 'tracks'
+                'table': 'Track'
             }
 }
 
 
 def test_join_1():
     # using grizly
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
@@ -462,7 +456,6 @@ def test_join_1():
 
 
 def test_join_2():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
@@ -478,11 +471,11 @@ def test_join_2():
             FROM
             (SELECT PlaylistId,
                     TrackId
-            FROM playlist_track) sq1
+            FROM PlaylistTrack) sq1
             CROSS JOIN
             (SELECT PlaylistId,
                     Name
-            FROM playlists) sq2
+            FROM Playlist) sq2
             """
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
@@ -502,26 +495,25 @@ def test_join_2():
                 FROM
                     (SELECT PlaylistId,
                             TrackId
-                    FROM playlist_track) sq1
+                    FROM PlaylistTrack) sq1
                 CROSS JOIN
                     (SELECT PlaylistId,
                             Name
-                    FROM playlists) sq2) sq1
+                    FROM Playlist) sq2) sq1
                 RIGHT JOIN
                 (SELECT PlaylistId,
                         TrackId
-                FROM playlist_track) sq2 ON sq1.PlaylistId=sq2.PlaylistId
+                FROM PlaylistTrack) sq2 ON sq1.PlaylistId=sq2.PlaylistId
                 FULL JOIN
                 (SELECT PlaylistId,
                         Name
-                FROM playlists) sq3 ON sq2.PlaylistId=sq3.PlaylistId
+                FROM Playlist) sq3 ON sq2.PlaylistId=sq3.PlaylistId
             """
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
 
 
 def test_union():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
@@ -530,11 +522,11 @@ def test_union():
     testsql = """
             SELECT PlaylistId,
                 Name
-            FROM playlists
+            FROM Playlist
             UNION
             SELECT PlaylistId,
                 Name
-            FROM playlists
+            FROM Playlist
             """
     sql = unioned_qf.get_sql().sql
 
@@ -546,11 +538,11 @@ def test_union():
     testsql = """
             SELECT PlaylistId,
                 Name
-            FROM playlists
+            FROM Playlist
             UNION ALL
             SELECT PlaylistId,
                 Name
-            FROM playlists
+            FROM Playlist
             """
     sql = unioned_qf.get_sql().sql
 

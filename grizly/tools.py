@@ -290,6 +290,8 @@ class AWS:
 
         sep : str, optional
             Separator, by default '\t'
+        types : dict, optional
+            Data types to force
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -348,6 +350,8 @@ class AWS:
 
         sep : str, optional
             Separator, by default '\t'
+        types : dict, optional
+            Data types to force
         """
         self.df_to_s3(df, sep=sep)
         self.s3_to_rds(
