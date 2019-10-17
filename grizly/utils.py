@@ -308,26 +308,33 @@ def set_cwd(*args):
     return cwd
 
 
-def get_path(*args):
-    try:
-        cwd = os.environ['USERPROFILE']
-    except KeyError:
-        cwd = "Error with UserProfile"
-    cwd = os.path.join(cwd, *args)
-    return cwd
-
-  
-def file_extension(file_path:str):
-    """Gets extension of file.
-
+def get_path(*args, from_where='python'):
+    """Quick utility function to get the full path from either
+    the python execution root folder or from your python
+    notebook or python module folder
+    
     Parameters
     ----------
-    file_path : str
-        Path to the file
+    from_where : {'python', 'here'}, optional
+
+        * with the python option the path starts from the 
+        python execution environment
+        * with the here option the path starts from the 
+        folder in which your module or notebook is
     
     Returns
     -------
     str
-        File extension, eg '.csv'
+        path in string format
     """
-    return os.path.splitext(file_path)[1]
+    if type == 'python':
+        try:
+            cwd = os.environ['USERPROFILE']
+        except KeyError:
+            cwd = "Error with UserProfile"
+        cwd = os.path.join(cwd, *args)
+        return cwd
+    elif type == 'here':
+        cwd = os.path.abspath('')
+        cwd = os.path.join(cwd, *args)
+        return cwd
