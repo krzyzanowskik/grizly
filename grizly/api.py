@@ -45,4 +45,7 @@ from .tools import (
 
 from os import environ
 
-cwd = environ['USERPROFILE']
+try:
+    cwd = environ['USERPROFILE']
+except KeyError:
+    pass

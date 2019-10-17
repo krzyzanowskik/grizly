@@ -4,6 +4,8 @@ from copy import deepcopy
 from sqlalchemy import create_engine
 from pandas import read_sql, read_csv, merge, concat
 
+from grizly import get_path
+
 from grizly.qframe import (
     QFrame,
     union,
@@ -79,7 +81,7 @@ def clean_testexpr(testsql):
 
 
 def test_save_json_and_read_json1():
-    q = QFrame().from_dict(deepcopy(customers))
+    q = QFrame().read_dict(deepcopy(customers))
     q.save_json('qframe_data.json')
     q.read_json('qframe_data.json')
     os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
@@ -87,7 +89,7 @@ def test_save_json_and_read_json1():
 
 
 def test_save_json_and_read_json2():
-    q = QFrame().from_dict(deepcopy(customers))
+    q = QFrame().read_dict(deepcopy(customers))
     q.save_json('qframe_data.json', 'alias')
     q.read_json('qframe_data.json', 'alias')
     os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
@@ -103,11 +105,11 @@ def test_validation_data():
 
     assert data["select"]["fields"]["Customer"]["as"] == "ABC_DEF"
 
-def test_from_dict():
-    q = QFrame().from_dict(deepcopy(customers))
+def test_read_dict():
+    q = QFrame().read_dict(deepcopy(customers))
     assert q.data["select"]["fields"]["Country"] == {"type": "dim", "as": "Country"}
 
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     assert q.data["select"]["fields"]["Value"] == {"type": "num"}
 
 
@@ -121,34 +123,34 @@ def test_read_excel():
     }
 
 def test_create_sql_blocks():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     assert build_column_strings(q.data)["select_names"] == ["Order as Bookings","Part", "Customer", "Value"]
     assert build_column_strings(q.data)["select_aliases"] == ["Bookings", "Part","Customer", "Value"]
     assert q.create_sql_blocks().data["select"]["sql_blocks"] == build_column_strings(q.data)
 
 
 def test_rename():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.rename({'Customer': 'Customer Name', 'Value': 'Sales'})
     assert q.data['select']['fields']['Customer']['as'] == 'Customer_Name'
     assert q.data['select']['fields']['Value']['as'] == 'Sales'
 
 
 def test_remove():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.remove(['Part', 'Order'])
     assert 'Part' and 'Order' not in q.data['select']['fields']
 
 
 def test_distinct():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.distinct()
     sql = q.get_sql().sql
     assert sql[7:15].upper() == 'DISTINCT'
 
 
 def test_query():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.query("country!='France'")
     q.query("country!='Italy'",if_exists='replace')
     q.query("(Customer='Enel' or Customer='Agip')")
@@ -158,7 +160,7 @@ def test_query():
     assert q.data["select"]["where"] == testexpr
 
 def test_having():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.query("sum(Value)==1000")
     q.query("sum(Value)>1000",if_exists='replace')
     q.query("count(Customer)<=65")
@@ -166,7 +168,7 @@ def test_having():
     assert q.data["select"]["where"] == testexpr
 
 def test_assign():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     value_x_two = "Value * 2"
     q.assign(value_x_two=value_x_two, type='num')
     q.assign(extract_date="format('yyyy-MM-dd', '2019-04-05 13:00:09')", custom_type='date')
@@ -191,7 +193,7 @@ def test_assign():
 
 
 def test_groupby():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.groupby(["Order", "Customer"])
     order = {"type": "dim", "as": "Bookings", "group_by": "group"}
     customer = {"type": "dim", "as": "Customer", "group_by": "group"}
@@ -200,14 +202,14 @@ def test_groupby():
 
 
 def test_agg():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.groupby(["Order", "Customer"])["Value"].agg("sum")
     value = {"type": "num", "group_by": "sum"}
     assert q.data["select"]["fields"]["Value"] == value
 
 
 def test_orderby():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.orderby("Value")
     assert q.data["select"]["fields"]["Value"]["order_by"] == 'ASC'
 
@@ -233,14 +235,14 @@ def test_orderby():
 
 
 def test_limit():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.limit(10)
     sql = q.get_sql().sql
     assert sql[-8:].upper() == 'LIMIT 10'
 
 
 def test_select():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.select(['Customer', 'Value'])
     q.groupby('sq.Customer')['sq.Value'].agg('sum')
     q.get_sql()
@@ -263,18 +265,18 @@ def test_select():
 
 
 def test_rearrange():
-    q = QFrame().from_dict(deepcopy(customers))
+    q = QFrame().read_dict(deepcopy(customers))
     q.rearrange(["Customer", "Country"])
     assert q.get_fields() == ["Customer", "Country"]
 
 def test_get_fields():
-    q = QFrame().from_dict(deepcopy(customers))
+    q = QFrame().read_dict(deepcopy(customers))
     fields = ["Country", "Customer"]
     assert fields == q.get_fields()
 
 
 def test_get_sql():
-    q = QFrame().from_dict(deepcopy(orders))
+    q = QFrame().read_dict(deepcopy(orders))
     q.assign(New_case="CASE WHEN Bookings = 100 THEN 1 ELSE 0 END", type="num")
     q.limit(5)
     q.groupby(q.data["select"]["fields"])["Value"].agg("sum")
@@ -422,8 +424,8 @@ def test_join_1():
     # using grizly
     engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
-    playlist_track_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlist_track))
-    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+    playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
+    playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
     joined_qf = join([playlist_track_qf,playlists_qf], join_type="left join", on="sq1.PlaylistId=sq2.PlaylistId")
     joined_df = joined_qf.to_df()
@@ -442,7 +444,7 @@ def test_join_1():
     assert joined_df.equals(test_df)
 
     # using grizly
-    tracks_qf = QFrame(engine=engine_string).from_dict(deepcopy(tracks))
+    tracks_qf = QFrame(engine=engine_string).read_dict(deepcopy(tracks))
 
     joined_qf = join(qframes=[playlist_track_qf, playlists_qf, tracks_qf], join_type=
                     ['left join', 'left join'], on=[
@@ -464,8 +466,8 @@ def test_join_1():
 def test_join_2():
     engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
-    playlist_track_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlist_track))
-    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+    playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
+    playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
     joined_qf = join([playlist_track_qf,playlists_qf], join_type="cross join", on=0)
 
@@ -523,7 +525,7 @@ def test_join_2():
 def test_union():
     engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
-    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+    playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
     unioned_qf =  union([playlists_qf, playlists_qf], 'union')
 

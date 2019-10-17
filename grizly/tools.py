@@ -5,7 +5,6 @@ from pandas import (
     ExcelWriter
 )
 import openpyxl
-import win32com.client as win32
 from grizly.utils import (
     get_path,
     read_config,
@@ -21,7 +20,10 @@ from io import StringIO
 from csv import reader
 
 grizly_config = read_config()
-os.environ["HTTPS_PROXY"] = grizly_config["https"]
+try:
+    os.environ["HTTPS_PROXY"] = grizly_config["https"]
+except TypeError:
+    pass
 
 class Excel:
     """Class which deals with Excel files.
@@ -133,57 +135,11 @@ class Excel:
         float
             Cell value
         """
-        xlApp = win32.Dispatch('Excel.Application')
-        wb = xlApp.Workbooks.Open(self.input_excel_path)
-        ws = wb.Worksheets(sheet)
-        value = ws.Cells(row,col).Value
-        wb.Close()
-        xlApp.Quit()
         
+        wb = openpyxl.load_workbook(self.input_excel_path, data_only=True)
+        sh = wb[sheet]
+        value = sh.cell(row, col).value
         return value
-
-
-    def open(self, input=False):
-        """[summary]
-        
-        Parameters
-        ----------
-        input : bool, optional
-            [description], by default False
-        
-        Returns
-        -------
-        [type]
-            [description]
-        """
-
-        if input == False:
-            path = self.input_excel_path
-        else:
-            path = self.output_excel_path
-
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            try:
-                xlwb = excel.Workbooks(path)
-            except Exception as e:
-                try:
-                    xlwb = excel.Workbooks.Open(path)
-                except Exception as e:
-                    print(e)
-                    xlwb = None
-            ws = xlwb.Worksheets('blaaaa') 
-            excel.Visible = True
-
-        except Exception as e:
-            print(e)
-
-        finally:
-            ws = None
-            wb = None
-            excel = None
-
-        return self
 
 
 class AWS:
