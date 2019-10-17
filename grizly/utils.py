@@ -41,7 +41,7 @@ def get_connection(db="denodo"):
 
     return con
 
-  
+
 def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
     """Get columns (or also columns types) from Denodo view.
 
@@ -173,7 +173,7 @@ def get_columns(schema, table, column_types=False, date_format="DATE", db="denod
     if db == "denodo":
         return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format)
     elif db == "redshift":
-        return get_redshift_columns(schema=schema, table=table)
+        return get_redshift_columns(schema=schema, table=table, column_types=column_types)
     else:
         raise NotImplementedError("This db is not yet supported")
 
@@ -193,7 +193,7 @@ def check_if_exists(table, schema=''):
 
 def check_if_valid_type(type:str):
     """Checks if given type is valid in Redshift.
-    
+
     Parameters
     ----------
     type : str
@@ -312,16 +312,16 @@ def get_path(*args, from_where='python'):
     """Quick utility function to get the full path from either
     the python execution root folder or from your python
     notebook or python module folder
-    
+
     Parameters
     ----------
     from_where : {'python', 'here'}, optional
 
-        * with the python option the path starts from the 
+        * with the python option the path starts from the
         python execution environment
-        * with the here option the path starts from the 
+        * with the here option the path starts from the
         folder in which your module or notebook is
-    
+
     Returns
     -------
     str
@@ -338,8 +338,8 @@ def get_path(*args, from_where='python'):
         cwd = os.path.abspath('')
         cwd = os.path.join(cwd, *args)
         return cwd
-    
-    
+
+
 def file_extension(file_path:str):
     """Gets extension of file.
 
@@ -347,11 +347,10 @@ def file_extension(file_path:str):
     ----------
     file_path : str
         Path to the file
-    
+
     Returns
     -------
     str
         File extension, eg '.csv'
     """
     return os.path.splitext(file_path)[1]
-
