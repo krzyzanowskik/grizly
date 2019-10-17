@@ -17,7 +17,7 @@ from grizly.utils import (
 
 def write_out(out):
     with open(
-        get_path("grizly", "tests", "output.sql"),
+        get_path("output.sql", from_where='here'),
         "w",
     ) as f:
         f.write(out)
@@ -41,9 +41,9 @@ def test_set_cwd():
 
 
 def test_to_s3_and_s3_to_file():
-    in_file_path = get_path('grizly', 'tests', 'tables.xlsx')
+    in_file_path = get_path('tables.xlsx', from_where='here')
     to_s3(in_file_path, 'test/tables.xlsx')
-    out_file_path = get_path('grizly', 'tests', 'tables_s3.xlsx')
+    out_file_path = get_path('tables_s3.xlsx', from_where='here')
     read_s3(out_file_path, 'test/tables.xlsx')
     assert cmp(in_file_path, out_file_path) == True
     os.remove(out_file_path)

@@ -327,14 +327,14 @@ def get_path(*args, from_where='python'):
     str
         path in string format
     """
-    if type == 'python':
+    if from_where == 'python':
         try:
             cwd = os.environ['USERPROFILE']
         except KeyError:
             cwd = "Error with UserProfile"
         cwd = os.path.join(cwd, *args)
         return cwd
-    elif type == 'here':
+    elif from_where == 'here':
         cwd = os.path.abspath('')
         cwd = os.path.join(cwd, *args)
         return cwd
