@@ -338,3 +338,20 @@ def get_path(*args, from_where='python'):
         cwd = os.path.abspath('')
         cwd = os.path.join(cwd, *args)
         return cwd
+    
+    
+def file_extension(file_path:str):
+    """Gets extension of file.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the file
+    
+    Returns
+    -------
+    str
+        File extension, eg '.csv'
+    """
+    return os.path.splitext(file_path)[1]
+
