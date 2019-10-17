@@ -18,10 +18,8 @@ from grizly.sqlbuilder import (
     get_sql
 )
 
-from grizly.utils import (
-    get_path
-)
-
+excel_path = get_path("tables.xlsx", from_where="here")
+engine_string = "sqlite:///" + get_path("chinook.sqlite", from_where="here")
 
 orders = {
     "select": {
