@@ -259,10 +259,33 @@ def set_cwd(*args):
     return cwd
 
 
-def get_path(*args):
-    try:
-        cwd = os.environ['USERPROFILE']
-    except KeyError:
-        cwd = "Error with UserProfile"
-    cwd = os.path.join(cwd, *args)
-    return cwd
+def get_path(*args, from_where='python'):
+    """Quick utility function to get the full path from either
+    the python execution root folder or from your python
+    notebook or python module folder
+    
+    Parameters
+    ----------
+    from_where : {'python', 'here'}, optional
+
+        * with the python option the path starts from the 
+        python execution environment
+        * with the here option the path starts from the 
+        folder in which your module or notebook is
+    
+    Returns
+    -------
+    str
+        path in string format
+    """
+    if type == 'python':
+        try:
+            cwd = os.environ['USERPROFILE']
+        except KeyError:
+            cwd = "Error with UserProfile"
+        cwd = os.path.join(cwd, *args)
+        return cwd
+    elif type == 'here':
+        cwd = os.path.abspath('')
+        cwd = os.path.join(cwd, *args)
+        return cwd
