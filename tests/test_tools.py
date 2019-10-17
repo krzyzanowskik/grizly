@@ -1,11 +1,10 @@
 from pandas import DataFrame
 import os
 from filecmp import cmp
-from grizly import extract
-from tests import config
 from grizly import (
     AWS
 )
+from tests import config
 
 
 def write_out(out):
@@ -14,6 +13,7 @@ def write_out(out):
         "w",
     ) as f:
         f.write(out)
+
 
 def test_df_to_s3_and_s3_to_file():
     aws = AWS(file_name='testing_aws_class.csv')
@@ -29,7 +29,3 @@ def test_df_to_s3_and_s3_to_file():
     assert cmp(first_file_path, second_file_path) == True
     os.remove(first_file_path)
     os.remove(second_file_path)
-
-def test_csv_from_sql():
-    csv = extract.Csv(csv_path=config.csv_path).from_sql(table="artist", engine_str=config.engine_str, chunksize=100)
-    write_out(csv.deletethis)

@@ -1,6 +1,7 @@
 import os
 import dask
 from grizly.tools import AWS
+from grizly.utils import file_extension
 
 
 class Load():
@@ -32,7 +33,7 @@ class Load():
 
     def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', s3_key:str=None, bucket:str=None, redshift_str:str=None):
 
-        assert os.path.splitext(self.file_path)[1] == '.csv', "This method only supports csv files"
+        assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
         aws = self.to_s3(
                 s3_key=s3_key,

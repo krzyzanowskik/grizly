@@ -1,30 +1,36 @@
-import pytest
-import sqlparse
 import os
-from copy import deepcopy
 from filecmp import cmp
 
 from grizly.etl import (
-    to_csv,
-    create_table,
     to_s3,
-    read_s3,
-    csv_to_s3,
-    s3_to_csv,
-    s3_to_rds
+    read_s3
 )
 
 from grizly.utils import (
-    read_config,
     check_if_exists,
-    delete_where,
+    check_if_valid_type,
     set_cwd,
-    get_path
+    get_path,
+    file_extension
 )
+
+
+def write_out(out):
+    with open(
+        get_path("grizly", "tests", "output.sql"),
+        "w",
+    ) as f:
+        f.write(out)
 
 
 def test_check_if_exists():
     assert check_if_exists('fiscal_calendar_weeks','baseviews') == True
+
+
+def test_check_if_valid_type():
+    assert check_if_valid_type('INT')
+    assert not check_if_valid_type('string')
+    assert check_if_valid_type('varchar(30)')
 
 
 def test_set_cwd():
@@ -35,10 +41,15 @@ def test_set_cwd():
 
 
 def test_to_s3_and_s3_to_file():
-    in_file_path = get_path('grizly', 'grizly', 'tests', 'tables.xlsx')
+    in_file_path = get_path('grizly', 'tests', 'tables.xlsx')
     to_s3(in_file_path, 'test/tables.xlsx')
-    out_file_path = get_path('grizly', 'grizly', 'tests', 'tables_s3.xlsx')
+    out_file_path = get_path('grizly', 'tests', 'tables_s3.xlsx')
     read_s3(out_file_path, 'test/tables.xlsx')
     assert cmp(in_file_path, out_file_path) == True
-
     os.remove(out_file_path)
+
+
+def test_file_extention():
+    file_path = get_path('test.csv')
+    assert file_extension(file_path) == '.csv'
+    assert file_extension(get_path()) == '' 

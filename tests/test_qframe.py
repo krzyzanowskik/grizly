@@ -1,4 +1,3 @@
-import pytest
 import sqlparse
 import os
 from copy import deepcopy
@@ -19,8 +18,10 @@ from grizly.sqlbuilder import (
     get_sql
 )
 
-excel_path = get_path("acoe_projects","grizly_dev", "tests", "tables.xlsx")
-engine_string = "sqlite:///" + get_path("acoe_projects","grizly_dev", "tests", "chinook.sqlite")
+from grizly.utils import (
+    get_path
+)
+
 
 orders = {
     "select": {
@@ -63,7 +64,7 @@ customers = {
 
 def write_out(out):
     with open(
-        os.getcwd() + "\\grizly\\grizly\\tests\\output.sql",
+        get_path("grizly", "tests", "output.sql"),
         "w",
     ) as f:
         f.write(out)
@@ -113,7 +114,7 @@ def test_read_dict():
 
 
 def test_read_excel():
-    excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'tables.xlsx')
+    excel_path = get_path("grizly", "tests", 'tables.xlsx')
     q = QFrame().read_excel(excel_path,sheet_name="orders")
     assert q.data["select"]["fields"]["Order_Nr"] == {
         "type": "dim",
@@ -301,7 +302,7 @@ def test_get_sql():
 
 
 def test_get_sql_with_select_attr():
-    excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'tables.xlsx')
+    excel_path = get_path('grizly', 'tests', 'tables.xlsx')
     q = QFrame().read_excel(excel_path, sheet_name="orders")
 
     testsql = """
@@ -328,7 +329,7 @@ def test_get_sql_with_select_attr():
 
 
 def test_to_csv():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
     q = QFrame(engine=engine_string,data = {'select':{
         'fields':{  'InvoiceLineId':{'type': 'dim'},
                     'InvoiceId': {'type': 'dim'},
@@ -354,8 +355,9 @@ def test_to_csv():
 
 
 def test_to_df():
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
     q = QFrame(engine=engine_string).read_excel(
-        excel_path,
+        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
         sheet_name="cb_invoices",
     )
     q.assign(sales="Quantity*UnitPrice", type='num')
@@ -369,7 +371,7 @@ def test_to_df():
 
 
 def test_copy():
-    excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'tables.xlsx')
+    excel_path = get_path('grizly', 'tests', 'tables.xlsx')
     qf = QFrame().read_excel(excel_path, sheet_name="orders")
 
     qf_copy = qf.copy()
@@ -420,7 +422,7 @@ tracks = {  'select': {
 
 def test_join_1():
     # using grizly
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
@@ -462,7 +464,7 @@ def test_join_1():
 
 
 def test_join_2():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlist_track_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlist_track))
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
@@ -521,7 +523,7 @@ def test_join_2():
 
 
 def test_union():
-    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
 
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
