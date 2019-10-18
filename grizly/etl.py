@@ -126,7 +126,7 @@ def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False)
         to_csv(qf,csv_path, sql, engine, sep=sep, compress=compress)
 
 
-def create_table(qf, table, engine, schema=''):
+def create_table(qf, table, engine, schema='', char_size=500):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -139,6 +139,7 @@ def create_table(qf, table, engine, schema=''):
         Engine string.
     schema : string, optional
         Specify the schema.
+    char_size : int, size of the VARCHAR field in the database column
     """
     engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
@@ -151,7 +152,10 @@ def create_table(qf, table, engine, schema=''):
         sql_blocks = qf.data["select"]["sql_blocks"]
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
-            column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
+            if char_size != 500:
+                column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
+            else:
+                column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
             columns.append(column)
 
         columns_str = ", ".join(columns)

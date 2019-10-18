@@ -644,7 +644,7 @@ class QFrame:
         return self
 
 
-    def create_table(self, table, schema=''):
+    def create_table(self, table, schema='', char_size=500):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
         Parameters
@@ -660,7 +660,7 @@ class QFrame:
         -------
         QFrame
         """
-        create_table(qf=self, table=table, engine=self.engine, schema=schema)
+        create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
         return self
 
 ## Non SQL Processing
