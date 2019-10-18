@@ -738,6 +738,26 @@ class QFrame:
 
         return self
 
+    def to_table(self, table, schema='', if_exists='fail'):
+        """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+        Parameters
+        ----------
+        table: str
+            Name of SQL table
+        schema: str
+            Specify the schema
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+        Returns
+        -------
+        QFrame
+        """
+        write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
+        return self
+      
     def to_df(self):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 

@@ -146,17 +146,14 @@ def create_table(qf, table, engine, schema='', char_size=500):
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
-        print("Table {} already exists.".format(table_name))
+        print("Table {} already exists...".format(table_name))
 
     else:
         sql_blocks = qf.data["select"]["sql_blocks"]
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
-            if char_size != 500:
-                if sql_blocks["select_aliases"][item] == 'VARCHAR(500)'
-                    column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
-                else:
-                    column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
+            if sql_blocks["types"][item] == "VARCHAR(500)":
+                column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
             else:
                 column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
             columns.append(column)
@@ -168,7 +165,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         con.execute(sql)
         con.close()
 
-        print("Table {} has been created successfully.".format(table_name))
+        print("Table {} has been created successfully.".format(sql))
 
 
 def to_s3(file_path: str, s3_name: str):
@@ -500,9 +497,7 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
 def write_to(qf, table, schema, if_exists):
     """
     Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-
     Warning: QFrame object should not have Denodo defined as an engine.
-
     Parameters:
     -----
     qf: QFrame object
