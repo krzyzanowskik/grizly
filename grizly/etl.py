@@ -515,12 +515,17 @@ def write_to(qf, table, schema, if_exists):
         sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
         sql_del_statement = f"DELETE FROM {table}"
     engine = create_engine(qf.engine)
-    if if_exists=='replace':
-        engine.execute(sql_del_statement)
+
+    if check_if_exists(table=table, schema=schema):
+        if if_exists=='replace':
+            engine.execute(sql_del_statement)
+            engine.execute(sql_statement)
+            print(f'Data has been owerwritten into {schema}.{table}')
+        elif if_exists=='fail':
+            raise ValueError("Table already exists")
+        elif if_exists=='append':
+            engine.execute(sql_statement)
+            print(f'Data has been appended to {table}')
+    else:
+        create_table(qf=qf, table=table, engine=engine, schema=schema)
         engine.execute(sql_statement)
-        print(f'Data has been owerwritten into {schema}.{table}')
-    elif if_exists=='fail':
-        raise ValueError("Table already exists")
-    elif if_exists=='append':
-        engine.execute(sql_statement)
-        print(f'Data has been appended to {table}')

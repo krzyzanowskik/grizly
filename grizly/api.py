@@ -12,7 +12,8 @@ from .utils import (
     get_columns,
     copy_table,
     set_cwd,
-    get_path
+    get_path,
+    file_extension
 )
 
 from .extract import(
