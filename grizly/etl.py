@@ -153,7 +153,10 @@ def create_table(qf, table, engine, schema='', char_size=500):
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
             if char_size != 500:
-                column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
+                if sql_blocks["select_aliases"][item] == 'VARCHAR(500)'
+                    column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
+                else:
+                    column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
             else:
                 column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
             columns.append(column)
