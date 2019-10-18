@@ -12,8 +12,10 @@ from grizly.utils import (
 
 
 config = read_config()
-os.environ["HTTPS_PROXY"] = config["https"]
-
+try:
+    os.environ["HTTPS_PROXY"] = config["https"]
+except TypeError:
+    pass
 
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     """
@@ -137,6 +139,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         Engine string.
     schema : string, optional
         Specify the schema.
+    char_size : int, size of the VARCHAR field in the database column
     """
     engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
