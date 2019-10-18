@@ -651,7 +651,7 @@ class QFrame:
         return self
 
 
-    def create_table(self, table, engine, schema=''):
+    def create_table(self, table, schema='', char_size=500):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
         Parameters
@@ -667,7 +667,7 @@ class QFrame:
         -------
         QFrame
         """
-        create_table(qf=self, table=table, engine=engine, schema=schema)
+        create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
         return self
 
 
@@ -793,21 +793,24 @@ class QFrame:
 
         return self
 
-    def write_to(self, table, schema=''):
+    def to_table(self, table, schema='', if_exists='fail'):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-
         Parameters
         ----------
         table: str
             Name of SQL table
         schema: str
             Specify the schema
-
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
         Returns
         -------
         QFrame
         """
-        write_to(qf=self,table=table,schema=schema)
+        write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
         return self
 
 
@@ -927,25 +930,6 @@ class QFrame:
         self.getfields = []
         self.getfields.append(getfields)
         return self
-
-    # old
-    def to_html(self):
-        from IPython.display import HTML, display
-
-        html_table = "<table>"
-        header = "\n".join(["<th>{}</th>".format(th) for th in self.fieldattrs])
-        html_table += "<tr><th>{}</th></tr>".format(header)
-        for field in self.fields:
-            html_table += """<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>
-                """.format(
-                field,
-                self.fields[field]["type"],
-                self.fields[field]["group_by"],
-                self.fields[field]["where"],
-                self.fields[field]["having"],
-            )
-        html_table += "</table>"
-        display(HTML(html_table))
 
 
 def join(qframes=[], join_type=None, on=None, unique_col=True):
