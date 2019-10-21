@@ -12,8 +12,10 @@ from grizly.utils import (
 
 
 config = read_config()
-os.environ["HTTPS_PROXY"] = config["https"]
-
+try:
+    os.environ["HTTPS_PROXY"] = config["https"]
+except TypeError:
+    pass
 
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
     """
@@ -124,7 +126,7 @@ def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False)
         to_csv(qf,csv_path, sql, engine, sep=sep, compress=compress)
 
 
-def create_table(qf, table, engine, schema=''):
+def create_table(qf, table, engine, schema='', char_size=500):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -137,19 +139,23 @@ def create_table(qf, table, engine, schema=''):
         Engine string.
     schema : string, optional
         Specify the schema.
+    char_size : int, size of the VARCHAR field in the database column
     """
     engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
-        print("Table {} already exists.".format(table_name))
+        print("Table {} already exists...".format(table_name))
 
     else:
         sql_blocks = qf.data["select"]["sql_blocks"]
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
-            column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
+            if sql_blocks["types"][item] == "VARCHAR(500)":
+                column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
+            else:
+                column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
             columns.append(column)
 
         columns_str = ", ".join(columns)
@@ -159,7 +165,7 @@ def create_table(qf, table, engine, schema=''):
         con.execute(sql)
         con.close()
 
-        print("Table {} has been created successfully.".format(table_name))
+        print("Table {} has been created successfully.".format(sql))
 
 
 def to_s3(file_path: str, s3_name: str):
@@ -488,12 +494,10 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
     print(f'Data has been copied to {table_name}')
 
 
-def write_to(qf, table, schema):
+def write_to(qf, table, schema, if_exists):
     """
     Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-
     Warning: QFrame object should not have Denodo defined as an engine.
-
     Parameters:
     -----
     qf: QFrame object
@@ -504,8 +508,22 @@ def write_to(qf, table, schema):
     columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
     if schema!='':
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {schema}.{table}"
     else:
         sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {table}"
     engine = create_engine(qf.engine)
-    engine.execute(sql_statement)
-    print(f'Data has been written to {table}')
+
+    if check_if_exists(table=table, schema=schema):
+        if if_exists=='replace':
+            engine.execute(sql_del_statement)
+            engine.execute(sql_statement)
+            print(f'Data has been owerwritten into {schema}.{table}')
+        elif if_exists=='fail':
+            raise ValueError("Table already exists")
+        elif if_exists=='append':
+            engine.execute(sql_statement)
+            print(f'Data has been appended to {table}')
+    else:
+        create_table(qf=qf, table=table, engine=engine, schema=schema)
+        engine.execute(sql_statement)

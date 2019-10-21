@@ -12,7 +12,8 @@ from .utils import (
     get_columns,
     copy_table,
     set_cwd,
-    get_path
+    get_path,
+    file_extension
 )
 
 from .extract import(
@@ -46,4 +47,7 @@ from .store import Store
 
 from os import environ
 
-cwd = environ['USERPROFILE']
+try:
+    cwd = environ['USERPROFILE']
+except KeyError:
+    pass
