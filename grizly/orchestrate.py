@@ -4,10 +4,12 @@ import dask
 import logging
 import os
 import json
+import datetime
+import graphviz
 
 from time import time, sleep
 from croniter import croniter
-from datetime import datetime, timedelta
+from datetime import timedelta
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
 from grizly import df_to_s3, s3_to_rds, QFrame, read_config
@@ -15,6 +17,9 @@ from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from json.decoder import JSONDecodeError
+from dask.optimization import key_split
+from dask.dot import _get_display_cls
+from dask.core import get_dependencies
 
 
 class Schedule:
@@ -53,7 +58,7 @@ class Schedule:
         cron = croniter(self.cron, start_date)
 
         while True:
-            next_date = pendulum.instance(cron.get_next(datetime))
+            next_date = pendulum.instance(cron.get_next(datetime.datetime))
             if self.end_date and next_date > self.end_date:
                 break
             yield next_date
@@ -71,11 +76,13 @@ class Schedule:
 
 
 class Listener:
-    """A class that listens for changes in a table
+    """A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
+    
+    Check and stores table's last refresh date.
     """
 
 
-    def __init__(self, workflow, schema, table, field, db="denodo"):
+    def __init__(self, workflow, schema, table, field, db="denodo", trigger="default"):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -83,10 +90,10 @@ class Listener:
         self.schema = schema
         self.table = table
         self.field = field
-        self.last_data_refresh = self.get_last_refresh()
-        self.engine = self.get_engine()
         self.logger = logging.getLogger(__name__)
-        #self.trigger = trigger
+        self.last_data_refresh = self.get_last_refresh() # has to be standardized to one data type (currently can be int, e.g. fiscal day, or date)
+        self.engine = self.get_engine()
+        self.trigger = trigger
 
     def get_engine(self):
 
@@ -99,12 +106,21 @@ class Listener:
     def get_last_refresh(self):
 
         with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json") as f:
+
             try:
                 listener_store = json.load(f)
-                last_data_refresh = listener_store[self.name]["last_data_refresh"]
-                return last_data_refresh
-            except (KeyError, JSONDecodeError):
+                last_data_refresh = listener_store[self.name]["last_data_refresh"] # int or serialized date
+            except (KeyError, JSONDecodeError) as e:
                 return None
+
+            try:
+                # convert the serialized datetime to a date object
+                last_data_refresh = datetime.datetime.date(datetime.datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
+            except:
+                pass
+
+        return last_data_refresh
+            
 
     def update_json(self):
 
@@ -113,25 +129,75 @@ class Listener:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
                 listener_store = {}
+
+        if isinstance(self.last_data_refresh, datetime.date):
+            listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+        else:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
+
         with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json", "w") as f_write:
             json.dump(listener_store, f_write)
+
+  
+    
+    def get_table_last_refresh(self):
+
+        sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
+
+
+        con = get_con(engine=self.engine)
+        cursor = con.cursor()
+        cursor.execute(sql)
+        last_data_refresh = cursor.fetchone()[0]
+
+        cursor.close()
+        con.close()
+
+        if isinstance(last_data_refresh, datetime.datetime):
+            last_data_refresh = datetime.datetime.date(last_data_refresh)
+
+        return last_data_refresh
+
+    
+    def should_trigger(self, table_last_refresh):
+
+        if self.trigger == "default":
+            # will trigger on day change
+            if (not self.last_data_refresh) or (table_last_refresh != self.last_data_refresh):
+                return True
+
+        elif isinstance(self.trigger, Schedule):
+            next_check_on = datetime.date(self.trigger.next_run)
+            if next_check_on == table_last_refresh:
+                return True
+        if self.trigger == "fiscal day":
+            # date_fiscal_day = to_fiscal(table_last_refresh, "day")
+            # date_fiscal_week = to_fiscal(table_last_refresh, "week")
+            # date_json_fiscal_day = to_fiscal(self.last_refresh_date, "day")
+            # date_json_fiscal_week = to_fiscal(self.last_refresh_date, "week")
+            # if (date_fiscal_day == date_json_fiscal_day) and (date_fiscal_day != date_json_fiscal_week): # means a week has passed
+            #     return True
+            pass
+        elif self.trigger == "fiscal week":
+            # date_fiscal_week = to_fiscal(table_last_refresh, "week")
+            pass
+        elif self.trigger == "fiscal year":
+            # date_fiscal_year = to_fiscal(table_last_refresh, "week")
+            pass
+
 
     def detect_change(self):
 
         self.logger.info(f"Listening for changes in {self.table}...")
 
-        sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
-
         try:
-            con = self.engine.connect().connection
-            cursor = con.cursor()
-            cursor.execute(sql)
-            last_data_refresh = cursor.fetchone()[0]
+            last_data_refresh = self.get_table_last_refresh()
         except:
             self.logger.exception(f"Connection or query error when connecting to {self.db}")
+            last_data_refresh = None
 
-        if (not self.last_data_refresh) or (last_data_refresh != self.last_data_refresh):
+
+        if self.should_trigger(last_data_refresh):
             self.last_data_refresh = last_data_refresh
             self.update_json()
             return True
@@ -219,17 +285,17 @@ class Workflow:
     @retry_task(Exception, tries=3, delay=300)
     def write_status_to_rds(self, name, owner_email, backup_email, status, run_time):
 
-        schema = "z_sandbox_mz"
+        schema = "administration"
         table = "status"
 
         last_run_date = pd.datetime.utcnow()
 
         status_data = {
-            "job_name": [name],
+            "workflow_name": [name],
             "owner_email": [owner_email],
             "backup_email": [backup_email],
             "run_date": [last_run_date],
-            "flow_status": [status],
+            "workflow_status": [status],
             "run_time": [run_time]
         }
 
@@ -288,12 +354,27 @@ class Workflow:
         end = time()
         self.run_time = int(end-start)
 
-        run_time_str = str(timedelta(seconds=self.run_time))
-        email_body = f"Workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-
-
         self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time)
-        self.send_email(body=email_body, to=[self.owner_email], cc=[self.backup_email], status=self.status)
+
+        # only send email notification on failure
+        if self.status == "fail":
+
+            run_time_str = str(timedelta(seconds=self.run_time))
+
+            if self.is_scheduled:
+                email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+            else:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+
+            cc = self.backup_email
+            to = self.owner_email
+            if not isinstance(self.backup_email, list):
+                cc = [self.backup_email]
+            if not isinstance(self.owner_email, list):
+                to = [self.owner_email]
+            
+            self.send_email(body=email_body, to=to, cc=cc, status=self.status)
 
         return self.status
 
@@ -326,7 +407,7 @@ class Runner:
         if workflow.is_scheduled:
             now = pendulum.now()
             next_run = workflow.next_run
-            self.logger.info(f"Determining whether {workflow.name} shuld run... (next scheduled run: {next_run})")
+            self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run})")
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
@@ -355,6 +436,64 @@ class Runner:
             status = workflow.run()
 
         return {workflow.name: workflow.status for workflow in workflows}
+
+
+class SimpleGraph:
+    """Produces a simplified Dask graph"""
+
+
+    def __init__(self, format="png", filename=None):
+        self.format = format
+        self.filename = filename
+
+    @staticmethod
+    def _node_key(s):
+        if isinstance(s, tuple):
+            return s[0]
+        return str(s)
+
+    def visualize(self,
+                     x,
+                     filename='simple_computation_graph',
+                     format=None):
+
+        if hasattr(x, 'dask'):
+            dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
+        else:
+            dsk = x
+
+        deps = {k: get_dependencies(dsk, k) for k in dsk}
+
+        g = graphviz.Digraph(graph_attr={'rankdir': 'LR'})
+
+        nodes = set()
+        edges = set()
+        for k in dsk:
+            key = self._node_key(k)
+            if key not in nodes:
+                g.node(key, label=key_split(k), shape='rectangle')
+                nodes.add(key)
+            for dep in deps[k]:
+                dep_key = self._node_key(dep)
+                if dep_key not in nodes:
+                    g.node(dep_key, label=key_split(dep), shape='rectangle')
+                    nodes.add(dep_key)
+                # Avoid circular references
+                if dep_key != key and (dep_key, key) not in edges:
+                    g.edge(dep_key, key)
+                    edges.add((dep_key, key))
+
+        data = g.pipe(format=self.format)
+        display_cls = _get_display_cls(self.format)
+
+        if self.filename is None:
+            return display_cls(data=data)
+
+        full_filename = '.'.join([filename, self.format])
+        with open(full_filename, 'wb') as f:
+            f.write(data)
+
+        return display_cls(filename=full_filename)
 
 
 def retry(exceptions, tries=4, delay=3, backoff=2):
@@ -400,3 +539,9 @@ def retry(exceptions, tries=4, delay=3, backoff=2):
         return f_retry  # true decorator
 
     return deco_retry
+
+
+@retry(Exception, tries=5, delay=5)
+def get_con(engine):
+    con = engine.connect().connection
+    return con
