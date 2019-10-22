@@ -37,6 +37,8 @@ from .excel import (
     copy_df_to_excel
 )
 
+from .email import Email
+
 from .tools import (
     Excel,
     AWS
