@@ -1,4 +1,3 @@
-import pendulum
 import pandas as pd
 import dask
 import logging
