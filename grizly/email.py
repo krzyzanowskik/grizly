@@ -1,5 +1,5 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
+from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody
 from grizly.utils import read_config
 from grizly.orchestrate import retry
 
@@ -19,9 +19,12 @@ class Email:
     """
 
 
-    def __init__(self, subject, body, logger=None):
+    def __init__(self, subject, body, logger=None, is_html=False):
         self.subject = subject
-        self.body = body
+        if is_html :
+            self.body = HTMLBody(body)
+        else:
+            self.body = body
         self.logger = logger
         self.email_address = config["email_address"]
         self.email_password = config["email_password"]
