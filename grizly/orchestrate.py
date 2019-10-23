@@ -5,7 +5,6 @@ import os
 import json
 import datetime
 import graphviz
-import pendulum
 
 from time import time, sleep
 from croniter import croniter
