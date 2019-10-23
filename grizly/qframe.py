@@ -741,7 +741,7 @@ class QFrame:
         return self
 
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -786,7 +786,7 @@ class QFrame:
         self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
-        csv_to_s3(csv_path)
+        csv_to_s3(csv_path, keep_csv=keep_csv)
 
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
