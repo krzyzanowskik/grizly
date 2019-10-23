@@ -42,6 +42,7 @@ from .tools import (
     AWS
 )
 
+from .store import Store
 
 from os import environ
 
