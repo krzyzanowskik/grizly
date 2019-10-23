@@ -11,6 +11,7 @@ Welcome to grizly's documentation!
    :caption: Contents:
 
    content/getting_started
+   content/tutorial_store
    content/api_QFrame
    content/api_Extract
 
