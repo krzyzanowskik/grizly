@@ -64,7 +64,7 @@ def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
         'base64': "NVARCHAR",
         'boolean': "BOOLEAN",
         'combobox': "NVARCHAR",
-        'currency': "NVARCHAR",
+        'currency': "NUMERIC(precision=6)",
         'datacategorygroupreference': "NVARCHAR",
         'date': "DATE",
         'datetime': "DATETIME",
