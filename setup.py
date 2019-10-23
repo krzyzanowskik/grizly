@@ -4,20 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-requires = [
-    "boto3==1.9.200",
-    "ipython==7.6.1",
-    "openpyxl",
-    "pandas==0.25.1",
-    "SQLAlchemy==1.3.5",
-    "sqlparse==0.3.0",
-    "simple-salesforce==0.74.2",
-    "dask==2.1.0",
-    "exchangelib==2.0.1",
-    "pendulum==2.0.5",
-    "croniter==0.3.30",
-    "graphviz"
-]
+with open('requirements.txt', 'r') as f:
+    requires = [line.strip() for line in f] 
 
 setuptools.setup(
     name="grizly",
