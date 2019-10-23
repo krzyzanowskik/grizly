@@ -1,6 +1,6 @@
 
 Tutorial - QFrame
-~~~~~~~~~~~~~~~~~
+-----------------
 
 The best way to create a QFrame from scratch is to first create a
 ``store.jon`` file using Store(). This way you can build an initial
