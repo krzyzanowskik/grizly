@@ -68,13 +68,13 @@ def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
         'datacategorygroupreference': "NVARCHAR",
         'date': "DATE",
         'datetime': "DATETIME",
-        'double': "DOUBLE",
+        'double': "NUMERIC",
         'email': "NVARCHAR",
         'encryptedstring': "NVARCHAR",
         'id': "NVARCHAR",
         'int': "INT",
         'multipicklist': "NVARCHAR",
-        'percent': "DOUBLE(precision=6)",
+        'percent': "NUMERIC(precision=6)",
         'phone': "NVARCHAR",
         'picklist': "NVARCHAR",
         'reference': "NVARCHAR",
@@ -222,7 +222,7 @@ def get_redshift_columns(schema, table, column_types=False):
         Name of schema.
     table : str
         Name of table.
-    types : bool
+    column_types : bool
         Whether to retrieve field types.
     date_format : str
         Denodo date format differs from those from other databases. User can choose which format is desired.
