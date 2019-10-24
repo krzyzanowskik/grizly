@@ -440,7 +440,28 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t'):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None):
+
+    sql = f"""
+        COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'
+        access_key_id '{config["akey"]}'
+        secret_access_key '{config["skey"]}'
+        delimiter '{sep}'
+        NULL ''
+        IGNOREHEADER 1
+        REMOVEQUOTES
+        ;commit;
+        """
+    indent = 9
+    last_line_pos = len(sql) - len(";commit;") - indent
+    if time_format:
+        spaces = indent * " " # print formatting
+        time_format_argument = f"timeformat '{time_format}'"
+        return sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+    return sql
+
+
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
     Parameters:
@@ -478,18 +499,9 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
         else:
             pass
 
-    print(f"Loading data into {table_name}...")
-    sql = f"""
-        COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'
-        access_key_id '{config["akey"]}'
-        secret_access_key '{config["skey"]}'
-        delimiter '{sep}'
-        NULL ''
-        IGNOREHEADER 1
-        REMOVEQUOTES
-        ;commit;
-        """
+    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format)
 
+    print(f"Loading data into {table_name}...")
     engine.execute(sql)
     print(f'Data has been copied to {table_name}')
 
