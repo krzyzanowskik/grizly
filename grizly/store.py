@@ -9,11 +9,13 @@ class Store():
                 d = json.load(json_file)
         except FileNotFoundError:
             with open(self.path, 'w') as json_file:
-                d = json.dump({}, json_file)
+                d = json.dump({"sample_key":"sample_key_value"}, json_file)
         self.data = d
         self.new_data = {}
         
     def to_store(self, key=None):
+        if self.data == None:
+            self.data = {}
         if key == None:
             for k in self.new_data:
                 if k in self.data:
@@ -23,6 +25,7 @@ class Store():
                     self.data[k] = self.new_data[k]
                     with open(self.path, 'w') as json_file:
                         json.dump(self.data, json_file)
+                        self.new_data = {}
         else:
             if key in self.data:
                 msg = f"Key # {key} # already in store. Use remove_key() if you don't need it"
@@ -31,6 +34,7 @@ class Store():
                 self.data[key] = self.new_data[key]
                 with open(self.path, 'w') as json_file:
                     json.dump(self.data, json_file)
+                    self.new_data = {}
     
     def add_key(self, **kwargs):
         for kwarg in kwargs:

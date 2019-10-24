@@ -10,7 +10,8 @@ Welcome to grizly's documentation!
    :maxdepth: 3
    :caption: Contents:
 
-   content/getting_started
+   content/tutorial_qframe
+   content/tutorial_store
    content/api_QFrame
    content/api_Extract
 
