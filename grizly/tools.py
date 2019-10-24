@@ -407,6 +407,7 @@ class AWS:
         for col in column_names:
             if types and col in types:
                 col_type = types[col].upper()
+                types.pop(col)
             else:
                 if True in set(column_isfloat[count]):
                     col_type = "FLOAT"
@@ -414,6 +415,9 @@ class AWS:
                     col_type = "VARCHAR(500)"
             columns.append(f"{col} {col_type}")
             count += 1
+        if types:
+            other_cols = list(types.keys())
+            print(f"Columns {other_cols} were not found.")
             
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
