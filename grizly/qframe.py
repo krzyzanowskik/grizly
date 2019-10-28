@@ -67,6 +67,14 @@ class QFrame:
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
 
+    def create_sql_blocks(self):
+        if self.data == {}:
+            print("Your QFrame is empty.")
+            return self
+        else:
+            self.data['select']['sql_blocks'] = build_column_strings(self.data)
+            return self
+
 
     def validate_data(self, data):
         """Validates loaded data.
@@ -83,6 +91,37 @@ class QFrame:
         """
         return _validate_data(data)
 
+    def show_duplicated_columns(self):
+        """Shows duplicated columns.
+
+        Returns
+        -------
+        QFrame
+        """
+        columns = {}
+        fields = self.data["select"]["fields"]
+
+        for field in fields:
+            alias =  field if  "as" not in fields[field] else fields[field]["as"]
+            if alias in columns.keys():
+                columns[alias].append(field)
+            else:
+                columns[alias] = [field]
+
+        duplicates = deepcopy(columns)
+        for alias in columns.keys():
+            if len(columns[alias]) == 1:
+                duplicates.pop(alias)
+
+        if duplicates != {}:
+            print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
+            for key in duplicates.keys():
+                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
+            print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
+
+        else:
+            print("There are no duplicated columns.")
+        return self
 
     def save_json(self, json_path, subquery=''):
         """Saves QFrame.data to json file.
@@ -111,49 +150,6 @@ class QFrame:
             json.dump(json_data, f)
         print(f"Data saved in {json_path}")
 
-
-    def read_json(self, json_path, subquery=''):
-        """Reads QFrame.data from json file.
-
-        Parameters
-        ----------
-        json_path : str
-            Path to json file.
-        subquery : str, optional
-            [description], by default ''
-
-        Returns
-        -------
-        QFrame
-        """
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-            if data != {}:
-                if subquery == '':
-                    self.data = self.validate_data(data)
-                else:
-                    self.data = self.validate_data(data[subquery])
-            else:
-                self.data = data
-        return self
-
-
-    def from_dict(self, data):
-        """Reads QFrame.data from dictionary.
-
-        Parameters
-        ----------
-        data : dict
-            Dictionary structure holding fields, schema, table, sql information.
-
-        Returns
-        -------
-        QFrame
-        """
-        self.data = self.validate_data(data)
-        return self
-
-
     def read_excel(self, excel_path, sheet_name="", query=""):
         """Reads fields information from excel file.
 
@@ -181,14 +177,99 @@ class QFrame:
         self.data = self.validate_data(data)
         return self
 
+    def read_json(self, json_path, subquery=''):
+        """Reads QFrame.data from json file.
 
-    def create_sql_blocks(self):
-        if self.data == {}:
-            print("Your QFrame is empty.")
-            return self
-        else:
-            self.data['select']['sql_blocks'] = build_column_strings(self.data)
-            return self
+        Parameters
+        ----------
+        json_path : str
+            Path to json file.
+        subquery : str, optional
+            [description], by default ''
+
+        Returns
+        -------
+        QFrame
+        """
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            if data != {}:
+                if subquery == '':
+                    self.data = self.validate_data(data)
+                else:
+                    self.data = self.validate_data(data[subquery])
+            else:
+                self.data = data
+        return self
+
+    def read_dict(self, data):
+        """Reads QFrame.data from dictionary.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary structure holding fields, schema, table, sql information.
+
+        Returns
+        -------
+        QFrame
+        """
+        self.data = self.validate_data(data)
+        return self
+
+
+    def select(self, fields):
+        """Creates a subquery that looks like "SELECT sq.col1, sq.col2 FROM (some sql) sq".
+
+        NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created
+        as a concat of "sq." and alias in the parent QFrame.
+
+        Examples
+        --------
+        qframe :
+        q -> fields : customer_id as 'customer', date, order
+
+        >>> q.select(["customer_id", "order"])
+
+        q -> fields : sq.customer_id, sq.order
+
+        Parameters
+        ----------
+        fields : list or str
+            Fields in list or field as a string.
+
+        Returns
+        -------
+        QFrame
+        """
+
+        self.create_sql_blocks()
+        sq_fields = deepcopy(self.data["select"]["fields"])
+        new_fields = {}
+
+        if isinstance(fields, str) : fields = [fields]
+
+        for field in fields:
+            if field not in sq_fields:
+                print(f"Field {field} not found")
+
+            elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
+                print(f"Field {field} is not selected in subquery.")
+
+            else:
+                if "as" in sq_fields[field] and sq_fields[field]["as"] != '':
+                    alias = sq_fields[field]["as"]
+                else:
+                    alias = field
+                new_fields[f"sq.{alias}"] = {"type": sq_fields[field]["type"], "as": alias}
+                if "custom_type" in sq_fields[field] and sq_fields[field]['custom_type'] !='':
+                    new_fields[f"sq.{alias}"]["custom_type"] = sq_fields[field]["custom_type"]
+
+        if new_fields:
+            data = {"select": {"fields": new_fields }, "sq": self.data}
+            self.data = data
+
+        return self
 
 
     def rename(self, fields):
@@ -493,94 +574,6 @@ class QFrame:
 
         return self
 
-
-    def select(self, fields):
-        """Creates a subquery that looks like "SELECT sq.col1, sq.col2 FROM (some sql) sq".
-
-        NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created
-        as a concat of "sq." and alias in the parent QFrame.
-
-        Examples
-        --------
-        qframe :
-        q -> fields : customer_id as 'customer', date, order
-
-        >>> q.select(["customer_id", "order"])
-
-        q -> fields : sq.customer_id, sq.order
-
-        Parameters
-        ----------
-        fields : list or str
-            Fields in list or field as a string.
-
-        Returns
-        -------
-        QFrame
-        """
-
-        self.create_sql_blocks()
-        sq_fields = deepcopy(self.data["select"]["fields"])
-        new_fields = {}
-
-        if isinstance(fields, str) : fields = [fields]
-
-        for field in fields:
-            if field not in sq_fields:
-                print(f"Field {field} not found")
-
-            elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
-                print(f"Field {field} is not selected in subquery.")
-
-            else:
-                if "as" in sq_fields[field] and sq_fields[field]["as"] != '':
-                    alias = sq_fields[field]["as"]
-                else:
-                    alias = field
-                new_fields[f"sq.{alias}"] = {"type": sq_fields[field]["type"], "as": alias}
-                if "custom_type" in sq_fields[field] and sq_fields[field]['custom_type'] !='':
-                    new_fields[f"sq.{alias}"]["custom_type"] = sq_fields[field]["custom_type"]
-
-        if new_fields:
-            data = {"select": {"fields": new_fields }, "sq": self.data}
-            self.data = data
-
-        return self
-
-
-    def show_duplicated_columns(self):
-        """Shows duplicated columns.
-
-        Returns
-        -------
-        QFrame
-        """
-        columns = {}
-        fields = self.data["select"]["fields"]
-
-        for field in fields:
-            alias =  field if  "as" not in fields[field] else fields[field]["as"]
-            if alias in columns.keys():
-                columns[alias].append(field)
-            else:
-                columns[alias] = [field]
-
-        duplicates = deepcopy(columns)
-        for alias in columns.keys():
-            if len(columns[alias]) == 1:
-                duplicates.pop(alias)
-
-        if duplicates != {}:
-            print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
-            for key in duplicates.keys():
-                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
-            print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
-
-        else:
-            print("There are no duplicated columns.")
-        return self
-
-
     def rearrange(self, fields):
         """Changes order of the columns.
 
@@ -651,7 +644,7 @@ class QFrame:
         return self
 
 
-    def create_table(self, table, engine, schema=''):
+    def create_table(self, table, schema='', char_size=500):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
         Parameters
@@ -667,9 +660,10 @@ class QFrame:
         -------
         QFrame
         """
-        create_table(qf=self, table=table, engine=engine, schema=schema)
+        create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
         return self
 
+## Non SQL Processing
 
     def to_csv(self, csv_path, chunksize=None):
         """Writes QFrame table to csv file.
@@ -793,24 +787,26 @@ class QFrame:
 
         return self
 
-    def write_to(self, table, schema=''):
+    def to_table(self, table, schema='', if_exists='fail'):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-
         Parameters
         ----------
         table: str
             Name of SQL table
         schema: str
             Specify the schema
-
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
         Returns
         -------
         QFrame
         """
-        write_to(qf=self,table=table,schema=schema)
+        write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
         return self
-
-
+      
     def to_df(self):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
@@ -829,7 +825,6 @@ class QFrame:
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = pandas.read_sql(sql=self.sql, con=con)
         return df
-
 
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
@@ -878,7 +873,6 @@ class QFrame:
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
-
     def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
         """Saves data to Excel file.
 
@@ -908,6 +902,79 @@ class QFrame:
 
         return df
 
+    def to_table(self, table, schema='', if_exists='fail'):
+        """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+
+        Parameters
+        ----------
+        table: str
+            Name of SQL table
+        schema: str
+            Specify the schema
+
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
+        Returns
+        -------
+        QFrame
+        """
+        write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
+        return self
+
+    #AC: this probably needs to be removed
+    def csv_to_s3(self, csv_path):
+        """Writes csv file to s3 in 'teis-data/bulk' bucket.
+
+        Parameters
+        ----------
+        csv_path : str
+            Path to csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        csv_to_s3(csv_path)
+        return self
+
+    #AC: this probably needs to be removed
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+        """Writes s3 to Redshift database.
+
+        Parameters
+        ----------
+        table : str
+            Name of SQL table.
+        s3_name : str
+            Name of s3 file from which we want to load data.
+        schema : str, optional
+            Specify the schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
+        sep : str, default '\t'
+            Separator/delimiter in csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        self.create_sql_blocks()
+        self.sql = get_sql(self.data)
+        
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        return self
+
+
 
     def copy(self):
         """Makes a copy of QFrame.
@@ -927,25 +994,6 @@ class QFrame:
         self.getfields = []
         self.getfields.append(getfields)
         return self
-
-    # old
-    def to_html(self):
-        from IPython.display import HTML, display
-
-        html_table = "<table>"
-        header = "\n".join(["<th>{}</th>".format(th) for th in self.fieldattrs])
-        html_table += "<tr><th>{}</th></tr>".format(header)
-        for field in self.fields:
-            html_table += """<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>
-                """.format(
-                field,
-                self.fields[field]["type"],
-                self.fields[field]["group_by"],
-                self.fields[field]["where"],
-                self.fields[field]["having"],
-            )
-        html_table += "</table>"
-        display(HTML(html_table))
 
 
 def join(qframes=[], join_type=None, on=None, unique_col=True):

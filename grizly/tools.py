@@ -5,7 +5,6 @@ from pandas import (
     ExcelWriter
 )
 import openpyxl
-import win32com.client as win32
 from grizly.utils import (
     get_path,
     read_config,
@@ -21,7 +20,10 @@ from io import StringIO
 from csv import reader
 
 grizly_config = read_config()
-os.environ["HTTPS_PROXY"] = grizly_config["https"]
+try:
+    os.environ["HTTPS_PROXY"] = grizly_config["https"]
+except TypeError:
+    pass
 
 class Excel:
     """Class which deals with Excel files.
@@ -133,57 +135,11 @@ class Excel:
         float
             Cell value
         """
-        xlApp = win32.Dispatch('Excel.Application')
-        wb = xlApp.Workbooks.Open(self.input_excel_path)
-        ws = wb.Worksheets(sheet)
-        value = ws.Cells(row,col).Value
-        wb.Close()
-        xlApp.Quit()
         
+        wb = openpyxl.load_workbook(self.input_excel_path, data_only=True)
+        sh = wb[sheet]
+        value = sh.cell(row, col).value
         return value
-
-
-    def open(self, input=False):
-        """[summary]
-        
-        Parameters
-        ----------
-        input : bool, optional
-            [description], by default False
-        
-        Returns
-        -------
-        [type]
-            [description]
-        """
-
-        if input == False:
-            path = self.input_excel_path
-        else:
-            path = self.output_excel_path
-
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            try:
-                xlwb = excel.Workbooks(path)
-            except Exception as e:
-                try:
-                    xlwb = excel.Workbooks.Open(path)
-                except Exception as e:
-                    print(e)
-                    xlwb = None
-            ws = xlwb.Worksheets('blaaaa') 
-            excel.Visible = True
-
-        except Exception as e:
-            print(e)
-
-        finally:
-            ws = None
-            wb = None
-            excel = None
-
-        return self
 
 
 class AWS:
@@ -316,7 +272,7 @@ class AWS:
         self.file_to_s3()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t') :
+    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
         """Writes S3 file to Redshift table.    
 
         Parameters
@@ -334,6 +290,8 @@ class AWS:
 
         sep : str, optional
             Separator, by default '\t'
+        types : dict, optional
+            Data types to force
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -352,7 +310,7 @@ class AWS:
             else:
                 pass
         else:
-            self._create_table_like_s3(table_name, sep)
+            self._create_table_like_s3(table_name, sep, types)
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
@@ -372,7 +330,7 @@ class AWS:
         print(f'Data has been copied to {table_name}')
 
 
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t'):
+    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None):
         """Writes DataFrame to Redshift.
         
         Parameters
@@ -392,16 +350,19 @@ class AWS:
 
         sep : str, optional
             Separator, by default '\t'
+        types : dict, optional
+            Data types to force
         """
         self.df_to_s3(df, sep=sep)
         self.s3_to_rds(
             table=table, 
             schema=schema, 
             if_exists=if_exists, 
-            sep=sep)
+            sep=sep,
+            types=types)
 
 
-    def _create_table_like_s3(self, table_name, sep):
+    def _create_table_like_s3(self, table_name, sep, types):
         s3_client = self.s3_resource.meta.client
 
         obj_content = s3_client.select_object_content(
@@ -439,15 +400,24 @@ class AWS:
                     column_isfloat[i].append(isfloat(item))
                     i+=1
             count+=1
-            
+
         columns = []
+
         count = 0
         for col in column_names:
-            if True in set(column_isfloat[count]):
-                columns.append(f"{col} FLOAT")
+            if types and col in types:
+                col_type = types[col].upper()
+                types.pop(col)
             else:
-                columns.append(f"{col} VARCHAR(500)")
+                if True in set(column_isfloat[count]):
+                    col_type = "FLOAT"
+                else:
+                    col_type = "VARCHAR(500)"
+            columns.append(f"{col} {col_type}")
             count += 1
+        if types:
+            other_cols = list(types.keys())
+            print(f"Columns {other_cols} were not found.")
             
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)

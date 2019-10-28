@@ -42,7 +42,7 @@ def test_write_to():
     excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'testing.xlsx')
     qf = QFrame(engine='mssql+pyodbc://Redshift').read_excel(excel_path, sheet_name="data")
     qf.query("assignment_level='CBC2'")
-    
+
     schema="testing"
     table="test_patrycja"
 
@@ -53,7 +53,7 @@ def test_write_to():
     else:
         sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
 
-    statement="""INSERT INTO testing.test_patrycja (assignment_group, billings, fiscal_year, assignment_code, assignment_name) 
+    statement="""INSERT INTO testing.test_patrycja (assignment_group, billings, fiscal_year, assignment_code, assignment_name)
     SELECT assignment_level AS assignment_group, sum(billings) AS billings, fiscal_year,
        assignment_values_fy19.profit_center || ' x ' || assignment_values_fy19.assignment_code_l2 AS assignment_code,
        assignment_values_fy19.profit_center || ' x ' || assignment_values_fy19.assignment_code_l2 AS assignment_name
@@ -89,9 +89,9 @@ def test_csv_to_s3_to_csv():
     engine = create_engine(engine_string)
     df = pandas.read_sql(sql="select * from chinook", con=engine)
     csv_path = os.path.join(os.getcwd(), 'csv_to_s3_test.csv')
-    s3_name = "'csv_to_s3_test.csv'
+    s3_name = 'csv_to_s3_test.csv'
 
-    csv = test_df.to_csv(path_or_buf=csv_path, index=False)  
+    csv = test_df.to_csv(path_or_buf=csv_path, index=False)
 
     test_s3 = csv_to_s3(csv_path,s3_name)
     test_csv = s3_to_csv(s3_name,csv_path)
@@ -102,9 +102,6 @@ def test_csv_to_s3_to_csv():
 def test_df_to_s3():
     engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
     engine = create_engine(engine_string)
-    df = pandas.read_sql(sql="select * from chinook", con=engine) 
+    df = pandas.read_sql(sql="select * from chinook", con=engine)
 
     """..."""
-
-
-

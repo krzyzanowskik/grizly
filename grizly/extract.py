@@ -5,8 +5,9 @@ import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
-
 from grizly.tools import AWS
+from grizly.utils import file_extension
+
 
 
 class Extract():
@@ -22,15 +23,14 @@ class Extract():
         self.task = None
         self.config = config
 
-
     def get_path(self):
         return self.file_path
 
 
     def write(self):
-        assert os.path.splitext(self.file_path)[1] == '.csv', "This method only supports csv files"
+        assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
-        with open(self.file_path, 'a+', newline='', encoding = 'utf-8') as csvfile:
+        with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
             print("writing...")
             writer = csv.writer(csvfile, delimiter=',')
             writer.writerows(self.rows)
@@ -82,7 +82,7 @@ class Extract():
         return self
 
 
-    def from_qf():
+    def from_qf(self):
         pass
 
 
@@ -173,15 +173,30 @@ class Extract():
 
 
     def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
+        """Writes s3 to local file.
+        
+        Parameters
+        ----------
+        s3_key : str, optional
+            Name of s3 key, if None then 'bulk/'
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        
+        Returns
+        -------
+        Extract
+        """
         file_name = os.path.basename(self.file_path)
         file_dir = os.path.dirname(self.file_path)
         aws = AWS(
-                file_name=file_name, 
-                s3_key=s3_key, 
-                bucket=bucket, 
+                file_name=file_name,
+                s3_key=s3_key,
+                bucket=bucket,
                 file_dir=file_dir,
                 redshift_str=redshift_str,
                 config=self.config
                 )
         aws.s3_to_file()
-        return aws
+        return self
