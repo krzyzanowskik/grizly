@@ -686,7 +686,56 @@ class QFrame:
         to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
         return self
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
+
+    def csv_to_s3(self, csv_path):
+        """Writes csv file to s3 in 'teis-data/bulk' bucket.
+
+        Parameters
+        ----------
+        csv_path : str
+            Path to csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        csv_to_s3(csv_path)
+        return self
+
+
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+        """Writes s3 to Redshift database.
+
+        Parameters
+        ----------
+        table : str
+            Name of SQL table.
+        s3_name : str
+            Name of s3 file from which we want to load data.
+        schema : str, optional
+            Specify the schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
+        sep : str, default '\t'
+            Separator/delimiter in csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        self.create_sql_blocks()
+        self.sql = get_sql(self.data)
+        
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        return self
+
+
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -731,7 +780,7 @@ class QFrame:
         self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
-        csv_to_s3(csv_path)
+        csv_to_s3(csv_path, keep_csv=keep_csv)
 
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
