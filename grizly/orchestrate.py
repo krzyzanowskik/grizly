@@ -288,8 +288,7 @@ class Workflow:
     @retry_task(Exception, tries=3, delay=300)
     def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage):
 
-        #schema = "administration"
-        schema = "z_sandbox_mz"
+        schema = "administration"
         table = "status"
 
         last_run_date = pd.datetime.utcnow()
