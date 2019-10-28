@@ -148,7 +148,7 @@ class QFrame:
             json_data = self.data
 
         with open(json_path, 'w') as f:
-            json.dump(json_data, f)
+            json.dump(json_data, f, indent=4)
         print(f"Data saved in {json_path}")
 
     def read_excel(self, excel_path, sheet_name="", query=""):

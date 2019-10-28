@@ -97,26 +97,22 @@ class Extract():
         """
 
         def from_sfdc():
-            proxies = {
-                "http": "http://restrictedproxy.tycoelectronics.com:80",
-                "https": "http://restrictedproxy.tycoelectronics.com:80",
-            }
 
             username = config["sfdc_username"]
             password = config["sfdc_password"]
 
             if env == "prod":
                 try:
-                    sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+                    sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve')
                 except SalesforceAuthenticationFailed:
-                    print("Could not log in to SFDC. Are you sure your password hasn't expired?")
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
                     raise SalesforceAuthenticationFailed
             elif env == "stage":
                 try:
                     sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                                    organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+                                    organizationId='00DE0000000Hkve', sandbox=True, security_token='')
                 except SalesforceAuthenticationFailed:
-                    print("Could not log in to SFDC. Are you sure your password hasn't expired?")
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
                     raise SalesforceAuthenticationFailed
             else:
                 raise ValueError("Please choose one of supported environments: (prod, stage)")
