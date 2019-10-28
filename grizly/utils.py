@@ -3,6 +3,7 @@ import json
 from sqlalchemy import create_engine
 import pandas as pd
 from sqlalchemy.pool import NullPool
+from simple_salesforce import Salesforce
 
 class Config(dict):
     def __init__(self):
@@ -42,8 +43,108 @@ def get_connection(db="denodo"):
     return con
 
 
+def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
+    """Get SQLAlchemy equivalent of the given SFDC data type.
+
+    Parameters
+    ----------
+    sfdc_dtype : str
+        SFDC data type.
+
+    Returns
+    ----------
+    sqlalchemy_dtype : str
+        The string representing a SQLAlchemy data type.
+    """
+
+
+    sqlalchemy_dtypes = {
+        "address": "NVARCHAR",
+        'anytype': "NVARCHAR",
+        'base64': "NVARCHAR",
+        'boolean': "BOOLEAN",
+        'combobox': "NVARCHAR",
+        'currency': "NUMERIC(precision=6)",
+        'datacategorygroupreference': "NVARCHAR",
+        'date': "DATE",
+        'datetime': "DATETIME",
+        'double': "NUMERIC",
+        'email': "NVARCHAR",
+        'encryptedstring': "NVARCHAR",
+        'id': "NVARCHAR",
+        'int': "INT",
+        'multipicklist': "NVARCHAR",
+        'percent': "NUMERIC(precision=6)",
+        'phone': "NVARCHAR",
+        'picklist': "NVARCHAR",
+        'reference': "NVARCHAR",
+        'string': "NVARCHAR",
+        'textarea': "NVARCHAR",
+        'time': "DATETIME",
+        'url': "NVARCHAR"
+    }
+    sqlalchemy_dtype = sqlalchemy_dtypes[sfdc_dtype]
+    return sqlalchemy_dtype
+
+
+def get_sfdc_columns(table, columns=None, column_types=True):
+    """Get column names (and optionally types) from a SFDC table.
+
+    The columns are sent by SFDC in a messy format and the types are custom SFDC types,
+    so they need to be manually converted to sql data types.
+
+    Parameters
+    ----------
+    table : str
+        Name of table.
+    column_types : bool
+        Whether to retrieve field types.
+
+    Returns
+    ----------
+    List or Dict
+    """
+    proxies = {
+    "http": "http://restrictedproxy.tycoelectronics.com:80",
+    "https": "http://restrictedproxy.tycoelectronics.com:80"
+    }
+    sfdc_username = config["sfdc_username"]
+    sfdc_pw = config["sfdc_password"]
+
+    sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve', proxies=proxies)
+
+    proxies = {
+        "http": "http://restrictedproxy.tycoelectronics.com:80",
+        "https": "http://restrictedproxy.tycoelectronics.com:80",
+    }
+
+    sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve', proxies=proxies)
+    field_descriptions = eval(f'sf.{table}.describe()["fields"]') # change to variable table
+    types = {field["name"]: (field["type"], field["length"]) for field in field_descriptions}
+
+    if columns:
+        fields = columns
+    else:
+        fields = [field["name"] for field in field_descriptions]
+
+    if column_types:
+        dtypes = {}
+        for field in fields:
+
+            field_sfdc_type = types[field][0]
+            field_len = types[field][1]
+            field_sqlalchemy_type = sfdc_to_sqlalchemy_dtype(field_sfdc_type)
+            if field_sqlalchemy_type == "NVARCHAR":
+                field_sqlalchemy_type = f"{field_sqlalchemy_type}({field_len})"
+
+            dtypes[field] = field_sqlalchemy_type
+        return dtypes
+    else:
+        raise NotImplementedError("Retrieving columns only is currently not supported")
+
+
 def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
-    """Get columns (or also columns types) from Denodo view.
+    """Get column names (and optionally types) from Denodo view.
 
     Parameters
     ----------
@@ -113,7 +214,7 @@ def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
 
 
 def get_redshift_columns(schema, table, column_types=False):
-    """Get columns and optionally other metadata from a Redshift table.
+    """Get column names (and optionally types) from a Redshift table.
 
     Parameters
     ----------
@@ -122,7 +223,7 @@ def get_redshift_columns(schema, table, column_types=False):
     table : str
         Name of table.
     column_types : bool
-        True means user wants to get also data types.
+        Whether to retrieve field types.
     date_format : str
         Denodo date format differs from those from other databases. User can choose which format is desired.
     """
@@ -167,13 +268,15 @@ def get_redshift_columns(schema, table, column_types=False):
     return to_return
 
 
-def get_columns(schema, table, column_types=False, date_format="DATE", db="denodo"):
+def get_columns(table, schema=None, column_types=False, date_format="DATE", db="denodo", columns=None):
     """ Retrieves column names and optionally other table metadata """
     db = db.lower()
     if db == "denodo":
         return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format)
     elif db == "redshift":
         return get_redshift_columns(schema=schema, table=table, column_types=column_types)
+    elif db == "sfdc":
+        return get_sfdc_columns(table=table, column_types=column_types, columns=columns)
     else:
         raise NotImplementedError("This db is not yet supported")
 

@@ -6,9 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from grizly.tools import AWS
-from grizly.utils import file_extension
+from grizly.utils import file_extension, read_config
 
-
+config = read_config()
 
 class Extract():
     """
@@ -86,13 +86,11 @@ class Extract():
         pass
 
 
-    def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
+    def from_sfdc(self, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
         Parameters
         ----------
-        username : string
-        username_password : string
         tablename : string
         ...?
         """
@@ -102,6 +100,9 @@ class Extract():
                 "http": "http://restrictedproxy.tycoelectronics.com:80",
                 "https": "http://restrictedproxy.tycoelectronics.com:80",
             }
+
+            username = config["sfdc_username"]
+            password = config["sfdc_password"]
 
             if env == "prod":
                 sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
