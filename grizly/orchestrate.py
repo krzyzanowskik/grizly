@@ -14,7 +14,7 @@ from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
 from grizly.etl import df_to_s3, s3_to_rds
 from grizly.qframe import QFrame
-from grizly.utils import read_config
+from grizly.utils import read_config, get_path
 from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
@@ -107,7 +107,7 @@ class Listener:
 
     def get_last_refresh(self):
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json") as f:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as f:
 
             try:
                 listener_store = json.load(f)
@@ -126,7 +126,7 @@ class Listener:
 
     def update_json(self):
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json") as json_file:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as json_file:
             try:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
@@ -137,7 +137,7 @@ class Listener:
         else:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json", "w") as f_write:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json"), "w") as f_write:
             json.dump(listener_store, f_write)
 
 
