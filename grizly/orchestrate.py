@@ -5,13 +5,16 @@ import os
 import json
 import datetime
 import graphviz
+import pendulum
 
 from time import time, sleep
 from croniter import croniter
 from datetime import timedelta
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
-from grizly import df_to_s3, s3_to_rds, QFrame, read_config
+from grizly.etl import df_to_s3, s3_to_rds
+from grizly.qframe import QFrame
+from grizly.utils import read_config, get_path
 from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
@@ -76,7 +79,7 @@ class Schedule:
 
 class Listener:
     """A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
-    
+
     Check and stores table's last refresh date.
     """
 
@@ -104,7 +107,7 @@ class Listener:
 
     def get_last_refresh(self):
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json") as f:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as f:
 
             try:
                 listener_store = json.load(f)
@@ -119,11 +122,11 @@ class Listener:
                 pass
 
         return last_data_refresh
-            
+
 
     def update_json(self):
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json") as json_file:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as json_file:
             try:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
@@ -134,11 +137,11 @@ class Listener:
         else:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
-        with open(r"C:\Users\te393828\acoe_projects\infrastructure\listener_store.json", "w") as f_write:
+        with open(get_path("acoe_projects", "infrastructure", "listener_store.json"), "w") as f_write:
             json.dump(listener_store, f_write)
 
-  
-    
+
+
     def get_table_last_refresh(self):
 
         sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
@@ -157,7 +160,7 @@ class Listener:
 
         return last_data_refresh
 
-    
+
     def should_trigger(self, table_last_refresh):
 
         if self.trigger == "default":
@@ -219,6 +222,7 @@ class Workflow:
         self.run_time = 0
         self.status = "idle"
         self.is_scheduled = False
+        self.stage = "prod"
         self.logger = logging.getLogger(__name__)
 
         self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
@@ -282,7 +286,7 @@ class Workflow:
 
 
     @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time):
+    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage):
 
         schema = "administration"
         table = "status"
@@ -295,7 +299,8 @@ class Workflow:
             "backup_email": [backup_email],
             "run_date": [last_run_date],
             "workflow_status": [status],
-            "run_time": [run_time]
+            "run_time": [run_time],
+            "stage": [stage]
         }
 
         status_data = pd.DataFrame(status_data)
@@ -353,7 +358,7 @@ class Workflow:
         end = time()
         self.run_time = int(end-start)
 
-        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time)
+        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage)
 
         # only send email notification on failure
         if self.status == "fail":
@@ -372,7 +377,7 @@ class Workflow:
                 cc = [self.backup_email]
             if not isinstance(self.owner_email, list):
                 to = [self.owner_email]
-            
+
             self.send_email(body=email_body, to=to, cc=cc, status=self.status)
 
         return self.status

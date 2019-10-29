@@ -5,10 +5,11 @@ import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
+from simple_salesforce.login import SalesforceAuthenticationFailed
 from grizly.tools import AWS
-from grizly.utils import file_extension
+from grizly.utils import file_extension, read_config
 
-
+config = read_config()
 
 class Extract():
     """
@@ -32,7 +33,7 @@ class Extract():
 
         with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
             print("writing...")
-            writer = csv.writer(csvfile, delimiter=',')
+            writer = csv.writer(csvfile, delimiter='\t')
             writer.writerows(self.rows)
             print("done writing")
 
@@ -86,28 +87,33 @@ class Extract():
         pass
 
 
-    def from_sfdc(self, username, password, fields, table, where=None, env="prod", delayed=False):
+    def from_sfdc(self, fields, table, where=None, env="prod", delayed=False):
         """
         Writes Salesforce table to csv file.
         Parameters
         ----------
-        username : string
-        username_password : string
         tablename : string
         ...?
         """
 
         def from_sfdc():
-            proxies = {
-                "http": "http://restrictedproxy.tycoelectronics.com:80",
-                "https": "http://restrictedproxy.tycoelectronics.com:80",
-            }
+
+            username = config["sfdc_username"]
+            password = config["sfdc_password"]
 
             if env == "prod":
-                sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+                try:
+                    sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve')
+                except SalesforceAuthenticationFailed:
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                    raise SalesforceAuthenticationFailed
             elif env == "stage":
-                sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                                organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+                try:
+                    sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                                    organizationId='00DE0000000Hkve', sandbox=True, security_token='')
+                except SalesforceAuthenticationFailed:
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                    raise SalesforceAuthenticationFailed
             else:
                 raise ValueError("Please choose one of supported environments: (prod, stage)")
 
@@ -173,6 +179,21 @@ class Extract():
 
 
     def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
+        """Writes s3 to local file.
+        
+        Parameters
+        ----------
+        s3_key : str, optional
+            Name of s3 key, if None then 'bulk/'
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        
+        Returns
+        -------
+        Extract
+        """
         file_name = os.path.basename(self.file_path)
         file_dir = os.path.dirname(self.file_path)
         aws = AWS(
@@ -184,4 +205,4 @@ class Extract():
                 config=self.config
                 )
         aws.s3_to_file()
-        return aws
+        return self

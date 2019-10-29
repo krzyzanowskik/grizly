@@ -54,6 +54,7 @@ class QFrame:
     engine : str
         Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC".
         Other engine strings:
+        * DenodoPROD: "mssql+pyodbc://DenodoPROD",
         * Redshift: "mssql+pyodbc://Redshift",
         * MariaDB: "mssql+pyodbc://retool_dev_db"
     """
@@ -147,7 +148,7 @@ class QFrame:
             json_data = self.data
 
         with open(json_path, 'w') as f:
-            json.dump(json_data, f)
+            json.dump(json_data, f, indent=4)
         print(f"Data saved in {json_path}")
 
     def read_excel(self, excel_path, sheet_name="", query=""):
@@ -449,7 +450,7 @@ class QFrame:
                         "expression": expression,
                         "custom_type": custom_type
                         }
-                        
+
         return self
 
 
@@ -611,13 +612,13 @@ class QFrame:
 
     def get_fields(self):
         """Gets list of QFrame fields.
-        
+
         Returns
         -------
         list
             List of fields names
         """
-            
+
         fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields
@@ -686,7 +687,56 @@ class QFrame:
         to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
         return self
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
+
+    def csv_to_s3(self, csv_path):
+        """Writes csv file to s3 in 'teis-data/bulk' bucket.
+
+        Parameters
+        ----------
+        csv_path : str
+            Path to csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        csv_to_s3(csv_path)
+        return self
+
+
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+        """Writes s3 to Redshift database.
+
+        Parameters
+        ----------
+        table : str
+            Name of SQL table.
+        s3_name : str
+            Name of s3 file from which we want to load data.
+        schema : str, optional
+            Specify the schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
+        sep : str, default '\t'
+            Separator/delimiter in csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        self.create_sql_blocks()
+        self.sql = get_sql(self.data)
+        
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        return self
+
+
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -731,7 +781,7 @@ class QFrame:
         self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
-        csv_to_s3(csv_path)
+        csv_to_s3(csv_path, keep_csv=keep_csv)
 
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
@@ -757,7 +807,7 @@ class QFrame:
         """
         write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
         return self
-      
+
     def to_df(self):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
@@ -820,7 +870,7 @@ class QFrame:
         df = self.to_df()
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
 
-        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists,
+        df.to_sql(name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
@@ -921,7 +971,7 @@ class QFrame:
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
-        
+
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
@@ -978,7 +1028,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
             (q2.sql) sq2
         ON sq1.customer_id=sq2.customer_id
 
-    
+
     qframes:
     q1 -> fields: customer_id, orders
     q2 -> fields: customer_id, orders as 'ord'

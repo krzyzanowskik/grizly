@@ -37,12 +37,15 @@ from .excel import (
     copy_df_to_excel
 )
 
+from .email import Email
+
 from .tools import (
     Excel,
     AWS
 )
 
 from .store import Store
+
 
 from os import environ
 
