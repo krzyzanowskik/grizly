@@ -33,7 +33,7 @@ class Extract():
 
         with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
             print("writing...")
-            writer = csv.writer(csvfile, delimiter=',')
+            writer = csv.writer(csvfile, delimiter='\t')
             writer.writerows(self.rows)
             print("done writing")
 

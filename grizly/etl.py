@@ -17,7 +17,18 @@ try:
 except TypeError:
     pass
 
-def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
+def to_csv(qf,csv_path, sql, engine_str, cursor, sep='\t', chunksize=None, compress=False):
+
+    if cursor:
+        cursor.execute(sql)
+    else:
+        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+        con = engine.connect().connection
+        cursor = con.cursor()
+        cursor.execute(sql)
+
+
+def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -32,17 +43,27 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
         Separtor/delimiter in csv file.
     chunksize : int, default None
         If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+    cursor : Cursor, default None
+        The cursor to be used to execute the SQL. By default a new cursor is created.
     """
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
-    try:
-        con = engine.connect().connection
-        cursor = con.cursor()
+    if cursor:
         cursor.execute(sql)
-    except:
-        con = engine.connect().connection
-        cursor = con.cursor()
-        cursor.execute(sql)
+        close_cursor = False
+
+    else:
+        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+        try:
+            con = engine.connect().connection
+            cursor = con.cursor()
+            cursor.execute(sql)
+        except:
+            con = engine.connect().connection
+            cursor = con.cursor()
+            cursor.execute(sql)
+
+        close_cursor = True
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
@@ -64,8 +85,9 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
         else:
             writer.writerows(cursor.fetchall())
 
-    cursor.close()
-    con.close()
+    if close_cursor:
+        cursor.close()
+        con.close()
 
 
 def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
