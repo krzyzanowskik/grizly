@@ -54,6 +54,7 @@ class QFrame:
     engine : str
         Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC".
         Other engine strings:
+        * DenodoPROD: "mssql+pyodbc://DenodoPROD",
         * Redshift: "mssql+pyodbc://Redshift",
         * MariaDB: "mssql+pyodbc://retool_dev_db"
     """
@@ -147,7 +148,7 @@ class QFrame:
             json_data = self.data
 
         with open(json_path, 'w') as f:
-            json.dump(json_data, f)
+            json.dump(json_data, f, indent=4)
         print(f"Data saved in {json_path}")
 
     def read_excel(self, excel_path, sheet_name="", query=""):
@@ -449,7 +450,7 @@ class QFrame:
                         "expression": expression,
                         "custom_type": custom_type
                         }
-                        
+
         return self
 
 
@@ -611,13 +612,13 @@ class QFrame:
 
     def get_fields(self):
         """Gets list of QFrame fields.
-        
+
         Returns
         -------
         list
             List of fields names
         """
-            
+
         fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields
@@ -806,7 +807,7 @@ class QFrame:
         """
         write_to(qf=self,table=table,schema=schema, if_exists=if_exists)
         return self
-      
+
     def to_df(self):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
@@ -970,7 +971,7 @@ class QFrame:
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
-        
+
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
@@ -1027,7 +1028,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
             (q2.sql) sq2
         ON sq1.customer_id=sq2.customer_id
 
-    
+
     qframes:
     q1 -> fields: customer_id, orders
     q2 -> fields: customer_id, orders as 'ord'

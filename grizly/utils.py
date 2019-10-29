@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
+from simple_salesforce.login import SalesforceAuthenticationFailed
 
 class Config(dict):
     def __init__(self):
@@ -64,7 +65,7 @@ def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
         'base64': "NVARCHAR",
         'boolean': "BOOLEAN",
         'combobox': "NVARCHAR",
-        'currency': "NUMERIC(precision=6)",
+        'currency': "NUMERIC(precision=14)",
         'datacategorygroupreference': "NVARCHAR",
         'date': "DATE",
         'datetime': "DATETIME",
@@ -104,21 +105,15 @@ def get_sfdc_columns(table, columns=None, column_types=True):
     ----------
     List or Dict
     """
-    proxies = {
-    "http": "http://restrictedproxy.tycoelectronics.com:80",
-    "https": "http://restrictedproxy.tycoelectronics.com:80"
-    }
+
     sfdc_username = config["sfdc_username"]
     sfdc_pw = config["sfdc_password"]
 
-    sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve', proxies=proxies)
-
-    proxies = {
-        "http": "http://restrictedproxy.tycoelectronics.com:80",
-        "https": "http://restrictedproxy.tycoelectronics.com:80",
-    }
-
-    sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve', proxies=proxies)
+    try:
+        sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve')
+    except SalesforceAuthenticationFailed:
+        print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+        raise SalesforceAuthenticationFailed
     field_descriptions = eval(f'sf.{table}.describe()["fields"]') # change to variable table
     types = {field["name"]: (field["type"], field["length"]) for field in field_descriptions}
 

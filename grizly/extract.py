@@ -5,6 +5,7 @@ import dask
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
+from simple_salesforce.login import SalesforceAuthenticationFailed
 from grizly.tools import AWS
 from grizly.utils import file_extension, read_config
 
@@ -32,7 +33,7 @@ class Extract():
 
         with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
             print("writing...")
-            writer = csv.writer(csvfile, delimiter=',')
+            writer = csv.writer(csvfile, delimiter='\t')
             writer.writerows(self.rows)
             print("done writing")
 
@@ -96,19 +97,23 @@ class Extract():
         """
 
         def from_sfdc():
-            proxies = {
-                "http": "http://restrictedproxy.tycoelectronics.com:80",
-                "https": "http://restrictedproxy.tycoelectronics.com:80",
-            }
 
             username = config["sfdc_username"]
             password = config["sfdc_password"]
 
             if env == "prod":
-                sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve', proxies=proxies)
+                try:
+                    sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve')
+                except SalesforceAuthenticationFailed:
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                    raise SalesforceAuthenticationFailed
             elif env == "stage":
-                sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                                organizationId='00DE0000000Hkve', proxies=proxies, sandbox=True, security_token='')
+                try:
+                    sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
+                                    organizationId='00DE0000000Hkve', sandbox=True, security_token='')
+                except SalesforceAuthenticationFailed:
+                    print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                    raise SalesforceAuthenticationFailed
             else:
                 raise ValueError("Please choose one of supported environments: (prod, stage)")
 

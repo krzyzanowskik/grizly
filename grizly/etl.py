@@ -17,7 +17,18 @@ try:
 except TypeError:
     pass
 
-def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
+def to_csv(qf,csv_path, sql, engine_str, cursor, sep='\t', chunksize=None, compress=False):
+
+    if cursor:
+        cursor.execute(sql)
+    else:
+        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+        con = engine.connect().connection
+        cursor = con.cursor()
+        cursor.execute(sql)
+
+
+def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -32,17 +43,27 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
         Separtor/delimiter in csv file.
     chunksize : int, default None
         If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+    cursor : Cursor, default None
+        The cursor to be used to execute the SQL. By default a new cursor is created.
     """
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
-    try:
-        con = engine.connect().connection
-        cursor = con.cursor()
+    if cursor:
         cursor.execute(sql)
-    except:
-        con = engine.connect().connection
-        cursor = con.cursor()
-        cursor.execute(sql)
+        close_cursor = False
+
+    else:
+        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+        try:
+            con = engine.connect().connection
+            cursor = con.cursor()
+            cursor.execute(sql)
+        except:
+            con = engine.connect().connection
+            cursor = con.cursor()
+            cursor.execute(sql)
+
+        close_cursor = True
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
@@ -64,8 +85,9 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
         else:
             writer.writerows(cursor.fetchall())
 
-    cursor.close()
-    con.close()
+    if close_cursor:
+        cursor.close()
+        con.close()
 
 
 def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
@@ -441,7 +463,28 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t'):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None):
+
+    sql = f"""
+        COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'
+        access_key_id '{config["akey"]}'
+        secret_access_key '{config["skey"]}'
+        delimiter '{sep}'
+        NULL ''
+        IGNOREHEADER 1
+        REMOVEQUOTES
+        ;commit;
+        """
+    indent = 9
+    last_line_pos = len(sql) - len(";commit;") - indent
+    if time_format:
+        spaces = indent * " " # print formatting
+        time_format_argument = f"timeformat '{time_format}'"
+        return sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+    return sql
+
+
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
     Parameters:
@@ -479,18 +522,9 @@ def s3_to_rds(file_name, table_name=None, schema='', if_exists='fail', sep='\t')
         else:
             pass
 
-    print(f"Loading data into {table_name}...")
-    sql = f"""
-        COPY {schema}.{table_name} FROM 's3://teis-data/bulk/{file_name}'
-        access_key_id '{config["akey"]}'
-        secret_access_key '{config["skey"]}'
-        delimiter '{sep}'
-        NULL ''
-        IGNOREHEADER 1
-        REMOVEQUOTES
-        ;commit;
-        """
+    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format)
 
+    print(f"Loading data into {table_name}...")
     engine.execute(sql)
     print(f'Data has been copied to {table_name}')
 
