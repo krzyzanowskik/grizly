@@ -17,16 +17,6 @@ try:
 except TypeError:
     pass
 
-def to_csv(qf,csv_path, sql, engine_str, cursor, sep='\t', chunksize=None, compress=False):
-
-    if cursor:
-        cursor.execute(sql)
-    else:
-        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-        con = engine.connect().connection
-        cursor = con.cursor()
-        cursor.execute(sql)
-
 
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
     """
