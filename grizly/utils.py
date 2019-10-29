@@ -72,7 +72,8 @@ def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
             WHERE view_name = '{table}'
             AND database_name = '{schema}'
     """
-    engine = create_engine(config["denodo"])
+    print(config["denodo"])
+    engine = create_engine(config["denodo"], encoding='utf8', poolclass=NullPool)
 
     try:
         con = engine.connect().connection
