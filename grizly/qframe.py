@@ -666,7 +666,7 @@ class QFrame:
 
 ## Non SQL Processing
 
-    def to_csv(self, csv_path, chunksize=None):
+    def to_csv(self, csv_path, chunksize=None, cursor=None):
         """Writes QFrame table to csv file.
 
         Parameters
@@ -675,6 +675,8 @@ class QFrame:
             Path to csv file.
         chunksize : int, default None
             If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+        cursor : Cursor, optional
+            The cursor to be used to execute the SQL, by default None
 
         Returns
         -------
@@ -684,9 +686,8 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
+        to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
         return self
-
 
     def csv_to_s3(self, csv_path):
         """Writes csv file to s3 in 'teis-data/bulk' bucket.
@@ -736,7 +737,7 @@ class QFrame:
         return self
 
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -772,6 +773,10 @@ class QFrame:
             If True the data will be loaded by the names of columns, by default True
         chunksize : int, optional
             If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
+        keep_csv : bool, optional
+            Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+        cursor : Cursor, optional
+            The cursor to be used to execute the SQL, by default None
 
         Returns
         -------
@@ -780,9 +785,8 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
+        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
         csv_to_s3(csv_path, keep_csv=keep_csv)
-
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
 
