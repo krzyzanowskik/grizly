@@ -666,7 +666,7 @@ class QFrame:
 
 ## Non SQL Processing
 
-    def to_csv(self, csv_path, chunksize=None):
+    def to_csv(self, csv_path, chunksize=None, cursor=None):
         """Writes QFrame table to csv file.
 
         Parameters
@@ -684,10 +684,10 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine,chunksize=chunksize)
+        to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
         return self
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, cursor=None):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -731,7 +731,7 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
+        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
         csv_to_s3(csv_path)
 
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
