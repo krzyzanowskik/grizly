@@ -219,7 +219,7 @@ def read_s3(file_path: str, s3_name: str):
     print('{} uploaded to {}'.format('bulk/' + s3_name, os.path.basename(file_path)))
 
 
-def csv_to_s3(csv_path):
+def csv_to_s3(csv_path, keep_csv=True):
     """
     Writes csv file to s3 in 'teis-data' bucket.
 
@@ -237,8 +237,9 @@ def csv_to_s3(csv_path):
 
     bucket.upload_file(csv_path, 'bulk/' + s3_name)
     print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), 'bulk/' + s3_name))
-
-
+    if not keep_csv:
+        os.remove(csv_path)
+        
 def s3_to_csv(csv_path):
     """
     Writes s3 in 'teis-data' bucket to csv file .

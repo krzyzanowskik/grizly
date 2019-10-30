@@ -675,6 +675,8 @@ class QFrame:
             Path to csv file.
         chunksize : int, default None
             If specified, return an iterator where chunksize is the number of rows to include in each chunk.
+        cursor : Cursor, optional
+            The cursor to be used to execute the SQL, by default None
 
         Returns
         -------
@@ -687,7 +689,55 @@ class QFrame:
         to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
         return self
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, cursor=None):
+    def csv_to_s3(self, csv_path):
+        """Writes csv file to s3 in 'teis-data/bulk' bucket.
+
+        Parameters
+        ----------
+        csv_path : str
+            Path to csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        csv_to_s3(csv_path)
+        return self
+
+
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+        """Writes s3 to Redshift database.
+
+        Parameters
+        ----------
+        table : str
+            Name of SQL table.
+        s3_name : str
+            Name of s3 file from which we want to load data.
+        schema : str, optional
+            Specify the schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+
+        sep : str, default '\t'
+            Separator/delimiter in csv file.
+
+        Returns
+        -------
+        QFrame
+        """
+        self.create_sql_blocks()
+        self.sql = get_sql(self.data)
+        
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        return self
+
+
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -723,6 +773,10 @@ class QFrame:
             If True the data will be loaded by the names of columns, by default True
         chunksize : int, optional
             If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
+        keep_csv : bool, optional
+            Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+        cursor : Cursor, optional
+            The cursor to be used to execute the SQL, by default None
 
         Returns
         -------
@@ -732,8 +786,7 @@ class QFrame:
         self.sql = get_sql(self.data)
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
-        csv_to_s3(csv_path)
-
+        csv_to_s3(csv_path, keep_csv=keep_csv)
         s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
 
@@ -821,7 +874,7 @@ class QFrame:
         df = self.to_df()
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
 
-        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists,
+        df.to_sql(name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 

@@ -179,6 +179,21 @@ class Extract():
 
 
     def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
+        """Writes s3 to local file.
+        
+        Parameters
+        ----------
+        s3_key : str, optional
+            Name of s3 key, if None then 'bulk/'
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        
+        Returns
+        -------
+        Extract
+        """
         file_name = os.path.basename(self.file_path)
         file_dir = os.path.dirname(self.file_path)
         aws = AWS(
@@ -190,4 +205,4 @@ class Extract():
                 config=self.config
                 )
         aws.s3_to_file()
-        return aws
+        return self
