@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
 from grizly.sqlbuilder import (
+    get_duplicated_columns,
     get_sql,
     build_column_strings
 )
@@ -99,20 +100,7 @@ class QFrame:
         -------
         QFrame
         """
-        columns = {}
-        fields = self.data["select"]["fields"]
-
-        for field in fields:
-            alias =  field if  "as" not in fields[field] else fields[field]["as"]
-            if alias in columns.keys():
-                columns[alias].append(field)
-            else:
-                columns[alias] = [field]
-
-        duplicates = deepcopy(columns)
-        for alias in columns.keys():
-            if len(columns[alias]) == 1:
-                duplicates.pop(alias)
+        duplicates = show_duplicated_columns(self.data)
 
         if duplicates != {}:
             print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
@@ -828,7 +816,7 @@ class QFrame:
         df = self.to_df()
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
 
-        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists,
+        df.to_sql(name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
@@ -933,7 +921,6 @@ class QFrame:
 
         s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
-
 
 
     def copy(self):
@@ -1082,10 +1069,9 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
     return QFrame(data=data, engine=qframes[0].engine)
 
 
-def union(qframes=[], union_type=None):
+def union(qframes=[], union_type=None, union_by='position'):
     """Unions QFrame objects. Returns QFrame.
 
-    TODO: Add validations on columns and an option to check unioned columns.
     TODO: Add validations on engines.
 
     Examples
@@ -1105,6 +1091,11 @@ def union(qframes=[], union_type=None):
         List of qframes
     union_type : str or list
         Type or list of union types. Valid types: 'UNION', 'UNION ALL'.
+    union_by : {'position', 'name'}, default 'position'
+        How to union the qframe:
+
+        * position: union by position of the field
+        * name: union by the field aliases
 
     Returns
     -------
@@ -1112,30 +1103,65 @@ def union(qframes=[], union_type=None):
     """
     if isinstance(union_type, str) : union_type = [union_type]
 
+    assert len(qframes) >= 2, "You have to specify at least 2 qframes to perform a union."
     assert len(qframes) == len(union_type)+1, "Incorrect list size."
     assert set(item.upper() for item in union_type) <= {"UNION", "UNION ALL"}, "Incorrect union type. Valid types: 'UNION', 'UNION ALL'."
+    if union_by not in {'position', 'name'}:
+        raise ValueError("Invalid value for union_by. Valid values: 'position', 'name'.")
+    
     data = {'select': {'fields': {}}}
 
-    iterator = 0
-    for q in qframes:
-        q.create_sql_blocks()
+    main_qf = qframes[0]
+    main_qf.create_sql_blocks()
+    data["sq1"] = deepcopy(main_qf.data)
+    old_fields = deepcopy(main_qf.data["select"]["fields"])
+    new_fields = deepcopy(main_qf.data["select"]["sql_blocks"]["select_aliases"])
+    new_types = deepcopy(main_qf.data["select"]["sql_blocks"]["types"])
+    qframes.pop(0)
+
+    iterator = 2
+    for qf in qframes:
+        assert main_qf.engine == qf.engine, "QFrames have different engine strings."
+        qf.create_sql_blocks()
+        qf_aliases = qf.data["select"]["sql_blocks"]["select_aliases"]
+        assert len(new_fields) == len(qf_aliases), f"Amount of fields in {iterator}. QFrame doesn't match amount of fields in 1. QFrame."
+        
+        if union_by == 'name':
+            field_diff_1 = set(new_fields) - set(qf_aliases)
+            field_diff_2 = set(qf_aliases) - set(new_fields)
+            assert field_diff_1 == set() and field_diff_2 == set(), f"""Aliases {field_diff_2} not found in 1. QFrame, aliases {field_diff_1} not found in {iterator}. QFrame. Use qf.rename() to rename fields or set option union_by='position'"""
+            ordered_fields = []
+            for new_field in new_fields:
+                fields = deepcopy(qf.data['select']['fields'])
+                for field in fields:
+                    if field == new_field or "as" in fields[field] and fields[field]["as"] == new_field:
+                        ordered_fields.append(field)
+                        break
+            qf.rearrange(ordered_fields)
+            qf.create_sql_blocks()
+
+        for new_field in new_fields:
+            field_position = new_fields.index(new_field)
+            new_type = new_types[field_position]
+            qf_alias = qf.data['select']['sql_blocks']['select_aliases'][field_position]
+            qf_type = qf.data['select']['sql_blocks']['types'][field_position]
+            assert qf_type == new_type, f"Types don't match. 1. QFrame alias: {new_field} type: {new_type}, {iterator}. QFrame alias: {qf_alias} type: {qf_type}."
+
+        data[f"sq{iterator}"] = deepcopy(qf.data)
         iterator += 1
-        data[f"sq{iterator}"] = deepcopy(q.data)
 
-    fields = deepcopy(data["sq1"]["select"]["fields"])
-
-    for field in fields:
-        if "select" in fields[field] and fields[field]["select"] == 0:
+    for field in old_fields:
+        if "select" in old_fields[field] and old_fields[field]["select"] == 0:
             continue
         else:
-            if "as" in fields[field] and fields[field]["as"] != "":
-                alias = fields[field]["as"]
+            if "as" in old_fields[field] and old_fields[field]["as"] != "":
+                alias = old_fields[field]["as"]
             else:
                 alias = field
 
-            data["select"]["fields"][alias] = {"type": fields[field]["type"]}
-            if "custom_type" in fields[field] and fields[field]["custom_type"] != "":
-                data["select"]["fields"][alias]["custom_type"] = fields[field]["custom_type"]
+            data["select"]["fields"][alias] = {"type": old_fields[field]["type"]}
+            if "custom_type" in old_fields[field] and old_fields[field]["custom_type"] != "":
+                data["select"]["fields"][alias]["custom_type"] = old_fields[field]["custom_type"]
 
     data["select"]["union"] = {"union_type": union_type}
 
@@ -1195,8 +1221,8 @@ def _validate_data(data):
 
         if "select" in fields[field] and fields[field]["select"] != "":
             is_selected = fields[field]["select"]
-            if str(int(is_selected)) != "0":
-                raise ValueError(f"""Field '{field}' has invalid value in select: '{is_selected}'.  Valid values: '', '0'""")
+            if str(is_selected) not in {"0", "0.0"}:
+                raise ValueError(f"""Field '{field}' has invalid value in select: '{is_selected}'.  Valid values: '', '0', '0.0'""")
 
     if "distinct" in select and select["distinct"] != "":
         distinct = select["distinct"]
