@@ -27,6 +27,10 @@ from grizly.etl import (
     write_to
 )
 
+from grizly.utils import(
+    check_if_valid_type
+)
+
 import openpyxl
 
 
@@ -55,7 +59,7 @@ class QFrame:
     engine : str
         Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC".
         Other engine strings:
-        
+
         * DenodoPROD: "mssql+pyodbc://DenodoPROD",
         * Redshift: "mssql+pyodbc://Redshift",
         * MariaDB: "mssql+pyodbc://retool_dev_db"
@@ -1187,7 +1191,10 @@ def _validate_data(data):
             field_type = fields[field]["type"]
             if "custom_type" in fields[field]:
                 field_custom_type = fields[field]["custom_type"]
-                if field_type not in ["dim", "num"] and field_custom_type=='':
+                if field_custom_type != '':
+                    if not check_if_valid_type(field_custom_type):
+                        raise ValueError(f"""Field '{field}' has invalid value '{field_custom_type}' in custom_type. Check valid types for Redshift tables.""")
+                elif field_type not in ["dim", "num"] and field_custom_type=='':
                     raise ValueError(f"""Field '{field}' doesn't have custom_type and has invalid value in type: '{field_type}'. Valid values: 'dim', 'num'.""")
             else:
                 if field_type not in ["dim", "num"]:
