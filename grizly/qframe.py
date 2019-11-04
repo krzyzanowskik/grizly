@@ -50,7 +50,8 @@ def prepend_table(data, expression):
 
 
 class QFrame:
-    """
+    """Class which genearates a SQL statement.
+
     Parameters
     ----------
     data : dict
@@ -1073,7 +1074,6 @@ def union(qframes=[], union_type=None, union_by='position'):
     --------
     >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
     >>> q_unioned.get_sql()
-
         q1.sql
         UNION ALL
         q2.sql

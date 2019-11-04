@@ -22,3 +22,4 @@ exchangelib>=2.0.1
 pendulum>=2.0.5
 croniter>=0.3.29
 graphviz>=0.12
+sphinx_rtd_theme
