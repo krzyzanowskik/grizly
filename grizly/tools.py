@@ -291,7 +291,7 @@ class AWS:
         sep : str, optional
             Separator, by default '\t'
         types : dict, optional
-            Data types to force
+            Data types to force, by default None
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")

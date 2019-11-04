@@ -44,7 +44,7 @@ class Extract():
 
 
     def write(self):
-        """Writes Extract.rows to csv file.
+        """Writes extract.rows to csv file.
         """
         assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
