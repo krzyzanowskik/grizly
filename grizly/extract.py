@@ -12,8 +12,7 @@ from grizly.utils import file_extension, read_config
 config = read_config()
 
 class Extract():
-    """
-        Writes data to file.
+    """Writes data to file.
     """
     def __init__(self, config=None, file_path:str=None):
         if config == None:
@@ -23,6 +22,7 @@ class Extract():
         self.rows = None
         self.task = None
         self.config = config
+
 
     def get_path(self):
         return self.file_path
@@ -37,20 +37,29 @@ class Extract():
             writer.writerows(self.rows)
             print("done writing")
 
-
+    # KM: can we change argument order? 
     def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed=False):
-        """
-        Writes SQL table to csv file.
+        """Writes SQL table to csv file.
+        
         Parameters
         ----------
-        sql : string
-            SQL query.
-        engine : str
+        table : str
+            Name of table
+        engine_str : str
             Engine string.
-        sep : string, default '\t'
-            Separtor/delimiter in csv file.
+        chunk_column : str, optional
+            [description], by default None
+        schema : str, optional
+            Name of schema, by default None
+        sep : str, optional
+            Separtor/delimiter in csv file, by default '\t'
+        delayed : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        Extract
         """
-
         def from_sql():
             engine = create_engine(engine_str, encoding='utf8', poolclass=NullPool)
             try:
@@ -88,14 +97,35 @@ class Extract():
 
 
     def from_sfdc(self, fields, table, where=None, env="prod", delayed=False):
-        """
-        Writes Salesforce table to csv file.
+        """Writes Salesforce table to csv file.
+        
         Parameters
         ----------
-        tablename : string
-        ...?
+        fields : [type]
+            [description]
+        table : str
+            [description]
+        where : str, optional
+            [description], by default None
+        env : str, optional
+            [description], by default "prod"
+        delayed : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        [type]
+            [description]
+        
+        Raises
+        ------
+        SalesforceAuthenticationFailed
+            [description]
+        SalesforceAuthenticationFailed
+            [description]
+        ValueError
+            [description]
         """
-
         def from_sfdc():
 
             username = config["sfdc_username"]
