@@ -329,7 +329,9 @@ def check_if_valid_type(type:str):
         'TEXT',
         'DATE',
         'TIMESTAMP',
-        'TIMESTAMPTZ'
+        'TIMESTAMP WITHOUT TIME ZONE',
+        'TIMESTAMPTZ',
+        'TIMESTAMP WITH TIME ZONE'
         ]
 
     for valid_type in valid_types:
