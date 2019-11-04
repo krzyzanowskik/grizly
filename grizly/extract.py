@@ -14,7 +14,15 @@ config = read_config()
 class Extract():
     """Writes data to file.
     """
-    def __init__(self, config=None, file_path:str=None):
+    def __init__(self, file_path:str=None, config=None):
+        """
+        Parameters
+        ----------
+        file_path : str, optional
+            Path to local output file, by default None
+        config : module, optional
+            Config module, by default None
+        """
         if config == None:
             self.file_path = file_path
         else:
@@ -25,10 +33,19 @@ class Extract():
 
 
     def get_path(self):
+        """Returns path stored in extract.file_path
+        
+        Returns
+        -------
+        str
+            Path to local output file
+        """
         return self.file_path
 
 
     def write(self):
+        """Writes Extract.rows to csv file.
+        """
         assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
         with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
@@ -114,8 +131,7 @@ class Extract():
         
         Returns
         -------
-        [type]
-            [description]
+        Extract
         
         Raises
         ------
@@ -173,6 +189,21 @@ class Extract():
 
 
     def from_github(self, username:str, username_password:str, pages:int=100):
+        """Writes GitHub data in csv file.
+        
+        Parameters
+        ----------
+        username : str
+            [description]
+        username_password : str
+            [description]
+        pages : int, optional
+            [description], by default 100
+        
+        Returns
+        -------
+        Extract
+        """
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
             "https": "https://restrictedproxy.tycoelectronics.com:80",
