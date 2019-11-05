@@ -689,7 +689,7 @@ class QFrame:
         to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
         return self
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None, redshift_str=None):
         """Writes QFrame table to Redshift database.
 
         Examples
@@ -729,6 +729,8 @@ class QFrame:
             Whether to keep the local csv copy after uploading it to Amazon S3, by default True
         cursor : Cursor, optional
             The cursor to be used to execute the SQL, by default None
+        redshift_str : str, optional
+            Redshift engine string, by default 'mssql+pyodbc://Redshift'
 
         Returns
         -------
@@ -740,11 +742,11 @@ class QFrame:
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
         csv_to_s3(csv_path, keep_csv=keep_csv)
 
-        s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
-
+        s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names, redshift_str=redshift_str)
 
         return self
 
+    
     def to_table(self, table, schema='', if_exists='fail'):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
         Parameters
@@ -780,11 +782,11 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = pandas.read_sql(sql=self.sql, con=con)
         return df
 
+    
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
@@ -828,7 +830,7 @@ class QFrame:
         df = self.to_df()
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
 
-        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists,
+        df.to_sql(name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
@@ -903,7 +905,7 @@ class QFrame:
         return self
 
     #AC: this probably needs to be removed
-    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None):
         """Writes s3 to Redshift database.
 
         Parameters
@@ -923,6 +925,8 @@ class QFrame:
 
         sep : str, default '\t'
             Separator/delimiter in csv file.
+        redshift_str : str, optional
+            Redshift engine string, by default 'mssql+pyodbc://Redshift'
 
         Returns
         -------
@@ -931,7 +935,7 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names, redshift_str=redshift_str)
         return self
 
 
