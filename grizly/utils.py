@@ -276,11 +276,18 @@ def get_columns(table, schema=None, column_types=False, date_format="DATE", db="
         raise NotImplementedError("This db is not yet supported")
 
 
-def check_if_exists(table, schema=''):
+def check_if_exists(table, schema='', redshift_str=None):
     """
     Checks if a table exists in Redshift.
+    
+    Parameters
+    ----------
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
-    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
     if schema == '':
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
     else:
@@ -340,7 +347,7 @@ def check_if_valid_type(type:str):
     return False
 
 
-def delete_where(table, schema='', *argv):
+def delete_where(table, schema='', redshift_str=None, *argv):
     """
     Removes records from Redshift table which satisfy *argv.
 
@@ -350,6 +357,8 @@ def delete_where(table, schema='', *argv):
         Name of SQL table.
     schema : string, optional
         Specify the schema.
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
 
     Examples:
     --------
@@ -367,9 +376,10 @@ def delete_where(table, schema='', *argv):
 
     """
     table_name = f'{schema}.{table}' if schema else f'{table}'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
 
     if check_if_exists(table, schema):
-        engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+        engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
         if argv is not None:
             for arg in argv:
@@ -380,7 +390,7 @@ def delete_where(table, schema='', *argv):
         print(f"Table {table_name} doesn't exist.")
 
 
-def copy_table(schema, copy_from, to, engine=None):
+def copy_table(schema, copy_from, to, redshift_str=None):
 
     sql = f"""
     DROP TABLE IF EXISTS {schema}.{to};
@@ -390,9 +400,10 @@ def copy_table(schema, copy_from, to, engine=None):
 
     print("Executing...")
     print(sql)
-
-    if engine is None:
-        engine = create_engine("mssql+pyodbc://Redshift")
+    
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    
+    engine = create_engine(redshift_str)
 
     engine.execute(sql)
 

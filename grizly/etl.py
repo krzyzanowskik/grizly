@@ -264,7 +264,7 @@ def s3_to_csv(csv_path):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=True, chunksize=10000, if_exists="fail"):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', delete_first=False, clean_df=False, keep_csv=True, chunksize=10000, if_exists="fail", redshift_str=None):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -281,14 +281,17 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
     ----------
     keep_csv : bool, optional
         Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
 
     ACCESS_KEY = config["akey"]
     SECRET_KEY = config["skey"]
     REGION = config["region"]
 
-    if engine is None:
-        engine = create_engine('mssql+pyodbc://Redshift')
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
     s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
     bucket = s3.Bucket('teis-data')
@@ -313,7 +316,7 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
     bucket.upload_file(filepath, f"bulk/{filename}")
     print(f'bulk/{filename} file uploaded to s3')
 
-    if check_if_exists(table_name, schema):
+    if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError(f"Table {table_name} already exists")
         elif if_exists == 'replace':
@@ -398,7 +401,7 @@ def df_clean(df):
     return df
 
 
-def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
+def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None):
     """
     Writes s3 to Redshift database.
 
@@ -421,15 +424,18 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         Separator/delimiter in csv file.
     use_col_names : boolean, default True
         If True the data will be loaded by the names of columns.
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
     if if_exists not in ("fail", "replace", "append"):
-        raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
+        raise ValueError("'{}' is not valid for if_exists".format(if_exists))
 
-    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
-    if check_if_exists(table, schema):
+    if check_if_exists(table, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError("Table {} already exists".format(table_name))
         elif if_exists == 'replace':
@@ -439,7 +445,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         else:
             pass
     else:
-        create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
+        create_table(qf, table, engine=redshift_str, schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
 
@@ -483,7 +489,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     return sql
 
 
-def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t'):
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None):
     """
     Writes s3 to Redshift database.
     
@@ -502,17 +508,20 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
             * append: Insert new values to the existing table.
     sep : string, default '\t'
         Separator/delimiter in csv file.
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
 
     if if_exists not in ("fail", "replace", "append"):
-        raise ValueError("'{0}' is not valid for if_exists".format(if_exists))
-
-    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+        raise ValueError(f"'{if_exists}' is not valid for if_exists")
+        
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
     if not table_name:
         table_name = file_name.replace(".csv", "")
 
-    if check_if_exists(table_name, schema):
+    if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError(f"Table {table_name} already exists")
         elif if_exists == 'replace':
@@ -549,7 +558,7 @@ def write_to(qf, table, schema, if_exists):
         sql_del_statement = f"DELETE FROM {table}"
     engine = create_engine(qf.engine)
 
-    if check_if_exists(table=table, schema=schema):
+    if check_if_exists(table=table, schema=schema, redshift_str=qf.engine):
         if if_exists=='replace':
             engine.execute(sql_del_statement)
             engine.execute(sql_statement)
