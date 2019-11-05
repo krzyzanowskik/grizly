@@ -521,7 +521,7 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
     if not table_name:
         table_name = file_name.replace(".csv", "")
 
-    if check_if_exists(table, schema, redshift_str=redshift_str):
+    if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError(f"Table {table_name} already exists")
         elif if_exists == 'replace':
