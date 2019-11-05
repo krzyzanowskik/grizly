@@ -17,16 +17,6 @@ try:
 except TypeError:
     pass
 
-def to_csv(qf,csv_path, sql, engine_str, cursor, sep='\t', chunksize=None, compress=False):
-
-    if cursor:
-        cursor.execute(sql)
-    else:
-        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-        con = engine.connect().connection
-        cursor = con.cursor()
-        cursor.execute(sql)
-
 
 def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
     """
@@ -43,8 +33,8 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
         Separtor/delimiter in csv file.
     chunksize : int, default None
         If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-    cursor : Cursor, default None
-        The cursor to be used to execute the SQL. By default a new cursor is created.
+    cursor : Cursor, optional
+        The cursor to be used to execute the SQL, by default None
     """
 
     if cursor:
@@ -237,6 +227,8 @@ def csv_to_s3(csv_path, keep_csv=True):
     ----------
     csv_path : string
         Path to csv file.
+    keep_csv : bool, optional
+        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
     """
     s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
@@ -247,9 +239,11 @@ def csv_to_s3(csv_path, keep_csv=True):
 
     bucket.upload_file(csv_path, 'bulk/' + s3_name)
     print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), 'bulk/' + s3_name))
+
     if not keep_csv:
         os.remove(csv_path)
-        
+
+
 def s3_to_csv(csv_path):
     """
     Writes s3 in 'teis-data' bucket to csv file .
@@ -270,7 +264,7 @@ def s3_to_csv(csv_path):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=False, chunksize=10000, if_exists="fail"):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_first=False, clean_df=False, keep_csv=True, chunksize=10000, if_exists="fail"):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -282,6 +276,11 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', engine=None, delete_f
 
         COLUMN TYPES: right now you need to do a DROP TABLE to
         change the column type, this needs to be changed TODO
+
+    Parameters
+    ----------
+    keep_csv : bool, optional
+        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
     """
 
     ACCESS_KEY = config["akey"]
@@ -487,6 +486,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
 def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
+    
     Parameters:
     -----------
     file_name : string
