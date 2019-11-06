@@ -87,7 +87,7 @@ class Extract():
         pass
 
 
-    def from_sfdc(self, fields, table, where=None, env="prod", delayed=False):
+    def from_sfdc(self, fields, table, where=None, env="prod", delayed=False, output="file"):
         """
         Writes Salesforce table to csv file.
         Parameters
@@ -123,17 +123,35 @@ class Extract():
 
             data = sf.query_all(query)
 
-            rows = []
-            colnames = [item for item in data["records"][0] if item != "attributes"]
-            rows.append(colnames)
-            for item in data['records']:
-                row = []
-                for field in fields:
-                    row.append(item[field])
-                rows.append(row)
+            if output == "file":
+                rows = []
+                colnames = [item for item in data["records"][0] if item != "attributes"]
+                rows.append(colnames)
+                for item in data['records']:
+                    row = []
+                    for field in fields:
+                        row.append(item[field])
+                    rows.append(row)
 
-            self.rows = rows
-            self.write()
+                self.rows = rows
+                self.write()
+
+            elif output == "df":
+                import pandas as pd
+                import numpy as np
+
+                l = []
+                for item in data['records']:
+                    row = []
+                    for field in fields:
+                        row.append(item[field])
+                    l.append(row)
+
+                df = (pd
+                      .DataFrame(l, columns=fields)
+                      .replace(to_replace=["None"], value=np.nan)
+                     )
+                return df
 
         if not delayed:
             from_sfdc()
@@ -180,7 +198,7 @@ class Extract():
 
     def from_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
         """Writes s3 to local file.
-        
+
         Parameters
         ----------
         s3_key : str, optional
@@ -189,7 +207,7 @@ class Extract():
             Bucket name, if None then 'teis-data'
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://Redshift'
-        
+
         Returns
         -------
         Extract
