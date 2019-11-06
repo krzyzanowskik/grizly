@@ -871,8 +871,8 @@ class QFrame:
         return df
 
     #AC: this probably needs to be removed
-    def csv_to_s3(self, csv_path, keep_csv=True):
-        """Writes csv file to s3 in 'teis-data/bulk' bucket.
+    def csv_to_s3(self, csv_path, keep_csv=True, bucket=None):
+        """Writes csv file to s3.
 
         Parameters
         ----------
@@ -880,16 +880,18 @@ class QFrame:
             Path to csv file.
         keep_csv : bool, optional
             Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
 
         Returns
         -------
         QFrame
         """
-        csv_to_s3(csv_path, keep_csv=keep_csv)
+        csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
         return self
 
     #AC: this probably needs to be removed
-    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None):
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None, bucket=None):
         """Writes s3 to Redshift database.
 
         Parameters
@@ -913,7 +915,8 @@ class QFrame:
             If True the data will be loaded by the names of columns, by default True
         redshift_str : str, optional
             Redshift engine string, by default 'mssql+pyodbc://Redshift'
-
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
 
         Returns
         -------
@@ -922,7 +925,15 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names, redshift_str=redshift_str)
+        s3_to_rds_qf(self, 
+                    table, 
+                    s3_name=s3_name, 
+                    schema=schema , 
+                    if_exists=if_exists, 
+                    sep=sep, 
+                    use_col_names=use_col_names, 
+                    redshift_str=redshift_str,
+                    bucket=bucket)
         return self
 
 
