@@ -14,7 +14,10 @@ Welcome to grizly's documentation!
    content/tutorial_qframe
    content/tutorial_store
    content/api_QFrame
+   content/api_Email
    content/api_Extract
+   content/api_Load
+   content/api_AWS
 
 
 Indices and tables

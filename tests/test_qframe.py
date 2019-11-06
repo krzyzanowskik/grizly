@@ -514,7 +514,6 @@ def test_join_2():
 
 
 def test_union():
-
     playlists_qf = QFrame(engine=engine_string).read_dict(deepcopy(playlists))
 
     unioned_qf =  union([playlists_qf, playlists_qf], 'union')
@@ -548,6 +547,32 @@ def test_union():
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
+
+    qf1 = playlists_qf.copy()
+    qf1.rename({'Name': 'Old_name'})
+    qf1.assign(New_name="Name || '_new'")
+
+    qf2 = playlists_qf.copy()
+    qf2.rename({'Name': 'New_name'})
+    qf2.assign(Old_name="Name || '_old'")
+
+    unioned_qf = union([qf1, qf2], union_type='union', union_by='name')
+
+    testsql = """
+            SELECT PlaylistId,
+                Name AS Old_name,
+                Name || '_new' AS New_name
+            FROM Playlist
+            UNION
+            SELECT PlaylistId,
+                Name || '_old' AS Old_name,
+                Name AS New_name
+            FROM Playlist
+            """
+    sql = unioned_qf.get_sql().sql
+
+    # write_out(sql)
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
 
 
 def test_initiate():

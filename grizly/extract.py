@@ -12,10 +12,17 @@ from grizly.utils import file_extension, read_config
 config = read_config()
 
 class Extract():
+    """Writes data to file.
     """
-        Writes data to file.
-    """
-    def __init__(self, config=None, file_path:str=None):
+    def __init__(self, file_path:str=None, config=None):
+        """
+        Parameters
+        ----------
+        file_path : str, optional
+            Path to local output file, by default None
+        config : module, optional
+            Config module, by default None
+        """
         if config == None:
             self.file_path = file_path
         else:
@@ -24,11 +31,21 @@ class Extract():
         self.task = None
         self.config = config
 
+
     def get_path(self):
+        """Returns path stored in extract.file_path
+        
+        Returns
+        -------
+        str
+            Path to local output file
+        """
         return self.file_path
 
 
     def write(self):
+        """Writes extract.rows to csv file.
+        """
         assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
         with open(self.file_path, 'w', newline='', encoding = 'utf-8') as csvfile:
@@ -37,20 +54,29 @@ class Extract():
             writer.writerows(self.rows)
             print("done writing")
 
-
+    # KM: can we change argument order? 
     def from_sql(self, table, engine_str, chunk_column:str=None, schema:str=None, sep='\t', delayed=False):
-        """
-        Writes SQL table to csv file.
+        """Writes SQL table to csv file.
+        
         Parameters
         ----------
-        sql : string
-            SQL query.
-        engine : str
+        table : str
+            Name of table
+        engine_str : str
             Engine string.
-        sep : string, default '\t'
-            Separtor/delimiter in csv file.
+        chunk_column : str, optional
+            [description], by default None
+        schema : str, optional
+            Name of schema, by default None
+        sep : str, optional
+            Separtor/delimiter in csv file, by default '\t'
+        delayed : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        Extract
         """
-
         def from_sql():
             engine = create_engine(engine_str, encoding='utf8', poolclass=NullPool)
             try:
@@ -88,14 +114,34 @@ class Extract():
 
 
     def from_sfdc(self, fields, table, where=None, env="prod", delayed=False):
-        """
-        Writes Salesforce table to csv file.
+        """Writes Salesforce table to csv file.
+        
         Parameters
         ----------
-        tablename : string
-        ...?
+        fields : [type]
+            [description]
+        table : str
+            [description]
+        where : str, optional
+            [description], by default None
+        env : str, optional
+            [description], by default "prod"
+        delayed : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        Extract
+        
+        Raises
+        ------
+        SalesforceAuthenticationFailed
+            [description]
+        SalesforceAuthenticationFailed
+            [description]
+        ValueError
+            [description]
         """
-
         def from_sfdc():
 
             username = config["sfdc_username"]
@@ -143,6 +189,21 @@ class Extract():
 
 
     def from_github(self, username:str, username_password:str, pages:int=100):
+        """Writes GitHub data in csv file.
+        
+        Parameters
+        ----------
+        username : str
+            [description]
+        username_password : str
+            [description]
+        pages : int, optional
+            [description], by default 100
+        
+        Returns
+        -------
+        Extract
+        """
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",
             "https": "https://restrictedproxy.tycoelectronics.com:80",

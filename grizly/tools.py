@@ -204,7 +204,7 @@ class AWS:
 
 
     def file_to_s3(self):
-        """Writes local file to s3.
+        """Writes local file to S3.
 
         Examples
         --------
@@ -226,7 +226,7 @@ class AWS:
 
 
     def s3_to_file(self):
-        """Writes s3 to local file.
+        """Writes S3 to local file.
 
         Examples
         --------
@@ -243,7 +243,7 @@ class AWS:
 
 
     def df_to_s3(self, df:DataFrame, sep:str='\t'):
-        """Saves DataFrame in s3.
+        """Saves DataFrame in S3.
         
         Examples
         --------
@@ -273,7 +273,7 @@ class AWS:
 
 
     def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
-        """Writes S3 file to Redshift table.    
+        """Writes S3 to Redshift table.    
 
         Parameters
         ----------
@@ -291,7 +291,7 @@ class AWS:
         sep : str, optional
             Separator, by default '\t'
         types : dict, optional
-            Data types to force
+            Data types to force, by default None
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -331,7 +331,7 @@ class AWS:
 
 
     def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None):
-        """Writes DataFrame to Redshift.
+        """Writes DataFrame to Redshift table.
         
         Parameters
         ----------
