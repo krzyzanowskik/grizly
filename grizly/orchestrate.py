@@ -6,6 +6,7 @@ import json
 import datetime
 import graphviz
 import pendulum
+import traceback
 
 from time import time, sleep
 from croniter import croniter
@@ -228,9 +229,18 @@ class Workflow:
         self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
 
 
+    def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
+        tasks = [load_qf(qf, depends_on=None)]
+        fnretry = retry(fn)
+        self.tasks
+        return fn_decorated
+
     def __str__(self):
         return self.tasks
 
+    def log_task(self, task):
+        def deco():
+            pass
 
     def visualize(self):
         return self.graph.visualize()
@@ -259,6 +269,7 @@ class Workflow:
                 each retry).
             logger: Logger to use. If None, print.
         """
+
         def deco_retry(f):
 
             @wraps(f)
@@ -344,6 +355,9 @@ class Workflow:
 
 
     def run(self):
+
+        if not (self.is_scheduled or self.listener):
+            raise ValueError("Please add a schedule or listener before running the workflow")
 
         start = time()
 

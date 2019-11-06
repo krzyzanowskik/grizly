@@ -18,7 +18,7 @@ except TypeError:
     pass
 
 
-def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
+def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -27,8 +27,8 @@ def to_csv(qf,csv_path, sql, engine, sep='\t', chunksize=None, cursor=None):
         Path to csv file.
     sql : string
         SQL query.
-    engine : str
-        Engine string.
+    engine : str, optional
+        Engine string. Required if cursor is not provided.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     chunksize : int, default None
