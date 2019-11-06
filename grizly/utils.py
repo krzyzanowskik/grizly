@@ -138,7 +138,7 @@ def get_sfdc_columns(table, columns=None, column_types=True):
         raise NotImplementedError("Retrieving columns only is currently not supported")
 
 
-def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
+def get_denodo_columns(schema, table, column_types=False, columns=None, date_format="DATE"):
     """Get column names (and optionally types) from Denodo view.
 
     Parameters
@@ -205,6 +205,10 @@ def get_denodo_columns(schema, table, column_types=False, date_format="DATE"):
                 col_types.append(column[1])
         cursor.close()
         con.close()
+        if columns:
+            col_names_and_types = {col_name: col_type for col_name, col_type in zip(col_names, col_types) if col_name in columns}
+            col_names = [col for col in col_names_and_types]
+            col_types = [type for type in col_names_and_types.values()]
         return col_names, col_types
 
 
@@ -267,7 +271,7 @@ def get_columns(table, schema=None, column_types=False, date_format="DATE", db="
     """ Retrieves column names and optionally other table metadata """
     db = db.lower()
     if db == "denodo":
-        return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format)
+        return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format, columns=columns)
     elif db == "redshift":
         return get_redshift_columns(schema=schema, table=table, column_types=column_types)
     elif db == "sfdc":
@@ -276,11 +280,18 @@ def get_columns(table, schema=None, column_types=False, date_format="DATE", db="
         raise NotImplementedError("This db is not yet supported")
 
 
-def check_if_exists(table, schema=''):
+def check_if_exists(table, schema='', redshift_str=None):
     """
     Checks if a table exists in Redshift.
+
+    Parameters
+    ----------
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
-    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
     if schema == '':
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
     else:
@@ -329,7 +340,9 @@ def check_if_valid_type(type:str):
         'TEXT',
         'DATE',
         'TIMESTAMP',
-        'TIMESTAMPTZ'
+        'TIMESTAMP WITHOUT TIME ZONE',
+        'TIMESTAMPTZ',
+        'TIMESTAMP WITH TIME ZONE'
         ]
 
     for valid_type in valid_types:
@@ -338,7 +351,7 @@ def check_if_valid_type(type:str):
     return False
 
 
-def delete_where(table, schema='', *argv):
+def delete_where(table, schema='', redshift_str=None, *argv):
     """
     Removes records from Redshift table which satisfy *argv.
 
@@ -348,6 +361,8 @@ def delete_where(table, schema='', *argv):
         Name of SQL table.
     schema : string, optional
         Specify the schema.
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
 
     Examples:
     --------
@@ -365,9 +380,10 @@ def delete_where(table, schema='', *argv):
 
     """
     table_name = f'{schema}.{table}' if schema else f'{table}'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
 
     if check_if_exists(table, schema):
-        engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+        engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
         if argv is not None:
             for arg in argv:
@@ -378,7 +394,7 @@ def delete_where(table, schema='', *argv):
         print(f"Table {table_name} doesn't exist.")
 
 
-def copy_table(schema, copy_from, to, engine=None):
+def copy_table(schema, copy_from, to, redshift_str=None):
 
     sql = f"""
     DROP TABLE IF EXISTS {schema}.{to};
@@ -389,8 +405,9 @@ def copy_table(schema, copy_from, to, engine=None):
     print("Executing...")
     print(sql)
 
-    if engine is None:
-        engine = create_engine("mssql+pyodbc://Redshift")
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+
+    engine = create_engine(redshift_str)
 
     engine.execute(sql)
 
