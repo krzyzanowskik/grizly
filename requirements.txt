@@ -6,7 +6,7 @@ ipywidgets>=7.5.0
 lxml>=4.3.4
 openpyxl>=2.6.2
 pandas>=0.25.1
-Pillow>=6.1.0
+Pillow>=6.2.0
 pytz>=2019.1
 PyYAML>=5.1.1
 pyzmq>=18.0.0
@@ -22,3 +22,4 @@ exchangelib>=2.0.1
 pendulum>=2.0.5
 croniter>=0.3.29
 graphviz>=0.12
+sphinx_rtd_theme

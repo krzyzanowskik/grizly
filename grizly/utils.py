@@ -408,7 +408,6 @@ def copy_table(schema, copy_from, to, redshift_str=None):
     redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
 
     engine = create_engine(redshift_str)
-
     engine.execute(sql)
 
     return "Success"
