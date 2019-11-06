@@ -5,7 +5,8 @@ from grizly.utils import file_extension
 
 
 class Load():
-    """Loads file to s3 or database (only csv files)"""
+    """Loads file to s3 or database (only csv files)
+    """
     def __init__(self, file_path:str=None, config=None):
         """
         Parameters
@@ -56,6 +57,31 @@ class Load():
 
 
     def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', s3_key:str=None, bucket:str=None, redshift_str:str=None, types:dict=None):
+        """Writes local csv file to Redshift.
+        
+        Parameters
+        ----------
+        table : str
+            Table name
+        schema : str, optional
+            Schema name, by default None
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
+        sep : str, optional
+            Separator, by default '\t'
+        s3_key : str, optional
+            Name of s3 key, if None then 'bulk/'
+        bucket : str, optional
+            Bucket name, if None then 'teis-data'
+        redshift_str : str, optional
+            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        types : dict, optional
+            Data types to force, by default None
+        """
 
         assert file_extension(self.file_path) == '.csv', "This method only supports csv files"
 
@@ -72,4 +98,3 @@ class Load():
             sep=sep,
             types=types
         )
-        return aws

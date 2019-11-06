@@ -2,11 +2,31 @@ import sqlparse
 from copy import deepcopy
 
 
+def get_duplicated_columns(data):
+    columns = {}
+    fields = data["select"]["fields"]
+
+    for field in fields:
+        alias =  field if  "as" not in fields[field] or fields[field]["as"] == '' else fields[field]["as"]
+        if alias in columns.keys():
+            columns[alias].append(field)
+        else:
+            columns[alias] = [field]
+
+    duplicates = deepcopy(columns)
+    for alias in columns.keys():
+        if len(columns[alias]) == 1:
+            duplicates.pop(alias)
+
+    return duplicates
+
 
 def build_column_strings(data):
     if data == {}:
         return {}
 
+    duplicates = get_duplicated_columns(data)
+    assert duplicates == {}, f"""Some of your fields have the same aliases {duplicates}. Use your_qframe.remove() to remove or your_qframe.rename() to rename columns."""  
     select_names = []
     select_aliases = []
     group_dimensions = []
@@ -32,11 +52,11 @@ def build_column_strings(data):
                 expr = f"{agg}({expr})"
                 group_values.append(alias)
                 
-        if "select" not in fields[field] or "select" in fields[field] and str(fields[field]["select"]) == "":
+        if "select" not in fields[field] or "select" in fields[field] and fields[field]["select"] == "":
             select_name = field if expr == alias else f"{expr} as {alias}"
 
             if "custom_type" in fields[field] and fields[field]["custom_type"] != "":
-                type = fields[field]["custom_type"]
+                type = fields[field]["custom_type"].upper()
             elif fields[field]["type"] == "dim":
                 type = "VARCHAR(500)"
             elif fields[field]["type"] == "num":
@@ -52,9 +72,9 @@ def build_column_strings(data):
             select_names.append(select_name)
             select_aliases.append(alias)
             types.append(type)
-        elif str(int(fields[field]["select"])) == "0":
+        else:
             pass
-                                     
+
     sql_blocks = {
                     "select_names": select_names,
                     "select_aliases": select_aliases,
