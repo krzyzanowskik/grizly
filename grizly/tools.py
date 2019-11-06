@@ -316,7 +316,7 @@ class AWS:
         print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
-            COPY {table_name} FROM 's3://teis-data/{s3_key}'
+            COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
             access_key_id '{grizly_config["akey"]}'
             secret_access_key '{grizly_config["skey"]}'
             delimiter '{sep}'
