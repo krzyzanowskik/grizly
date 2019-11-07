@@ -143,9 +143,8 @@ class Excel:
 
 
 class AWS:
-    """Class that represents a file in S3."""
-    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
-        """
+    """Class that represents a file in S3.
+
         Examples
         --------
         >>> from grizly import get_path, AWS
@@ -166,6 +165,7 @@ class AWS:
         config : module, optional
             Config module (imported .py file), by default None
         """
+    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
         if not config:
             config = _AttrDict()
             config.update({
@@ -316,7 +316,7 @@ class AWS:
         print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
-            COPY {table_name} FROM 's3://teis-data/{s3_key}'
+            COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
             access_key_id '{grizly_config["akey"]}'
             secret_access_key '{grizly_config["skey"]}'
             delimiter '{sep}'
