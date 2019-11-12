@@ -300,7 +300,7 @@ class AWS:
 
         engine = create_engine(self.redshift_str, encoding='utf8')
 
-        if check_if_exists(table, schema):
+        if check_if_exists(table, schema, redshift_str=self.redshift_str):
             if if_exists == 'fail':
                 raise AssertionError("Table {} already exists".format(table_name))
             elif if_exists == 'replace':
