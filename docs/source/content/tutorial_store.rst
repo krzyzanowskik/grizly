@@ -11,10 +11,10 @@ The first thing you do is instantiating the Store()
 
     from grizly import Store, get_path, QFrame
     from grizly import get_path
-    
+
     json_path = get_path("acoe_projects","dev", "grizly",
                                 "notebooks","store.json")
-    
+
     store = Store(json_path)
 
 The above code will create a “store.json” if it does not exist already
@@ -34,7 +34,7 @@ function
 
 The above will add a query named *query_1* into the store. The *query_1*
 will not be saved back into the store.json file until you do
-*to_json()*. You can, however, check the data by doing store.new_data
+*to_store()*. You can, however, check the data by doing store.new_data
 
 Use case, adding a conf key
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -70,7 +70,7 @@ another functions like QFrame.select() or QFrame.rename() like so:
     select_names = q.data["select"]["sql_blocks"]["select_names"]
     select_aliases = q.data["select"]["sql_blocks"]["select_aliases"]
     column_keys = dict(zip(select_names, select_aliases)) #<- creating our dictionary
-    
+
     store.add_key(selects_on_query_1 = column_keys)#<- adding our dictionary
     store.to_store()#<- saving
 
