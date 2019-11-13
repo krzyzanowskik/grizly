@@ -211,6 +211,14 @@ class QFrame:
         data : dict
             Dictionary structure holding fields, schema, table, sql information.
 
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.get_sql()
+            SELECT CustomerId,
+                Sales
+            FROM schema.table
+
         Returns
         -------
         QFrame
@@ -274,14 +282,19 @@ class QFrame:
     def rename(self, fields):
         """Renames columns (changes the field alias).
 
-        Examples
-        --------
-        >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
-
         Parameters
         ----------
         fields : dict
             Dictionary of columns and their new names.
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.rename({'Sales': 'Billings'})
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales AS Billings
+        FROM schema.table
 
         Returns
         -------
@@ -296,14 +309,18 @@ class QFrame:
     def remove(self, fields):
         """Removes fields.
 
-        Examples
-        --------
-        >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
-
         Parameters
         ----------
         fields : list
             List of fields to remove.
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.remove(['Sales'])
+        >>> qf.get_sql()
+        SELECT CustomerId
+        FROM schema.table
 
         Returns
         -------
@@ -322,7 +339,12 @@ class QFrame:
 
         Examples
         --------
-        >>> q.distinct()
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.distinct()
+        >>> qf.get_sql()
+        SELECT DISTINCT CustomerId,
+                        Sales
+        FROM schema.table
 
         Returns
         -------
@@ -336,10 +358,6 @@ class QFrame:
     def query(self, query, if_exists='append', operator='and'):
         """Adds WHERE statement.
 
-        Examples
-        --------
-        >>> q.query("country!='Italy'")
-
         Parameters
         ----------
         query : str
@@ -348,6 +366,16 @@ class QFrame:
             How to behave when the where clause already exists, by default 'append'
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.query("Sales != 0")
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
+        WHERE Sales != 0
 
         Returns
         -------
@@ -371,10 +399,6 @@ class QFrame:
     def having(self, having, if_exists='append', operator='and'):
         """Adds HAVING statement.
 
-        Examples
-        --------
-        >>> q.having("sum(Value)>1000 and count(Customer)<=65")
-
         Parameters
         ----------
         having : str
@@ -383,6 +407,19 @@ class QFrame:
             How to behave when the having clause already exists, by default 'append'
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
+
+        
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> qf.having("sum(sales)>100")
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            sum(Sales) AS Sales
+        FROM schema.table
+        GROUP BY CustomerId
+        HAVING sum(sales)>100
 
         Returns
         -------
@@ -398,19 +435,18 @@ class QFrame:
             (The GROUP BY and HAVING clauses are applied to each individual query, not the final result set.)""")
 
         else:
-            if 'having' not in self.data['select'] and self.data['select']['having'] != '' or if_exists=='replace':
+            if if_exists=='replace':
                 self.data["select"]["having"] = having
-            elif if_exists=='append':
-                self.data["select"]["having"] += f" {operator} {having}"
+            else:
+                if 'having' in self.data['select']:
+                    self.data["select"]["having"] += f" {operator} {having}"
+                else:
+                    self.data["select"]["having"] = having
         return self
 
 
     def assign(self, type="dim", group_by='', order_by='', custom_type='',  **kwargs):
         """Assigns expressions.
-
-        Examples
-        --------
-        >>> q.assign(value_x_two="Value * 2")
 
         Parameters
         ----------
@@ -425,6 +461,27 @@ class QFrame:
             Sort ascending or descending, by default ''
         custom_type : str, optional
             Column type, by default ''
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.assign(Sales_Div="Sales/100", type='num')
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales,
+            Sales/100 AS Sales_Div
+        FROM schema.table
+
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.assign(Sales_Positive="CASE WHEN Sales>0 THEN 1 ELSE 0 END")
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales,
+            CASE
+                WHEN Sales>0 THEN 1
+                ELSE 0
+            END AS Sales_Positive
+        FROM schema.table
 
         Returns
         -------
@@ -450,23 +507,26 @@ class QFrame:
                         "expression": expression,
                         "custom_type": custom_type
                         }
-
         return self
 
 
     def groupby(self, fields):
         """Adds GROUP BY statement.
 
-        Examples
-        --------
-        >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
-
-        >>> q.groupby("Order")["Value"].agg("sum")
-
         Parameters
         ----------
         fields : list or string
             List of fields or a field.
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            sum(Sales) AS Sales
+        FROM schema.table
+        GROUP BY CustomerId
 
         Returns
         -------
@@ -485,14 +545,20 @@ class QFrame:
     def agg(self, aggtype):
         """Aggregates fields.
 
-        Examples
-        --------
-        >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
-
         Parameters
         ----------
         aggtype : {'sum', 'count', 'min', 'max', 'avg'}
             Aggregation type.
+        
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            sum(Sales) AS Sales
+        FROM schema.table
+        GROUP BY CustomerId
 
         Returns
         -------
@@ -519,18 +585,30 @@ class QFrame:
     def orderby(self, fields, ascending=True):
         """Adds ORDER BY statement.
 
-        Examples
-        --------
-        >>> q.orderby(["customer_id", "date"], [False, True])
-
-        >>> q.orderby("customer_id")
-
         Parameters
         ----------
         fields : list or str
             Fields in list or field as a string.
         ascending : bool or list, optional
             Sort ascending vs. descending. Specify list for multiple sort orders, by default True
+        
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.orderby(["Sales"])
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
+        ORDER BY Sales
+
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.orderby(["Sales"], ascending=False)
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
+        ORDER BY Sales DESC
 
         Returns
         -------
@@ -557,14 +635,20 @@ class QFrame:
     def limit(self, limit):
         """Adds LIMIT statement.
 
-        Examples
-        --------
-        >>> q.limit(100)
-
         Parameters
         ----------
         limit : int or str
             Number of rows to select.
+        
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.limit(100)
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
+        LIMIT 100
 
         Returns
         -------
@@ -578,23 +662,24 @@ class QFrame:
     def rearrange(self, fields):
         """Changes order of the columns.
 
-        Examples
-        ---------
-        qframe :
-        q -> fields : customer_id, date, order
-
-        >>> q.rearrange(["customer_id", "order", "date])
-
         Parameters
         ----------
         fields : list or str
             Fields in list or field as a string.
+        
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.rearrange(['Sales', 'CustomerId'])
+        >>> qf.get_sql()
+        SELECT Sales,
+            CustomerId
+        FROM schema.table
 
         Returns
         -------
         QFrame
         """
-
         if isinstance(fields, str) : fields = [fields]
 
         old_fields = deepcopy(self.data['select']['fields'])
@@ -614,6 +699,12 @@ class QFrame:
     def get_fields(self):
         """Returns list of QFrame fields.
 
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.get_fields()
+        ['CustomerId', 'Sales']
+
         Returns
         -------
         list
@@ -628,14 +719,18 @@ class QFrame:
     def get_sql(self, print_sql=True):
         """Overwrites the SQL statement inside the class and prints saved string.
 
-        Examples
-        --------
-        >>> q.get_sql()
-
         Parameters
         ----------
         print_sql : bool, optional
             If True prints generated SQL statement, by default True
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.get_sql()
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
 
         Returns
         -------
@@ -697,18 +792,6 @@ class QFrame:
     def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None, redshift_str=None, bucket=None):
         """Writes QFrame table to Redshift database.
 
-        Examples
-        --------
-        With defaults:
-
-        >>> q = QFrame(
-        >>>   ).to_rds(table='some_table', csv_path='some_path')
-
-        With schema:
-
-        >>> q = QFrame(
-        >>>   ).to_rds(schema='some_schema', table='some_table', csv_path='some_path')
-
         Parameters
         ----------
         table : str
@@ -738,6 +821,18 @@ class QFrame:
             Redshift engine string, by default 'mssql+pyodbc://Redshift'
         bucket : str, optional
             Bucket name, if None then 'teis-data'
+
+        Examples
+        --------
+        With defaults:
+
+        >>> q = QFrame(
+        >>>   ).to_rds(table='some_table', csv_path='some_path')
+
+        With schema:
+
+        >>> q = QFrame(
+        >>>   ).to_rds(schema='some_schema', table='some_table', csv_path='some_path')
 
         Returns
         -------
@@ -977,6 +1072,25 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
     which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns, set unique_col=False and
     after performing join please remove fields with the same aliases or rename the aliases.
 
+    Parameters
+    ----------
+    qframes : list
+        List of qframes
+    join_type : str or list
+        Join type or a list of join types.
+    on : str or list
+        List of on join conditions. In case of CROSS JOIN set the condition on 0.
+        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}."
+        if you want to refer to the column. Check examples.
+    unique_col : boolean, optional
+        If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which
+        are not repeated. If False the joined QFrame will contain all fields from every QFrame, default True
+
+
+    NOTE: Order of the elements in join_type and on list is important.
+
+    TODO: Add validations on engines. QFarmes engines have to be the same.
+
     Examples
     --------
     qframes:
@@ -1035,24 +1149,6 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
         INNER JOIN
             (q3.sql) sq3 ON sq2.customer_id=sq3.id
 
-    Parameters
-    ----------
-    qframes : list
-        List of qframes
-    join_type : str or list
-        Join type or a list of join types.
-    on : str or list
-        List of on join conditions. In case of CROSS JOIN set the condition on 0.
-        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}."
-        if you want to refer to the column. Check examples.
-    unique_col : boolean, optional
-        If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which
-        are not repeated. If False the joined QFrame will contain all fields from every QFrame, default True
-
-    NOTE: Order of the elements in join_type and on list is important.
-
-    TODO: Add validations on engines. QFarmes engines have to be the same.
-
     Returns
     -------
     QFrame
@@ -1096,16 +1192,6 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 def union(qframes=[], union_type=None, union_by='position'):
     """Unions QFrame objects. Returns QFrame.
 
-    Examples
-    --------
-    >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
-    >>> q_unioned.get_sql()
-        q1.sql
-        UNION ALL
-        q2.sql
-        UNION
-        q3.sql
-
     Parameters
     ----------
     qframes : list
@@ -1117,6 +1203,17 @@ def union(qframes=[], union_type=None, union_by='position'):
 
         * position: union by position of the field
         * name: union by the field aliases
+    
+    Examples
+    --------
+    >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
+    >>> q_unioned.get_sql()
+        q1.sql
+        UNION ALL
+        q2.sql
+        UNION
+        q3.sql
+
 
     Returns
     -------

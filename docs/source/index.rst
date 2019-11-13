@@ -12,6 +12,7 @@ Welcome to grizly's documentation!
 
    content/how_to_install
    content/tutorial_qframe
+   content/tutorial_qframe_new
    content/tutorial_store
    content/api_QFrame
    content/api_Email
