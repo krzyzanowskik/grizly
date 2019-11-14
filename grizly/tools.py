@@ -159,7 +159,7 @@ class AWS:
         bucket : str, optional
             Bucket name, if None then 'teis-data'
         file_dir : str, optional
-            Path to local folder to store the file, if None then 'C:\\Users\\your_id\\s3_loads'
+            Path to local folder to store the file, if None then 'C:/Users/your_id/s3_loads'
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://Redshift'
         config : module, optional
@@ -195,12 +195,72 @@ class AWS:
         Examples
         --------
         >>> AWS().info()
+        file_name: 	'test.csv'
+        s3_key: 	'bulk/'
+        bucket: 	'teis-data'
+        file_dir: 	'C:/Users/XXX/s3_loads'
+        redshift_str: 	'mssql+pyodbc://Redshift'
         """
         print(f"\033[1m file_name: \033[0m\t'{self.file_name}'")
         print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
         print(f"\033[1m bucket: \033[0m\t'{self.bucket}'")
         print(f"\033[1m file_dir: \033[0m\t'{self.file_dir}'")
         print(f"\033[1m redshift_str: \033[0m\t'{self.redshift_str}'")
+
+
+    def s3_to_s3(self, file_name:str=None, s3_key:str=None, bucket:str=None):
+        """Copies S3 file to another S3 file.
+
+        TODO: For now it moves only one file at a time, we need t improve it to move whole folders.
+        
+        Parameters
+        ----------
+        file_name : str, optional
+            New file name, if None then the same as in class
+        s3_key : str, optional
+            New S3 key, if None then the same as in class
+        bucket : str, optional
+            New bucket, if None then the same as in class
+
+        Examples
+        --------
+        >>> s3 = AWS(bucket='acoe-s3')
+        >>> s3.info()
+        file_name: 	'test.csv'
+        s3_key: 	'bulk/'
+        bucket: 	'acoe-s3'
+        file_dir: 	'C:/Users/XXX/s3_loads'
+        redshift_str: 	'mssql+pyodbc://Redshift'
+        >>> s3 = s3.s3_to_s3('test_old.csv', s3_key='bulk/test/')
+        'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
+        >>> s3.info()
+        file_name: 	'test_old.csv'
+        s3_key: 	'bulk/test/'
+        bucket: 	'acoe-s3'
+        file_dir: 	'C:/Users/XXX/s3_loads'
+        redshift_str: 	'mssql+pyodbc://Redshift'
+        
+        Returns
+        -------
+        AWS
+            AWS class with new parameters
+        """
+        file_name = file_name if file_name else self.file_name
+        s3_key = s3_key if s3_key else self.s3_key
+        bucket = bucket if bucket else self.bucket
+
+        s3_file = self.s3_resource.Object(bucket, s3_key + file_name)
+
+        source_s3_key = self.s3_key + self.file_name
+        copy_source = {
+            'Key': source_s3_key,
+            'Bucket': self.bucket
+        }
+
+        s3_file.copy(copy_source)
+        print(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
+
+        return AWS(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
     def file_to_s3(self):
@@ -300,7 +360,7 @@ class AWS:
 
         engine = create_engine(self.redshift_str, encoding='utf8')
 
-        if check_if_exists(table, schema):
+        if check_if_exists(table, schema, redshift_str=self.redshift_str):
             if if_exists == 'fail':
                 raise AssertionError("Table {} already exists".format(table_name))
             elif if_exists == 'replace':
