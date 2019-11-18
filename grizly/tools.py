@@ -18,12 +18,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from io import StringIO
 from csv import reader
+from configparser import ConfigParser
 
-grizly_config = read_config()
-try:
-    os.environ["HTTPS_PROXY"] = grizly_config["https"]
-except TypeError:
-    pass
+
+# grizly_config = read_config()
+# try:
+#     os.environ["HTTPS_PROXY"] = grizly_config["https"]
+# except TypeError:
+#     pass
 
 class Excel:
     """Class which deals with Excel files.
@@ -159,7 +161,7 @@ class AWS:
         bucket : str, optional
             Bucket name, if None then 'teis-data'
         file_dir : str, optional
-            Path to local folder to store the file, if None then 'C:/Users/your_id/s3_loads'
+            Path to local folder to store the file, if None then '%UserProfile%/s3_loads'
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://Redshift'
         config : module, optional
@@ -181,11 +183,7 @@ class AWS:
         self.bucket = bucket if bucket else config.bucket
         self.file_dir = file_dir if file_dir else config.file_dir
         self.redshift_str = redshift_str if redshift_str else config.redshift_str
-        self.s3_resource = boto3.resource('s3', 
-                            aws_access_key_id=grizly_config["akey"], 
-                            aws_secret_access_key=grizly_config["skey"], 
-                            region_name=grizly_config["region"])
-
+        self.s3_resource = boto3.resource('s3')
         os.makedirs(self.file_dir, exist_ok=True)
 
 
@@ -371,14 +369,19 @@ class AWS:
                 pass
         else:
             self._create_table_like_s3(table_name, sep, types)
+        
+        config = ConfigParser()
+        config.read(get_path('.aws','credentials'))
+        aws_access_key_id = config['default']['aws_access_key_id']
+        aws_secret_access_key = config['default']['aws_secret_access_key']
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
-            access_key_id '{grizly_config["akey"]}'
-            secret_access_key '{grizly_config["skey"]}'
+            access_key_id '{aws_access_key_id}'
+            secret_access_key '{aws_secret_access_key}'
             delimiter '{sep}'
             NULL ''
             IGNOREHEADER 1
