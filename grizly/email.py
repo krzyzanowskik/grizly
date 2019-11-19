@@ -15,13 +15,13 @@ class Email:
     to = "test@example.com"
     cc = ["test2@example.com", test3@example.com"]
     team_email_address = "shared_mailbox@example.com"
-    attachment = "path/to/attachment/a.bc"
+    attachment_path = "path/to/attachment/myattachment.pdf"
     email = Email("test", "testing body")
     email.send(to=to, cc=cc, send_as=team_email_address)
     """
 
 
-    def __init__(self, subject, body, attachment_path=None, logger=None, is_html=False):
+    def __init__(self, subject, body="", attachment_path=None, logger=None, is_html=False):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
