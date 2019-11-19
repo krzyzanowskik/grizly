@@ -373,26 +373,21 @@ class Workflow:
         self.run_time = int(end-start)
 
         self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage)
+        # prepare email
+        run_time_str = str(timedelta(seconds=self.run_time))
+        if self.is_scheduled:
+            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        else:
+            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+            \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+        cc = self.backup_email
+        to = self.owner_email
+        if not isinstance(self.backup_email, list):
+            cc = [self.backup_email]
+        if not isinstance(self.owner_email, list):
+            to = [self.owner_email]
 
-        # only send email notification on failure
-        if self.status == "fail":
-
-            run_time_str = str(timedelta(seconds=self.run_time))
-
-            if self.is_scheduled:
-                email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-
-            cc = self.backup_email
-            to = self.owner_email
-            if not isinstance(self.backup_email, list):
-                cc = [self.backup_email]
-            if not isinstance(self.owner_email, list):
-                to = [self.owner_email]
-
-            self.send_email(body=email_body, to=to, cc=cc, status=self.status)
+        self.send_email(body=email_body, to=to, cc=cc, status=self.status)
 
         return self.status
 
