@@ -25,15 +25,8 @@ def read_config():
     return config
 
 
-config = read_config()
-try:
-    os.environ["HTTPS_PROXY"] = config["https"]
-except TypeError:
-    pass
-
-
 def get_connection(db="denodo"):
-
+    config = read_config()
     engine = create_engine(config[db])
 
     try:
@@ -105,6 +98,7 @@ def get_sfdc_columns(table, columns=None, column_types=True):
     ----------
     List or Dict
     """
+    config = read_config()
 
     sfdc_username = config["sfdc_username"]
     sfdc_pw = config["sfdc_password"]
@@ -168,6 +162,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
             WHERE view_name = '{table}'
             AND database_name = '{schema}'
     """
+    config = read_config()
     engine = create_engine(config["denodo"], encoding='utf8', poolclass=NullPool)
 
     try:
@@ -468,3 +463,31 @@ def file_extension(file_path:str):
         File extension, eg '.csv'
     """
     return os.path.splitext(file_path)[1]
+
+
+
+def _validate_config(config:dict, service:str):
+
+    if not isinstance(config, dict):
+        raise TypeError ("config must be a dictionary")
+
+    if service not in ['email', 'github', 's3', 'sfdc']:
+        raise ValueError("Invalid value for service. Valid values: 'email', 'github', 's3', 'sfdc'")
+
+    if service not in config.keys():
+        raise KeyError(f"'{service}' not found in config")
+
+    if service == 'email':
+        pass
+    elif service == 'github':
+        pass
+    elif service == 's3':
+        for key in ['s3_key', 'bucket', 'file_dir', 'redshift_str']:
+            if key not in config['s3'].keys():
+                raise KeyError(f"{key} not found in config")
+        if config['s3']['file_dir'].startswith('%USERPROFILE%'):
+            config['s3']['file_dir'] = get_path(*os.path.normpath(config['s3']['file_dir']).split(os.sep)[1:])
+    elif service == 'sfdc':
+        pass
+
+    return config

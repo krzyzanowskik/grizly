@@ -9,7 +9,6 @@ from simple_salesforce.login import SalesforceAuthenticationFailed
 from grizly.tools import AWS
 from grizly.utils import file_extension, read_config
 
-config = read_config()
 
 class Extract():
     """Writes data to file.
@@ -144,7 +143,7 @@ class Extract():
             [description]
         """
         def from_sfdc():
-
+            config = read_config()
             username = config["sfdc_username"]
             password = config["sfdc_password"]
 

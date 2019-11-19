@@ -3,7 +3,7 @@ from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, 
 from grizly.utils import read_config
 from grizly.orchestrate import retry
 
-config = read_config()
+
 
 
 class Email:
@@ -26,6 +26,7 @@ class Email:
         else:
             self.body = body
         self.logger = logger
+        config = read_config()
         self.email_address = config["email_address"]
         self.email_password = config["email_password"]
 

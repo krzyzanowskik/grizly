@@ -6,17 +6,10 @@ import pandas as pd
 import csv
 
 from grizly.utils import (
-    read_config,
     check_if_exists,
     get_path
 )
 from configparser import ConfigParser
-
-# config = read_config()
-# try:
-#     os.environ["HTTPS_PROXY"] = config["https"]
-# except TypeError:
-#     pass
 
 
 def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None):

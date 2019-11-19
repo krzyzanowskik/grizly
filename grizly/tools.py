@@ -1,147 +1,21 @@
-import boto3
+from boto3 import resource
 import os
-import csv
-from pandas import (
-    ExcelWriter
-)
 import openpyxl
 from grizly.utils import (
     get_path,
-    read_config,
-    check_if_exists
+    check_if_exists,
+    _validate_config
 )
 from pandas import (
-    DataFrame,
-    read_csv
+    DataFrame
 )
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from io import StringIO
 from csv import reader
 from configparser import ConfigParser
+from copy import deepcopy
 
-
-# grizly_config = read_config()
-# try:
-#     os.environ["HTTPS_PROXY"] = grizly_config["https"]
-# except TypeError:
-#     pass
-
-class Excel:
-    """Class which deals with Excel files.
-    """
-    def __init__(self, excel_path, output_excel_path=''):
-        """
-        Parameters
-        ----------
-        excel_path : str
-            Path to input Excel file.
-        output_excel_path : str, optional
-            Path to output Excel.
-        """
-        self.input_excel_path = excel_path
-        self.filename = os.path.basename(self.input_excel_path)
-        if output_excel_path != '':
-            self.output_excel_path = output_excel_path
-        else:
-            self.output_excel_path = os.path.join(os.path.split(excel_path)[0], 
-                                        os.path.splitext(self.filename)[0] + '_working' + os.path.splitext(self.filename)[1])
-        #self.book = book = openpyxl.load_workbook(self.input_excel_path)
-    
-
-    def write_df(self, df, sheet, row=1, col=1, index=False, header=False):
-        """Saves DatFrame in Excel file.
-        
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            DataFrame to be saved in Excel
-        sheet: str
-            Name of sheet
-        row : int, optional
-            Upper left cell row to dump DataFrame, by default 1
-        col : int, optional
-            Upper left cell column to dump DataFrame, by default 1
-        index : bool, optional
-            Write row names (index), by default False
-        header : bool, optional
-            Write column names (header), by default False
-        """
-
-        writer = ExcelWriter(self.input_excel_path, engine='openpyxl')
-        book = openpyxl.load_workbook(self.input_excel_path)
-        writer.book = book
-
-        writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-
-        df.to_excel(writer, sheet_name=sheet,startrow=row-1,startcol=col-1,index=index,header=header)
-
-        writer.path = self.output_excel_path
-        writer.save()
-        writer.close()
-
-        self.input_excel_path = self.output_excel_path
-        self.filename = os.path.basename(self.output_excel_path)
-
-        return self
-        
-
-    def write_value(self, sheet, row, col, value):
-        """Writes cell value to Excel file.
-        
-        Parameters
-        ----------
-        sheet : str
-            Name of sheet
-        row : int
-            Cell row
-        col : int
-            Cell column
-
-        Returns
-        -------
-        float
-            Cell value
-        """
-        book = openpyxl.load_workbook(self.input_excel_path)
-
-        worksheet = book.get_sheet_by_name(sheet)
-        worksheet.cell(row=row, column=col, value=value)
-        book.save(filename = self.output_excel_path)
-        
-        print("Written value {} in sheet {}".format(value, sheet))
-
-        return self
-     
-
-    def save(self):
-        """save to workbook"""
-        #self.book.save()
-        pass
-
-
-    def get_value(self, sheet, row, col):
-        """Extracts cell value from Excel file.
-        
-        Parameters
-        ----------
-        sheet : str
-            Name of sheet
-        row : int
-            Cell row
-        col : int
-            Cell column
-
-        Returns
-        -------
-        float
-            Cell value
-        """
-        
-        wb = openpyxl.load_workbook(self.input_excel_path, data_only=True)
-        sh = wb[sheet]
-        value = sh.cell(row, col).value
-        return value
 
 
 class AWS:
@@ -159,45 +33,55 @@ class AWS:
         s3_key : str, optional
             Name of s3 key, if None then 'bulk/'
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name, if None then 'acoe-s3'
         file_dir : str, optional
             Path to local folder to store the file, if None then '%UserProfile%/s3_loads'
         redshift_str : str, optional
-            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
-        config : module, optional
+            Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
+        config : dict, optional
             Config module (imported .py file), by default None
         """
-    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
+    def __init__(self, file_name:str, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config:dict=None):
         if not config:
-            config = _AttrDict()
-            config.update({
-                        'file_name': 'test.csv', 
-                        's3_key' : 'bulk/',
-                        'bucket' : 'teis-data',
-                        'file_dir' : get_path('s3_loads'),
-                        'redshift_str' : 'mssql+pyodbc://Redshift'
-                        })
+            config = {
+                    's3_key' : '',
+                    'bucket' : 'acoe-s3',
+                    'file_dir' : get_path('s3_loads'),
+                    'redshift_str' : 'mssql+pyodbc://redshift_acoe'
+            }
+        else:
+            config = _validate_config(config=config, 
+                                    service='s3')['s3']
 
-        self.file_name = file_name if file_name else config.file_name
+        dict_config = deepcopy(config)
+        config = _AttrDict()
+        config.update(dict_config)
+
+        self.file_name = file_name
         self.s3_key = s3_key if s3_key else config.s3_key
         self.bucket = bucket if bucket else config.bucket
         self.file_dir = file_dir if file_dir else config.file_dir
         self.redshift_str = redshift_str if redshift_str else config.redshift_str
-        self.s3_resource = boto3.resource('s3')
+        self.s3_resource = resource('s3')
         os.makedirs(self.file_dir, exist_ok=True)
 
+        if self.s3_key == '':
+            raise ValueError("s3_key not specified")
+
+        if not self.s3_key.endswith('/'):
+            raise ValueError("s3_key should end with /")
 
     def info(self):
         """Print a concise summary of a AWS.
 
         Examples
         --------
-        >>> AWS().info()
+        >>> AWS('test.csv', 'bulk/').info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
-        bucket: 	'teis-data'
+        bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         """
         print(f"\033[1m file_name: \033[0m\t'{self.file_name}'")
         print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
@@ -222,13 +106,13 @@ class AWS:
 
         Examples
         --------
-        >>> s3 = AWS(bucket='acoe-s3')
+        >>> s3 = AWS('test.csv', 'bulk/')
         >>> s3.info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         >>> s3 = s3.s3_to_s3('test_old.csv', s3_key='bulk/test/')
         'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
         >>> s3.info()
@@ -236,7 +120,7 @@ class AWS:
         s3_key: 	'bulk/test/'
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         
         Returns
         -------
@@ -288,7 +172,7 @@ class AWS:
 
         Examples
         --------
-        >>> aws = AWS()
+        >>> aws = AWS('test.csv', 'bulk/')
         >>> aws.s3_to_file()
         """
         file_path = os.path.join(self.file_dir, self.file_name)
@@ -307,7 +191,7 @@ class AWS:
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> AWS().df_to_s3(df)
+        >>> AWS('test.csv', 'bulk/').df_to_s3(df)
 
         Parameters
         ----------

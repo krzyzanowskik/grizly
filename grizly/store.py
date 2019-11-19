@@ -120,3 +120,4 @@ class Store():
             return l
         else:
             raise BaseException(f"oftype value # {str(oftype)} # not supported")
+
