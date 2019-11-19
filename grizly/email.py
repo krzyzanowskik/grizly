@@ -56,16 +56,16 @@ class Email:
         compression_formats = ["pkl", "gzip", "bz", "bz2"]
 
         binary_formats = image_formats + doc_formats + archive_formats + compression_formats
-        text_formats = ["txt", "html", "xml", "json", "py", "md", "ini", "yaml", "yml", "toml", "cfg", "csv", "tsv"]
+        text_formats = ["txt", "log", "html", "xml", "json", "py", "md", "ini", "yaml", "yml", "toml", "cfg", "csv", "tsv"]
 
         attachment_format = attachment_name.split(".")[-1]
 
         if attachment_format in binary_formats:
-            with open(attachment, "rb") as f:
+            with open(attachment_path, "rb") as f:
                 binary_content = f.read()
 
         elif attachment_format in text_formats:
-            with open(attachment) as f:
+            with open(attachment_path) as f:
                 text_content = f.read()
                 binary_content = text_content.encode("utf-8")
 
