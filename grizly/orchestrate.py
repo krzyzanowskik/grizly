@@ -11,11 +11,10 @@ import traceback
 from time import time, sleep
 from croniter import croniter
 from datetime import timedelta
-from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
 from grizly.etl import df_to_s3, s3_to_rds
 from grizly.qframe import QFrame
 from grizly.utils import read_config, get_path
+from grizly.email import Email
 from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
@@ -108,7 +107,7 @@ class Listener:
 
     def get_last_refresh(self):
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as f:
+        with open("etc/listener_store.json") as f:
 
             try:
                 listener_store = json.load(f)
@@ -127,7 +126,7 @@ class Listener:
 
     def update_json(self):
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as json_file:
+        with open("etc/listener_store.json") as json_file:
             try:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
@@ -138,7 +137,7 @@ class Listener:
         else:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json"), "w") as f_write:
+        with open("etc/listener_store.json", "w") as f_write:
             json.dump(listener_store, f_write)
 
 
@@ -225,6 +224,7 @@ class Workflow:
         self.is_scheduled = False
         self.stage = "prod"
         self.logger = logging.getLogger(__name__)
+        self.error = None
 
         self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
 
@@ -297,7 +297,7 @@ class Workflow:
 
 
     @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage):
+    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage, error=None):
 
         schema = "administration"
         table = "status"
@@ -311,45 +311,21 @@ class Workflow:
             "run_date": [last_run_date],
             "workflow_status": [status],
             "run_time": [run_time],
-            "stage": [stage]
+            "stage": [stage],
+            #"error": [error]
         }
 
         status_data = pd.DataFrame(status_data)
 
         try:
-            df_to_s3(status_data, table, schema, if_exists="append")
+            df_to_s3(status_data, table, schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
         except Exception as e:
             self.logger.exception(f"{self.name} status could not be uploaded to S3")
             return None
 
-        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append")
+        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
 
         self.logger.info(f"{self.name} status successfully uploaded to Redshift")
-
-        return None
-
-
-    def send_email(self, body, to, cc, status):
-
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
-        credentials = Credentials('michal.zawadzki@te.com', 'Dell4rte92q1!')
-        config = Configuration(server='smtp.office365.com', credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
-        account = Account(primary_smtp_address='michal.zawadzki@te.com', credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
-
-        subject = f"Workflow {status}"
-
-        m = Message(
-            account=account,
-            subject=subject,
-            body=body,
-            to_recipients=to,
-            cc_recipients=cc,
-        )
-
-        try:
-            m.send()
-        except Exception as e:
-            self.logger.exception(f"{self.name} email notification not sent.")
 
         return None
 
@@ -358,7 +334,7 @@ class Workflow:
 
         if not (self.is_scheduled or self.listener):
             raise ValueError("Please add a schedule or listener before running the workflow")
-
+        
         start = time()
 
         try:
@@ -366,33 +342,33 @@ class Workflow:
             graph.compute(scheduler='threads') # may need to use client.compute() for speedup and larger-than-memory datasets
             self.status = "success"
         except Exception as e:
+            self.error = e
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
 
         end = time()
         self.run_time = int(end-start)
 
-        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage)
+        # prepare email
+        run_time_str = str(timedelta(seconds=self.run_time))
+        if self.is_scheduled:
+            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        else:
+            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+            \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+        if self.error:
+            email_body += f"\n\nError message: \n\n{self.error}"
+        cc = self.backup_email
+        to = self.owner_email
+        if not isinstance(self.backup_email, list):
+            cc = [self.backup_email]
+        if not isinstance(self.owner_email, list):
+            to = [self.owner_email]
+        subject = f"Workflow {self.status}"
 
-        # only send email notification on failure
-        if self.status == "fail":
-
-            run_time_str = str(timedelta(seconds=self.run_time))
-
-            if self.is_scheduled:
-                email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-
-            cc = self.backup_email
-            to = self.owner_email
-            if not isinstance(self.backup_email, list):
-                cc = [self.backup_email]
-            if not isinstance(self.owner_email, list):
-                to = [self.owner_email]
-
-            self.send_email(body=email_body, to=to, cc=cc, status=self.status)
+        notification = Email(subject=subject, body=email_body, logger=self.logger)
+        notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
+        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage, error=self.error)
 
         return self.status
 
@@ -452,6 +428,7 @@ class Runner:
         for workflow in workflows:
             self.logger.info(f"Running {workflow.name}...")
             status = workflow.run()
+            self.logger.info(f"Finished running {workflow.name} with the status <{status}>")
 
         return {workflow.name: workflow.status for workflow in workflows}
 
