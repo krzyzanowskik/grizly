@@ -11,11 +11,10 @@ import traceback
 from time import time, sleep
 from croniter import croniter
 from datetime import timedelta
-from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance
 from grizly.etl import df_to_s3, s3_to_rds
 from grizly.qframe import QFrame
 from grizly.utils import read_config, get_path
+from grizly.email import Email
 from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
@@ -225,6 +224,7 @@ class Workflow:
         self.is_scheduled = False
         self.stage = "prod"
         self.logger = logging.getLogger(__name__)
+        self.error = None
 
         self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
 
@@ -297,7 +297,7 @@ class Workflow:
 
 
     @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage):
+    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage, error=None):
 
         schema = "administration"
         table = "status"
@@ -311,18 +311,19 @@ class Workflow:
             "run_date": [last_run_date],
             "workflow_status": [status],
             "run_time": [run_time],
-            "stage": [stage]
+            "stage": [stage],
+            #"error": [error]
         }
 
         status_data = pd.DataFrame(status_data)
 
         try:
-            df_to_s3(status_data, table, schema, if_exists="append")
+            df_to_s3(status_data, table, schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
         except Exception as e:
             self.logger.exception(f"{self.name} status could not be uploaded to S3")
             return None
 
-        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append")
+        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
 
         self.logger.info(f"{self.name} status successfully uploaded to Redshift")
 
@@ -333,7 +334,7 @@ class Workflow:
 
         if not (self.is_scheduled or self.listener):
             raise ValueError("Please add a schedule or listener before running the workflow")
-
+        
         start = time()
 
         try:
@@ -341,6 +342,7 @@ class Workflow:
             graph.compute(scheduler='threads') # may need to use client.compute() for speedup and larger-than-memory datasets
             self.status = "success"
         except Exception as e:
+            self.error = e
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
 
@@ -354,19 +356,19 @@ class Workflow:
         else:
             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
             \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-        if e:
-            email_body += f"\n\nError message: \n\n{e}"
+        if self.error:
+            email_body += f"\n\nError message: \n\n{self.error}"
         cc = self.backup_email
         to = self.owner_email
         if not isinstance(self.backup_email, list):
             cc = [self.backup_email]
         if not isinstance(self.owner_email, list):
             to = [self.owner_email]
-        subject = f"Workflow {status}"
+        subject = f"Workflow {self.status}"
 
-        email = Email(subject=subject, body=email_body, logger=self.logger)
-        email.send(to=to, cc=cc, send_as="acoe_team@te.com")
-        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage)
+        notification = Email(subject=subject, body=email_body, logger=self.logger)
+        notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
+        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage, error=self.error)
 
         return self.status
 
@@ -426,7 +428,7 @@ class Runner:
         for workflow in workflows:
             self.logger.info(f"Running {workflow.name}...")
             status = workflow.run()
-            self.logger.info(f"Finished running {workflow.name} with the status {status}")
+            self.logger.info(f"Finished running {workflow.name} with the status <{status}>")
 
         return {workflow.name: workflow.status for workflow in workflows}
 
