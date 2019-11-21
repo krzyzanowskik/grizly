@@ -1,7 +1,6 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
 from grizly.utils import read_config
-from grizly.orchestrate import retry
 from os.path import basename
 
 config = read_config()
@@ -76,7 +75,6 @@ class Email:
         return binary_content
 
 
-    @retry(Exception, tries=5, delay=5)
     def send(self, to, cc=None, send_as=None):
 
         to = to if isinstance(to, list) else [to]
