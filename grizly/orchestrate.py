@@ -108,7 +108,7 @@ class Listener:
 
     def get_last_refresh(self):
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as f:
+        with open("etc/listener_store.json") as f:
 
             try:
                 listener_store = json.load(f)
@@ -127,7 +127,7 @@ class Listener:
 
     def update_json(self):
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json")) as json_file:
+        with open("etc/listener_store.json") as json_file:
             try:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
@@ -138,7 +138,7 @@ class Listener:
         else:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
-        with open(get_path("acoe_projects", "infrastructure", "listener_store.json"), "w") as f_write:
+        with open("etc/listener_store.json", "w") as f_write:
             json.dump(listener_store, f_write)
 
 
@@ -426,6 +426,7 @@ class Runner:
         for workflow in workflows:
             self.logger.info(f"Running {workflow.name}...")
             status = workflow.run()
+            self.logger.info(f"Finished running {workflow.name} with the status {status}")
 
         return {workflow.name: workflow.status for workflow in workflows}
 
