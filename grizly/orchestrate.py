@@ -329,31 +329,6 @@ class Workflow:
         return None
 
 
-    def send_email(self, body, to, cc, status):
-
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
-        credentials = Credentials('michal.zawadzki@te.com', 'Dell4rte92q1!')
-        config = Configuration(server='smtp.office365.com', credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
-        account = Account(primary_smtp_address='michal.zawadzki@te.com', credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
-
-        subject = f"Workflow {status}"
-
-        m = Message(
-            account=account,
-            subject=subject,
-            body=body,
-            to_recipients=to,
-            cc_recipients=cc,
-        )
-
-        try:
-            m.send()
-        except Exception as e:
-            self.logger.exception(f"{self.name} email notification not sent.")
-
-        return None
-
-
     def run(self):
 
         if not (self.is_scheduled or self.listener):
@@ -372,27 +347,26 @@ class Workflow:
         end = time()
         self.run_time = int(end-start)
 
+        # prepare email
+        run_time_str = str(timedelta(seconds=self.run_time))
+        if self.is_scheduled:
+            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        else:
+            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+            \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+        if e:
+            email_body += f"\n\nError message: \n\n{e}"
+        cc = self.backup_email
+        to = self.owner_email
+        if not isinstance(self.backup_email, list):
+            cc = [self.backup_email]
+        if not isinstance(self.owner_email, list):
+            to = [self.owner_email]
+        subject = f"Workflow {status}"
+
+        email = Email(subject=subject, body=email_body, logger=self.logger)
+        email.send(to=to, cc=cc, send_as="acoe_team@te.com")
         self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage)
-
-        # only send email notification on failure
-        if self.status == "fail":
-
-            run_time_str = str(timedelta(seconds=self.run_time))
-
-            if self.is_scheduled:
-                email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-
-            cc = self.backup_email
-            to = self.owner_email
-            if not isinstance(self.backup_email, list):
-                cc = [self.backup_email]
-            if not isinstance(self.owner_email, list):
-                to = [self.owner_email]
-
-            self.send_email(body=email_body, to=to, cc=cc, status=self.status)
 
         return self.status
 
