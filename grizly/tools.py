@@ -28,10 +28,10 @@ class AWS:
 
         Parameters
         ----------
-        file_name : str, optional
-            Name of the file, if None then 'test.csv'
-        s3_key : str, optional
-            Name of s3 key, if None then 'bulk/'
+        file_name : str
+            Name of the file
+        s3_key : str
+            Name of s3 key
         bucket : str, optional
             Bucket name, if None then 'acoe-s3'
         file_dir : str, optional
@@ -41,27 +41,12 @@ class AWS:
         config : dict, optional
             Config module (imported .py file), by default None
         """
-    def __init__(self, file_name:str, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config:dict=None):
-        if not config:
-            config = {
-                    's3_key' : '',
-                    'bucket' : 'acoe-s3',
-                    'file_dir' : get_path('s3_loads'),
-                    'redshift_str' : 'mssql+pyodbc://redshift_acoe'
-            }
-        else:
-            config = _validate_config(config=config, 
-                                    service='s3')['s3']
-
-        dict_config = deepcopy(config)
-        config = _AttrDict()
-        config.update(dict_config)
-
+    def __init__(self, file_name:str, s3_key:str, bucket:str=None, file_dir:str=None, redshift_str:str=None):
         self.file_name = file_name
-        self.s3_key = s3_key if s3_key else config.s3_key
-        self.bucket = bucket if bucket else config.bucket
-        self.file_dir = file_dir if file_dir else config.file_dir
-        self.redshift_str = redshift_str if redshift_str else config.redshift_str
+        self.s3_key = s3_key
+        self.bucket = bucket if bucket else 'acoe-s3'
+        self.file_dir = file_dir if file_dir else get_path('s3_loads')
+        self.redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
         self.s3_resource = resource('s3')
         os.makedirs(self.file_dir, exist_ok=True)
 

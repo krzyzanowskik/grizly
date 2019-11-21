@@ -467,27 +467,47 @@ def file_extension(file_path:str):
 
 
 def _validate_config(config:dict, service:str):
+    """Validates config dictionary.
+    
+    Parameters
+    ----------
+    config : dict
+        [description]
+    service : str
+        [description]
+    
+    Returns
+    -------
+    dict
+        Validated config
+    """
 
     if not isinstance(config, dict):
         raise TypeError ("config must be a dictionary")
 
-    if service not in ['email', 'github', 's3', 'sfdc']:
-        raise ValueError("Invalid value for service. Valid values: 'email', 'github', 's3', 'sfdc'")
+    if config == {}:
+        raise ValueError("config is empty")
+
+    if service not in ['email', 'github', 'sfdc_stage', 'sfdc_prod']:
+        raise ValueError("Invalid value for service. Valid values: 'email', 'github', 'sfdc_stage', 'sfdc_prod'")
 
     if service not in config.keys():
         raise KeyError(f"'{service}' not found in config")
 
     if service == 'email':
-        pass
+        for key in ['email_address', 'email_password', 'send_as']:
+            if key not in config['email'].keys():
+                raise KeyError(f"{key} not found in config['email']")
     elif service == 'github':
-        pass
-    elif service == 's3':
-        for key in ['s3_key', 'bucket', 'file_dir', 'redshift_str']:
-            if key not in config['s3'].keys():
-                raise KeyError(f"{key} not found in config")
-        if config['s3']['file_dir'].startswith('%USERPROFILE%'):
-            config['s3']['file_dir'] = get_path(*os.path.normpath(config['s3']['file_dir']).split(os.sep)[1:])
-    elif service == 'sfdc':
-        pass
-
+        for key in ['username', 'username_password']:
+            if key not in config['github'].keys():
+                raise KeyError(f"{key} not found in config['github']")
+    elif service == 'sfdc_stage':
+        for key in ['username', 'password', 'instance_url', 'organizationId']:
+            if key not in config['sfdc_stage'].keys():
+                raise KeyError(f"{key} not found in config['sfdc_stage']")
+    elif service == 'sfdc_prod':
+        for key in ['username', 'password', 'organizationId']:
+            if key not in config['sfdc_prod'].keys():
+                raise KeyError(f"{key} not found in config['sfdc_prod']")
     return config

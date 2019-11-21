@@ -7,25 +7,27 @@ from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from grizly.tools import AWS
-from grizly.utils import file_extension, read_config
+from grizly.utils import (
+    file_extension, 
+    read_config,
+    _validate_config
+)
+from grizly.store import Store
 
 
 class Extract():
     """Writes data to file.
     """
-    def __init__(self, file_path:str=None, config=None):
+    def __init__(self, file_path:str, config:dict):
         """
         Parameters
         ----------
         file_path : str, optional
             Path to local output file, by default None
-        config : module, optional
-            Config module, by default None
+        config : dict, optional
+            Config dict, by default None
         """
-        if config == None:
-            self.file_path = file_path
-        else:
-            self.file_path = config.file_path
+        self.file_path = file_path
         self.rows = None
         self.task = None
         self.config = config
@@ -132,31 +134,26 @@ class Extract():
         Returns
         -------
         Extract
-        
-        Raises
-        ------
-        SalesforceAuthenticationFailed
-            [description]
-        SalesforceAuthenticationFailed
-            [description]
-        ValueError
-            [description]
         """
         def from_sfdc():
-            config = read_config()
-            username = config["sfdc_username"]
-            password = config["sfdc_password"]
-
             if env == "prod":
+                config = _validate_config(self.config, service='sfdc_prod')
                 try:
-                    sf = Salesforce(password=password, username=username, organizationId='00DE0000000Hkve')
+                    sf = Salesforce(password=config["sfdc_prod"]["password"], 
+                                    username=config["sfdc_prod"]["username"], 
+                                    organizationId=config["sfdc_prod"]["organizationId"])
                 except SalesforceAuthenticationFailed:
                     print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
                     raise SalesforceAuthenticationFailed
             elif env == "stage":
+                config = _validate_config(self.config, service='sfdc_stage')
                 try:
-                    sf = Salesforce(instance_url='cs40-ph2.ph2.r.my.salesforce.com', password=password, username=username,
-                                    organizationId='00DE0000000Hkve', sandbox=True, security_token='')
+                    sf = Salesforce(instance_url=config["sfdc_stage"]["instance_url"], 
+                                    password=config["sfdc_stage"]["password"], 
+                                    username=config["sfdc_stage"]["username"],
+                                    organizationId=config["sfdc_stage"]["organizationId"], 
+                                    sandbox=True, 
+                                    security_token='')
                 except SalesforceAuthenticationFailed:
                     print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
                     raise SalesforceAuthenticationFailed
