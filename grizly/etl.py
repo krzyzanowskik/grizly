@@ -496,9 +496,10 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         delimiter '{sep}'
         NULL ''
         IGNOREHEADER 1
-        REMOVEQUOTES
+        CSV QUOTE AS '\"'
         ;commit;
         """
+        # REMOVEQUOTES
     indent = 9
     last_line_pos = len(sql) - len(";commit;") - indent
     if time_format:
