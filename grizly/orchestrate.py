@@ -311,7 +311,7 @@ class Workflow:
             "run_date": [last_run_date],
             "workflow_status": [status],
             "run_time": [run_time],
-            "stage": [stage],
+            #"stage": [stage],
             #"error": [error]
         }
 
