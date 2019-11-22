@@ -486,7 +486,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, remove_inside_quotes=False):
     bucket_name = bucket if bucket else 'teis-data'
 
     sql = f"""
@@ -496,20 +496,24 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         delimiter '{sep}'
         NULL ''
         IGNOREHEADER 1
-        CSV QUOTE AS '\"'
+        REMOVEQUOTES
         ;commit;
         """
-        # REMOVEQUOTES
-    indent = 9
-    last_line_pos = len(sql) - len(";commit;") - indent
+
     if time_format:
+        indent = 9
+        last_line_pos = len(sql) - len(";commit;") - indent
         spaces = indent * " " # print formatting
         time_format_argument = f"timeformat '{time_format}'"
-        return sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+        sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+
+    if remove_inside_quotes:
+        sql = sql.replace("REMOVEQUOTES", r"CSV QUOTE AS '\"'")
+
     return sql
 
 
-def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None, bucket=None):
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None, bucket=None, remove_inside_quotes=False):
     """
     Writes s3 to Redshift database.
     
@@ -554,7 +558,8 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
         else:
             pass
 
-    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, bucket=bucket_name)
+    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, 
+    bucket=bucket_name, remove_inside_quotes=remove_inside_quotes)
 
     print(f"Loading data into {table_name}...")
     engine.execute(sql)
