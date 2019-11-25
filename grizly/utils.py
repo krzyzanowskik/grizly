@@ -6,13 +6,33 @@ from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 
-class Config(dict):
-    def __init__(self):
-        dict.__init__(self)
+class Config():
+    data = {}
 
-    def from_dict(self, d):
-        for key in d:
-            self[key] = d[key]
+    def from_dict(self, data:dict):
+        if 'config' in data:
+            Config.data = data['config']
+            return Config()
+        else:
+            pass
+        
+    def add_keys(self, data:dict, if_exists:str='skip'):
+        for key in data.keys():
+            if key in list(Config.data.keys()):
+                if if_exists == 'skip':
+                    print(f"Key '{key}' already exists and has been skipped. If you want to overwrite it please use if_exists='replace'")
+                elif if_exists == 'replace':
+                    self._validate_config(data[key])
+                    Config.data.update({key: data[key]})
+                    print(f"Key '{key}' has been overwritten.")
+            else:
+                self._validate_config(data[key])
+                Config.data[key] = data[key]
+                print(f"Key '{key}' has been added.")
+        return Config()
+        
+    def _validate_config(self, data:dict):
+        print("validations....")
 
 
 def read_config():
