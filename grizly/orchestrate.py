@@ -142,7 +142,7 @@ class Listener:
 
 
 
-    def get_table_last_refresh(self):
+    def get_table_refresh_date(self):
 
         sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
 
@@ -161,16 +161,23 @@ class Listener:
         return last_data_refresh
 
 
-    def should_trigger(self, table_last_refresh):
+    def should_trigger(self, table_refresh_date):
 
         if self.trigger == "default":
-            # will trigger on day change
-            if (not self.last_data_refresh) or (table_last_refresh != self.last_data_refresh):
+            # first run
+            if not self.last_data_refresh:
+                return True
+            # the table ran previously, but now the refresh date is None
+            # this mean the table is being cleared in preparation for update
+            if not table_refresh_date:
+                return False
+            # trigger on day change
+            if table_refresh_date != self.last_data_refresh:
                 return True
 
         elif isinstance(self.trigger, Schedule):
             next_check_on = datetime.date(self.trigger.next_run)
-            if next_check_on == table_last_refresh:
+            if next_check_on == table_refresh_date:
                 return True
         if self.trigger == "fiscal day":
             # date_fiscal_day = to_fiscal(table_last_refresh, "day")
@@ -193,7 +200,7 @@ class Listener:
         self.logger.info(f"Listening for changes in {self.table}...")
 
         try:
-            last_data_refresh = self.get_table_last_refresh()
+            last_data_refresh = self.get_table_refresh_date()
         except:
             self.logger.exception(f"Connection or query error when connecting to {self.db}")
             last_data_refresh = None
@@ -366,7 +373,8 @@ class Workflow:
             to = [self.owner_email]
         subject = f"Workflow {self.status}"
 
-        notification = Email(subject=subject, body=email_body, logger=self.logger)
+        log_file_path = "logs/scheduler.log"
+        notification = Email(subject=subject, body=email_body, logger=self.logger, attachment_path=log_file_path)
         notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
         self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage, error=self.error)
 
