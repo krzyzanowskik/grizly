@@ -7,6 +7,7 @@ import datetime
 import graphviz
 import pendulum
 import traceback
+import sys
 
 from time import time, sleep
 from croniter import croniter
@@ -141,8 +142,8 @@ class Listener:
             json.dump(listener_store, f_write)
 
 
-    def _validate_table_refresh_value(value):
-        if not isinstance(last_data_refresh, (datetime.datetime.date, int)):
+    def _validate_table_refresh_value(self, value):
+        if not isinstance(value, (datetime.date, int)):
             return False
         return True
 
@@ -160,11 +161,15 @@ class Listener:
         cursor.close()
         con.close()
 
+        if isinstance(last_data_refresh, str):
+            # try casting to date
+            last_data_refresh = datetime.datetime.strptime("2019-11-26", "%Y-%m-%d")
+
         if isinstance(last_data_refresh, datetime.datetime):
             last_data_refresh = datetime.datetime.date(last_data_refresh)
 
-        if not _validate_table_refresh_value(last_data_refresh):
-            raise TypeError(f"{self.field} is not of type (int, datetime.datetime.date)")
+        if not self._validate_table_refresh_value(last_data_refresh):
+            raise TypeError(f"{self.field} (type {type(self.field)}) is not of type (int, datetime.datetime.date)")
 
         return last_data_refresh
 
@@ -241,7 +246,8 @@ class Workflow:
         self.is_manual = False
         self.stage = "prod"
         self.logger = logging.getLogger(__name__)
-        self.error = None
+        self.error_value = None
+        self.error_type = None
 
         self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
 
@@ -319,9 +325,9 @@ class Workflow:
 
         return deco_retry
 
-
+    
     @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, stage, error=None):
+    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
 
         schema = "administration"
         table = "status"
@@ -335,26 +341,27 @@ class Workflow:
             "run_date": [last_run_date],
             "workflow_status": [status],
             "run_time": [run_time],
-            #"stage": [stage],
-            #"error": [error]
+            "env": [env],
+            "error_value": [error_value],
+            "error_type": [error_type]
         }
 
         status_data = pd.DataFrame(status_data)
 
         try:
-            df_to_s3(status_data, table, schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
+            df_to_s3(status_data, table, schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3")
         except Exception as e:
             self.logger.exception(f"{self.name} status could not be uploaded to S3")
             return None
 
-        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append") # redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3"
+        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3")
 
         self.logger.info(f"{self.name} status successfully uploaded to Redshift")
 
         return None
 
 
-    def run(self):
+    def run(self, local=False):
 
         if self.check_if_manual():
             pass
@@ -366,34 +373,38 @@ class Workflow:
             graph.compute(scheduler='threads') # may need to use client.compute() for speedup and larger-than-memory datasets
             self.status = "success"
         except Exception as e:
-            self.error = e
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            self.error_value = str(exc_value)
+            self.error_type = type(exc_value)
+            self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
 
         end = time()
         self.run_time = int(end-start)
 
-        # prepare email
+        # prepare email body; to be refactored into a function
         run_time_str = str(timedelta(seconds=self.run_time))
         if self.is_scheduled:
             email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        else:
+        elif self.is_triggered:
             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
             \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-        if self.error:
-            email_body += f"\n\nError message: \n\n{self.error}"
-        cc = self.backup_email
-        to = self.owner_email
-        if not isinstance(self.backup_email, list):
-            cc = [self.backup_email]
-        if not isinstance(self.owner_email, list):
-            to = [self.owner_email]
+        else:
+            email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        if self.status == "fail":
+            email_body += f"\n\nError message: \n\n{self.error_message}"
+        
+        cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
+        to = self.owner_email if isinstance(self.owner_email, list) else [self.owner_email]
         subject = f"Workflow {self.status}"
 
-        log_file_path = "logs/scheduler.log"
-        notification = Email(subject=subject, body=email_body, logger=self.logger, attachment_path=log_file_path)
+        notification = Email(subject=subject, body=email_body, logger=self.logger)
         notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
-        self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage, error=self.error)
+        # when ran on server, the status is handled by Runner
+        if local:
+            self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, 
+                                    env="local", error_value=self.error_value, error_type=self.error_type)
 
         return self.status
 
@@ -402,8 +413,9 @@ class Runner:
     """Workflow runner"""
 
 
-    def __init__(self, workflows, logger=None):
+    def __init__(self, workflows, logger=None, env=None):
         self.workflows = workflows
+        self.env = env if env else "prod"
         self.logger = logging.getLogger(__name__)
 
 
@@ -452,8 +464,10 @@ class Runner:
 
         for workflow in workflows:
             self.logger.info(f"Running {workflow.name}...")
-            status = workflow.run()
-            self.logger.info(f"Finished running {workflow.name} with the status <{status}>")
+            workflow.run()
+            self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
+            workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status, 
+                                        workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
 
         return {workflow.name: workflow.status for workflow in workflows}
 
@@ -516,7 +530,7 @@ class SimpleGraph:
         return display_cls(filename=full_filename)
 
 
-def retry(exceptions, tries=4, delay=3, backoff=2):
+def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
     """
     Retry calling the decorated function using an exponential backoff.
 
@@ -532,8 +546,8 @@ def retry(exceptions, tries=4, delay=3, backoff=2):
 
     This is almost a copy of Workflow.retry, but it's using its own logger.
     """
-
-    logger = logging.getLogger(__name__)
+    if not logger:
+        logger = logging.getLogger(__name__)
 
     def deco_retry(f):
 
