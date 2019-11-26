@@ -141,6 +141,11 @@ class Listener:
             json.dump(listener_store, f_write)
 
 
+    def _validate_table_refresh_value(value):
+        if not isinstance(last_data_refresh, (datetime.datetime.date, int)):
+            return False
+        return True
+
 
     def get_table_refresh_date(self):
 
@@ -157,6 +162,9 @@ class Listener:
 
         if isinstance(last_data_refresh, datetime.datetime):
             last_data_refresh = datetime.datetime.date(last_data_refresh)
+
+        if not _validate_table_refresh_value(last_data_refresh):
+            raise TypeError(f"{self.field} is not of type (int, datetime.datetime.date)")
 
         return last_data_refresh
 
@@ -229,6 +237,8 @@ class Workflow:
         self.run_time = 0
         self.status = "idle"
         self.is_scheduled = False
+        self.is_triggered = False
+        self.is_manual = False
         self.stage = "prod"
         self.logger = logging.getLogger(__name__)
         self.error = None
@@ -261,6 +271,13 @@ class Workflow:
 
     def add_listener(self, listener):
         self.listener = listener
+        self.is_triggered = True
+
+    
+    def check_if_manual(self):
+        if not (self.is_scheduled or self.is_triggered):
+            self.is_manual = True
+            return True
 
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2):
@@ -339,8 +356,8 @@ class Workflow:
 
     def run(self):
 
-        if not (self.is_scheduled or self.listener):
-            raise ValueError("Please add a schedule or listener before running the workflow")
+        if self.check_if_manual():
+            pass
         
         start = time()
 
