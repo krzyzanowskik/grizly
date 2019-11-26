@@ -11,7 +11,14 @@ class Config():
 
     def from_dict(self, data:dict):
         if 'config' in data:
+            if not isinstance(data['config'], dict): raise TypeError("config must be a dictionary")
+            if data['config'] == {}: raise ValueError("config is empty")  
+
+            for key in data['config'].keys():
+                self._validate_config(data['config'][key], services = list(data['config'][key]))
+                
             Config.data = data['config']
+            print("Config data has been saved.")
             return Config()
         else:
             pass
@@ -22,17 +29,105 @@ class Config():
                 if if_exists == 'skip':
                     print(f"Key '{key}' already exists and has been skipped. If you want to overwrite it please use if_exists='replace'")
                 elif if_exists == 'replace':
-                    self._validate_config(data[key])
+                    self._validate_config(data[key], services = list(data[key]))
                     Config.data.update({key: data[key]})
                     print(f"Key '{key}' has been overwritten.")
             else:
-                self._validate_config(data[key])
+                self._validate_config(data[key], services = list(data[key]))
                 Config.data[key] = data[key]
                 print(f"Key '{key}' has been added.")
         return Config()
         
-    def _validate_config(self, data:dict):
-        print("validations....")
+    def _validate_config(self, config:dict, services:list=None):
+        """Validates config dictionary.
+
+        Parameters
+        ----------
+        config : dict
+            [description]
+        service : str or list
+            Services to validate, if None then ['email', 'github', 'sfdc'].
+
+        Returns
+        -------
+        dict
+            Validated config
+        """
+
+        if not isinstance(config, dict): raise TypeError("config must be a dictionary")
+        if config == {}: raise ValueError("config is empty")     
+
+        invalid_keys = set(config.keys()) - {'email', 'github', 'sfdc'}
+        if invalid_keys != set() :
+            raise KeyError(f"Invalid keys {invalid_keys} in config. Valid keys: 'email', 'github', 'sfdc'")
+            
+        if services == None: services = ['email', 'github', 'sfdc']
+        if isinstance(services, str): services = [services]
+        if not isinstance(services, list) : raise TypeError("services must be a list or string")
+            
+        invalid_services = set(services) - {'email', 'github', 'sfdc'}
+        if invalid_services != set():
+            raise ValueError(f"Invalid values in services {invalid_services}. Valid values: 'email', 'github', 'sfdc'")
+        
+        for service in services:
+            if service not in config.keys(): raise KeyError(f"'{service}' not found in config")
+                
+            if service == 'email':
+                if not isinstance(config['email'], dict): raise TypeError ("config['email'] must be a dictionary")
+                if config['email'] == {}: raise ValueError("config['email'] is empty")
+                    
+                invalid_keys = set(config['email'].keys()) - {'email_address', 'email_password', 'send_as'}
+                if invalid_keys != set():
+                    raise KeyError(f"Invalid keys {invalid_keys} in config['email']. Valid keys: 'email_address', 'email_password', 'send_as'")
+                    
+                not_found_keys = {'email_address', 'email_password', 'send_as'} - set(config['email'].keys())
+                if not_found_keys != set():
+                    raise KeyError(f"Keys {not_found_keys} not found in config['email']")
+                    
+            elif service == 'github':
+                if not isinstance(config['github'], dict): raise TypeError ("config['github'] must be a dictionary")
+                if config['github'] == {}: raise ValueError("config['github'] is empty")
+                    
+                invalid_keys = set(config['github'].keys()) - {'username', 'username_password'}
+                if invalid_keys != set():
+                    raise KeyError(f"Invalid keys {invalid_keys} in config['github']. Valid keys: 'username', 'username_password'")
+                    
+                not_found_keys = {'username', 'username_password'} - set(config['github'].keys())
+                if not_found_keys != set():
+                    raise KeyError(f"Keys {not_found_keys} not found in config['github']")
+                    
+            elif service == 'sfdc':
+                if not isinstance(config['sfdc'], dict): raise TypeError ("config['sfdc'] must be a dictionary")
+                if config['sfdc'] == {}: raise ValueError("config['sfdc'] is empty")  
+                    
+                invalid_keys = set(config['sfdc'].keys()) - {'stage', 'prod'}
+                if invalid_keys != set():
+                    raise KeyError(f"Invalid keys {invalid_keys} in config['sfdc']. Valid keys: 'prod', 'stage'")
+
+                if "stage" in config['sfdc'].keys():
+                    if not isinstance(config['sfdc']['stage'], dict): raise TypeError ("config['sfdc']['stage'] must be a dictionary")
+                    if config['sfdc']['stage'] == {}: raise ValueError("config['sfdc']['stage'] is empty")
+                        
+                    invalid_keys = set(config['sfdc']['stage'].keys()) - {'username', 'password', 'instance_url', 'organizationId'}
+                    if invalid_keys != set():
+                        raise KeyError(f"Invalid keys {invalid_keys} in config['sfdc']['stage']. Valid keys: 'username', 'password', 'instance_url', 'organizationId'")
+                        
+                    not_found_keys = {'username', 'password', 'instance_url', 'organizationId'} - set(config['sfdc']['stage'].keys())
+                    if not_found_keys != set():
+                        raise KeyError(f"Keys {not_found_keys} not found in config['sfdc']['stage']")
+                        
+                if "prod" in config['sfdc'].keys():
+                    if not isinstance(config['sfdc']['prod'], dict): raise TypeError ("config['sfdc']['prod'] must be a dictionary")
+                    if config['sfdc']['prod'] == {}: raise ValueError("config['sfdc']['prod'] is empty")
+                        
+                    invalid_keys = set(config['sfdc']['prod'].keys()) - {'username', 'password', 'instance_url', 'organizationId'}
+                    if invalid_keys != set():
+                        raise KeyError(f"Invalid keys {invalid_keys} in config['sfdc']['prod']. Valid keys: 'username', 'password', 'instance_url', 'organizationId'")
+                        
+                    not_found_keys = {'username', 'password', 'instance_url', 'organizationId'} - set(config['sfdc']['prod'].keys())
+                    if not_found_keys != set():
+                        raise KeyError(f"Keys {not_found_keys} not found in config['sfdc']['prod']")
+        return config
 
 
 def read_config():
@@ -483,51 +578,3 @@ def file_extension(file_path:str):
         File extension, eg '.csv'
     """
     return os.path.splitext(file_path)[1]
-
-
-
-def _validate_config(config:dict, service:str):
-    """Validates config dictionary.
-    
-    Parameters
-    ----------
-    config : dict
-        [description]
-    service : str
-        [description]
-    
-    Returns
-    -------
-    dict
-        Validated config
-    """
-
-    if not isinstance(config, dict):
-        raise TypeError ("config must be a dictionary")
-
-    if config == {}:
-        raise ValueError("config is empty")
-
-    if service not in ['email', 'github', 'sfdc_stage', 'sfdc_prod']:
-        raise ValueError("Invalid value for service. Valid values: 'email', 'github', 'sfdc_stage', 'sfdc_prod'")
-
-    if service not in config.keys():
-        raise KeyError(f"'{service}' not found in config")
-
-    if service == 'email':
-        for key in ['email_address', 'email_password', 'send_as']:
-            if key not in config['email'].keys():
-                raise KeyError(f"{key} not found in config['email']")
-    elif service == 'github':
-        for key in ['username', 'username_password']:
-            if key not in config['github'].keys():
-                raise KeyError(f"{key} not found in config['github']")
-    elif service == 'sfdc_stage':
-        for key in ['username', 'password', 'instance_url', 'organizationId']:
-            if key not in config['sfdc_stage'].keys():
-                raise KeyError(f"{key} not found in config['sfdc_stage']")
-    elif service == 'sfdc_prod':
-        for key in ['username', 'password', 'organizationId']:
-            if key not in config['sfdc_prod'].keys():
-                raise KeyError(f"{key} not found in config['sfdc_prod']")
-    return config
