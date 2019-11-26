@@ -367,7 +367,7 @@ class Workflow:
         subject = f"Workflow {self.status}"
 
         log_file_path = "logs/scheduler.log"
-        notification = Email(subject=subject, body=email_body, logger=self.logger, attachment=log_file_path)
+        notification = Email(subject=subject, body=email_body, logger=self.logger, attachment_path=log_file_path)
         notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
         self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, self.stage, error=self.error)
 
