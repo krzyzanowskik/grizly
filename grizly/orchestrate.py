@@ -163,7 +163,7 @@ class Listener:
 
         if isinstance(last_data_refresh, str):
             # try casting to date
-            last_data_refresh = datetime.datetime.strptime("2019-11-26", "%Y-%m-%d")
+            last_data_refresh = datetime.datetime.strptime(last_data_refresh, "%Y-%m-%d")
 
         if isinstance(last_data_refresh, datetime.datetime):
             last_data_refresh = datetime.datetime.date(last_data_refresh)
