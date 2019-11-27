@@ -3,8 +3,7 @@ import os
 import openpyxl
 from grizly.utils import (
     get_path,
-    check_if_exists,
-    _validate_config
+    check_if_exists
 )
 from pandas import (
     DataFrame
@@ -38,8 +37,6 @@ class AWS:
             Path to local folder to store the file, if None then '%UserProfile%/s3_loads'
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
-        config : dict, optional
-            Config module (imported .py file), by default None
         """
     def __init__(self, file_name:str, s3_key:str, bucket:str=None, file_dir:str=None, redshift_str:str=None):
         self.file_name = file_name

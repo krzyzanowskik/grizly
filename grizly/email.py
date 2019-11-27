@@ -2,6 +2,10 @@ from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody
 from grizly.utils import read_config
 from grizly.orchestrate import retry
+from grizly.config import (
+    Config,
+    _validate_config
+)
 
 
 
@@ -19,16 +23,26 @@ class Email:
     """
 
 
-    def __init__(self, subject, body, logger=None, is_html=False):
+    def __init__(self, subject, body, logger=None, is_html=False, email_address:str=None, email_password:str=None, config_key:str=None):
         self.subject = subject
         if is_html :
             self.body = HTMLBody(body)
         else:
             self.body = body
         self.logger = logger
-        config = read_config()
-        self.email_address = config["email_address"]
-        self.email_password = config["email_password"]
+        self.config_key = config_key if config_key else 'standard'
+        if email_address is None:
+            _validate_config(config=Config.data[config_key],
+                            service='email')
+            self.email_address = Config.data[config_key]['email']['email_address']
+        else:
+            self.email_address = email_address
+        if email_password is None:
+            _validate_config(config=Config.data[config_key],
+                            service='email')
+            self.email_password = Config.data[config_key]['email']['email_password']
+        else:
+            self.email_password = email_password
 
 
     @retry(Exception, tries=5, delay=5)
@@ -39,7 +53,12 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-        if not send_as:
+        if send_as is None:
+            _validate_config(config=Config.data[config_key],
+                            service='email')
+            send_as = Config.data[config_key]['email']['send_as']
+
+        if send_as == '':
             send_as = email_address
 
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings

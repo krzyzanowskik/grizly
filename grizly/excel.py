@@ -1,17 +1,11 @@
-from pandas import (
-    DataFrame,
-    read_csv,
-    read_excel,
-    ExcelWriter
-)
+import pandas as pd
 import openpyxl
-
 
 def read_excel(excel_path, sheet_name="", query=""):
     if sheet_name != "":
-        fields = read_excel(excel_path, sheet_name=sheet_name).fillna("")
+        fields = pd.read_excel(excel_path, sheet_name=sheet_name).fillna("")
     else:
-        fields = read_excel(excel_path).fillna("")
+        fields = pd.read_excel(excel_path).fillna("")
 
     schema = "" if "schema" not in fields else fields["schema"][0]
     table = fields["table"][0]
@@ -50,7 +44,7 @@ def read_excel(excel_path, sheet_name="", query=""):
 
 
 def copy_df_to_excel(df, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
-    writer = ExcelWriter(input_excel_path, engine='openpyxl')
+    writer = pd.ExcelWriter(input_excel_path, engine='openpyxl')
     book = openpyxl.load_workbook(input_excel_path)
     writer.book = book
 
@@ -90,21 +84,21 @@ class Excel:
         
         Parameters
         ----------
-        df : pandas.DataFrame
-            DataFrame to be saved in Excel
+        df : pandas.pd.DataFrame
+            pd.DataFrame to be saved in Excel
         sheet: str
             Name of sheet
         row : int, optional
-            Upper left cell row to dump DataFrame, by default 1
+            Upper left cell row to dump pd.DataFrame, by default 1
         col : int, optional
-            Upper left cell column to dump DataFrame, by default 1
+            Upper left cell column to dump pd.DataFrame, by default 1
         index : bool, optional
             Write row names (index), by default False
         header : bool, optional
             Write column names (header), by default False
         """
 
-        writer = ExcelWriter(self.input_excel_path, engine='openpyxl')
+        writer = pd.ExcelWriter(self.input_excel_path, engine='openpyxl')
         book = openpyxl.load_workbook(self.input_excel_path)
         writer.book = book
 
