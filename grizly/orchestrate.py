@@ -442,10 +442,13 @@ class Runner:
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
-        else:
+        elif workflow.is_triggered:
             listener = workflow.listener
             if listener.detect_change():
                 return True
+        elif workflow.is_manual:
+            # implement manual run logic here
+            return True
 
         return False
 
