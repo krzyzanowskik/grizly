@@ -374,8 +374,8 @@ class Workflow:
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value)
-            self.error_type = type(exc_value)
+            self.error_value = str(exc_value)[:255]
+            self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
