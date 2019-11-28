@@ -374,8 +374,8 @@ class Workflow:
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value)
-            self.error_type = type(exc_value)
+            self.error_value = str(exc_value)[:255]
+            self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
@@ -442,10 +442,13 @@ class Runner:
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
-        else:
+        elif workflow.is_triggered:
             listener = workflow.listener
             if listener.detect_change():
                 return True
+        elif workflow.is_manual:
+            # implement manual run logic here
+            return True
 
         return False
 
