@@ -43,10 +43,13 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
             cursor = con.cursor()
             cursor.execute(sql)
         except:
-            con = engine.connect().connection
-            cursor = con.cursor()
-            cursor.execute(sql)
-
+            try:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(sql)
+            except:
+                raise
+                
         close_cursor = True
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
@@ -61,8 +64,10 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
                         break
                     writer.writerow(row)
             else:
+                cursor_row_cunt = 0
                 while True:
                     rows = cursor.fetchmany(chunksize)
+                    cursor_row_cunt += len(rows)
                     if not rows:
                         break
                     writer.writerows(rows)
@@ -72,6 +77,8 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
     if close_cursor:
         cursor.close()
         con.close()
+    
+    return cursor_row_cunt
 
 
 def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
@@ -481,7 +488,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, remove_inside_quotes=False):
     bucket_name = bucket if bucket else 'teis-data'
     config = ConfigParser()
     config.read(get_path('.aws','credentials'))
@@ -498,16 +505,21 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         REMOVEQUOTES
         ;commit;
         """
-    indent = 9
-    last_line_pos = len(sql) - len(";commit;") - indent
+
     if time_format:
+        indent = 9
+        last_line_pos = len(sql) - len(";commit;") - indent
         spaces = indent * " " # print formatting
         time_format_argument = f"timeformat '{time_format}'"
-        return sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+        sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+
+    if remove_inside_quotes:
+        sql = sql.replace("REMOVEQUOTES", r"CSV QUOTE AS '\"'")
+
     return sql
 
 
-def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None, bucket=None):
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None, bucket=None, remove_inside_quotes=False):
     """
     Writes s3 to Redshift database.
     
@@ -552,7 +564,8 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
         else:
             pass
 
-    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, bucket=bucket_name)
+    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, 
+    bucket=bucket_name, remove_inside_quotes=remove_inside_quotes)
 
     print(f"Loading data into {table_name}...")
     engine.execute(sql)

@@ -245,6 +245,7 @@ class QFrame:
         ----------
         fields : list or str
             Fields in list or field as a string.
+            If Fields is * then Select will contain all columns
 
         Returns
         -------
@@ -254,7 +255,11 @@ class QFrame:
         sq_fields = deepcopy(self.data["select"]["fields"])
         new_fields = {}
 
-        if isinstance(fields, str) : fields = [fields]
+        if isinstance(fields, str): 
+            if fields == "*":
+                fields = sq_fields
+            else:
+                fields = [fields]
 
         for field in fields:
             if field not in sq_fields:
