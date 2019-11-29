@@ -232,11 +232,12 @@ class Workflow:
     """
 
 
-    def __init__(self, name, owner_email, backup_email, tasks):
+    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
         self.tasks = tasks
+        self.trigger_on_success = trigger_on_success
         self.graph = dask.delayed()(self.tasks)
         self.run_time = 0
         self.status = "idle"
@@ -407,6 +408,15 @@ class Workflow:
         if local:
             self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, 
                                     env="local", error_value=self.error_value, error_type=self.error_type)
+
+        if self.trigger_on_success:
+            triggered_wf = self.trigger_on_success
+            self.logger.info(f"Running {triggered_wf.name}...")
+            triggered_wf.run()
+            self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
+            triggered_wf.write_status_to_rds(triggered_wf.name, triggered_wf.owner_email, triggered_wf.backup_email,
+                                            triggered_wf.status, triggered_wf.run_time, env="prod",
+                                            error_value=triggered_wf.error_value, error_type=triggered_wf.error_type)
 
         return self.status
 
