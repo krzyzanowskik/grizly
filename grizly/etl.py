@@ -49,10 +49,13 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
             cursor = con.cursor()
             cursor.execute(sql)
         except:
-            con = engine.connect().connection
-            cursor = con.cursor()
-            cursor.execute(sql)
-
+            try:
+                con = engine.connect().connection
+                cursor = con.cursor()
+                cursor.execute(sql)
+            except:
+                raise
+                
         close_cursor = True
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
@@ -67,8 +70,10 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
                         break
                     writer.writerow(row)
             else:
+                cursor_row_cunt = 0
                 while True:
                     rows = cursor.fetchmany(chunksize)
+                    cursor_row_cunt += len(rows)
                     if not rows:
                         break
                     writer.writerows(rows)
@@ -78,6 +83,8 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
     if close_cursor:
         cursor.close()
         con.close()
+    
+    return cursor_row_cunt
 
 
 def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):

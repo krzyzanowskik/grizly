@@ -156,6 +156,7 @@ class Listener:
         con = get_con(engine=self.engine)
         cursor = con.cursor()
         cursor.execute(sql)
+        
         last_data_refresh = cursor.fetchone()[0]
 
         cursor.close()
@@ -210,8 +211,6 @@ class Listener:
 
     def detect_change(self):
 
-        self.logger.info(f"Listening for changes in {self.table}...")
-
         try:
             last_data_refresh = self.get_table_refresh_date()
         except:
@@ -249,7 +248,7 @@ class Workflow:
         self.error_value = None
         self.error_type = None
 
-        self.logger.info(f"\nWorkflow {self.name} initiated successfully\n")
+        self.logger.info(f"Workflow {self.name} initiated successfully")
 
 
     def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
@@ -286,7 +285,7 @@ class Workflow:
             return True
 
 
-    def retry_task(exceptions, tries=4, delay=3, backoff=2):
+    def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
         Retry calling the decorated function using an exponential backoff.
 
@@ -299,6 +298,9 @@ class Workflow:
                 each retry).
             logger: Logger to use. If None, print.
         """
+
+        if not logger:
+            logger = logging.getLogger(__name__)
 
         def deco_retry(f):
 
@@ -314,7 +316,7 @@ class Workflow:
 
                     except exceptions as e:
                         msg = f'{e}, \nRetrying in {mdelay} seconds...'
-                        self.logger.warning(msg)
+                        logger.warning(msg)
                         sleep(mdelay)
                         mtries -= 1
                         mdelay *= backoff
@@ -436,16 +438,23 @@ class Runner:
         """
 
         if workflow.is_scheduled:
+
+            self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})")
+
             now = pendulum.now()
             next_run = workflow.next_run
-            self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run})")
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
+
         elif workflow.is_triggered:
+            
+            self.logger.info(f"Listening for changes in {workflow.listener.table}...")
+
             listener = workflow.listener
             if listener.detect_change():
                 return True
+
         elif workflow.is_manual:
             # implement manual run logic here
             return True
@@ -453,24 +462,29 @@ class Runner:
         return False
 
 
-    def get_pending_workflows(self, pending=None):
+    # def get_pending_workflows(self, pending=None):
 
-        pending = []
-        for workflow in self.workflows:
-            if self.should_run(workflow):
-                pending.append(workflow)
+    #     pending = []
+    #     for workflow in self.workflows:
+    #         if self.should_run(workflow):
+    #             pending.append(workflow)
 
-        return pending
+    #     return pending
 
 
     def run(self, workflows):
 
+        self.logger.info(f"Checking for pending workflows...")
+
         for workflow in workflows:
-            self.logger.info(f"Running {workflow.name}...")
-            workflow.run()
-            self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
-            workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status, 
-                                        workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
+            if self.should_run(workflow):
+                self.logger.info(f"Running {workflow.name}...")
+                workflow.run()
+                self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
+                workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status, 
+                                            workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
+        else:
+            self.logger.info(f"No pending workflows found")
 
         return {workflow.name: workflow.status for workflow in workflows}
 
