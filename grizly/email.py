@@ -32,20 +32,20 @@ class Email:
         self.logger = logger
         self.config_key = config_key if config_key else 'standard'
         if email_address is None:
-            _validate_config(config=Config.data[config_key],
-                            service='email')
-            self.email_address = Config.data[config_key]['email']['email_address']
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            self.email_address = Config.data[self.config_key]['email']['email_address']
         else:
             self.email_address = email_address
         if email_password is None:
-            _validate_config(config=Config.data[config_key],
-                            service='email')
-            self.email_password = Config.data[config_key]['email']['email_password']
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            self.email_password = Config.data[self.config_key]['email']['email_password']
         else:
             self.email_password = email_password
 
 
-    @retry(Exception, tries=5, delay=5)
+    #@retry(Exception, tries=5, delay=5)
     def send(self, to, cc=None, send_as=None):
 
         to = to if isinstance(to, list) else [to]
@@ -54,9 +54,9 @@ class Email:
         email_address = self.email_address
         email_password = self.email_password
         if send_as is None:
-            _validate_config(config=Config.data[config_key],
-                            service='email')
-            send_as = Config.data[config_key]['email']['send_as']
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            send_as = Config.data[self.config_key]['email']['send_as']
 
         if send_as == '':
             send_as = email_address

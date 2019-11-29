@@ -20,7 +20,7 @@ from grizly.config import (
 class Extract():
     """Writes data to file.
     """
-    def __init__(self, file_path:str, config_key:str=None):
+    def __init__(self, file_path:str=None, config_key:str=None):
         """
         Parameters
         ----------
@@ -112,8 +112,14 @@ class Extract():
         return self
 
 
-    def from_qf(self):
-        pass
+    def from_qf(self, qf):
+        df = qf.to_df()
+        if self.file_path != None:
+            self.rows = df.values.tolist()
+            self.write()
+            return self
+        else:
+            return df
 
 
     def from_sfdc(self, fields, table, where=None, env="prod", delayed=False, output="file", username:str=None, password:str=None, organizationId:str=None, instance_url:str=None):
