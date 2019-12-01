@@ -40,7 +40,6 @@ from .excel import (
 from .email import Email
 
 from .tools import (
-    Excel,
     AWS
 )
 

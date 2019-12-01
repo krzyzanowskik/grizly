@@ -1,4 +1,5 @@
 import json
+from .utils import get_redshift_columns
 
 class Store():
     def __init__(self, path):
@@ -12,6 +13,9 @@ class Store():
                 d = json.dump({"sample_key":"sample_key_value"}, json_file)
         self.data = d
         self.new_data = {}
+
+    def get_columns(schema, table, column_types=False):
+        return get_redshift_columns(schema, table, column_types=False)
         
     def to_store(self, key=None):
         if self.data == None:
@@ -22,6 +26,7 @@ class Store():
                     msg = f"Key # {k} # already in store. Use remove_key() if you don't need it"
                     raise KeyError(msg)
                 else:
+                    #1
                     self.data[k] = self.new_data[k]
                     with open(self.path, 'w') as json_file:
                         json.dump(self.data, json_file)
@@ -31,10 +36,16 @@ class Store():
                 msg = f"Key # {key} # already in store. Use remove_key() if you don't need it"
                 raise KeyError(msg)
             else:
+                #2
                 self.data[key] = self.new_data[key]
                 with open(self.path, 'w') as json_file:
                     json.dump(self.data, json_file)
                     self.new_data = {}
+
+    def add_qframe_expression(self, subquery, field_name, expression):
+        if self.new_data == {}:
+            self.new_data = self.data
+        self.new_data[subquery]["select"][field_name] = expression
     
     def add_key(self, **kwargs):
         for kwarg in kwargs:
@@ -47,7 +58,7 @@ class Store():
             else:
                 raise ValueError("The key value passed to this method is not a dictionary")
     
-    def add_query(self, columns, schema, table, key_query, col_types=None):
+    def add_query(self, columns, schema, table, key_query, engine_str="", col_types=None):
         """Creates a dictionary with fields information for a Qframe and saves the data in json file.
 
         Parameters
@@ -97,6 +108,7 @@ class Store():
                     "table": table,
                     "schema": schema,
                     "fields": fields,
+                    "engine": engine_str,
                     "where": "",
                     "distinct": "",
                     "having": "",
