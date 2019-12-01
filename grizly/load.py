@@ -7,22 +7,14 @@ from grizly.utils import file_extension
 class Load():
     """Loads file to s3 or database (only csv files)
     """
-    def __init__(self, file_path:str=None, config=None):
+    def __init__(self, file_path:str):
         """
         Parameters
         ----------
         file_path : str, optional
             Path to local file, by default None
-        config : module, optional
-            Config module, by default None
         """
-        self.config = config
-        if file_path:
-             self.file_path = file_path
-        elif config:
-            self.file_path = config.file_path
-        else:
-            raise ValueError("Missing file_path argument.")
+        self.file_path = file_path
 
 
     def to_s3(self, s3_key:str=None, bucket:str=None, redshift_str:str=None):
@@ -49,8 +41,7 @@ class Load():
                 s3_key=s3_key, 
                 bucket=bucket, 
                 file_dir=file_dir,
-                redshift_str=redshift_str,
-                config=self.config
+                redshift_str=redshift_str
                 )
         aws.file_to_s3()
         return aws

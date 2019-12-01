@@ -34,7 +34,8 @@ from .etl import (
 )
 
 from .excel import (
-    copy_df_to_excel
+    copy_df_to_excel,
+    Excel
 )
 
 from .email import Email
@@ -44,6 +45,8 @@ from .tools import (
 )
 
 from .store import Store
+
+from .config import Config
 
 
 from os import environ

@@ -1,29 +1,20 @@
-import boto3
+from boto3 import resource
 import os
-import csv
-from pandas import (
-    ExcelWriter
-)
 import openpyxl
 from grizly.utils import (
     get_path,
-    read_config,
     check_if_exists
 )
 from pandas import (
-    DataFrame,
-    read_csv
+    DataFrame
 )
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from io import StringIO
 from csv import reader
+from configparser import ConfigParser
+from copy import deepcopy
 
-grizly_config = read_config()
-try:
-    os.environ["HTTPS_PROXY"] = grizly_config["https"]
-except TypeError:
-    pass
 
 class AWS:
     """Class that represents a file in S3.
@@ -35,54 +26,43 @@ class AWS:
 
         Parameters
         ----------
-        file_name : str, optional
-            Name of the file, if None then 'test.csv'
-        s3_key : str, optional
-            Name of s3 key, if None then 'bulk/'
+        file_name : str
+            Name of the file
+        s3_key : str
+            Name of s3 key
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name, if None then 'acoe-s3'
         file_dir : str, optional
-            Path to local folder to store the file, if None then 'C:/Users/your_id/s3_loads'
+            Path to local folder to store the file, if None then '%UserProfile%/s3_loads'
         redshift_str : str, optional
-            Redshift engine string, if None then 'mssql+pyodbc://Redshift'
-        config : module, optional
-            Config module (imported .py file), by default None
+            Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
         """
-    def __init__(self, file_name:str=None, s3_key:str=None, bucket:str=None, file_dir:str=None, redshift_str:str=None, config=None):
-        if not config:
-            config = _AttrDict()
-            config.update({
-                        'file_name': 'test.csv', 
-                        's3_key' : 'bulk/',
-                        'bucket' : 'teis-data',
-                        'file_dir' : get_path('s3_loads'),
-                        'redshift_str' : 'mssql+pyodbc://Redshift'
-                        })
-
-        self.file_name = file_name if file_name else config.file_name
-        self.s3_key = s3_key if s3_key else config.s3_key
-        self.bucket = bucket if bucket else config.bucket
-        self.file_dir = file_dir if file_dir else config.file_dir
-        self.redshift_str = redshift_str if redshift_str else config.redshift_str
-        self.s3_resource = boto3.resource('s3', 
-                            aws_access_key_id=grizly_config["akey"], 
-                            aws_secret_access_key=grizly_config["skey"], 
-                            region_name=grizly_config["region"])
-
+    def __init__(self, file_name:str, s3_key:str, bucket:str=None, file_dir:str=None, redshift_str:str=None):
+        self.file_name = file_name
+        self.s3_key = s3_key
+        self.bucket = bucket if bucket else 'acoe-s3'
+        self.file_dir = file_dir if file_dir else get_path('s3_loads')
+        self.redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
+        self.s3_resource = resource('s3')
         os.makedirs(self.file_dir, exist_ok=True)
 
+        if self.s3_key == '':
+            raise ValueError("s3_key not specified")
+
+        if not self.s3_key.endswith('/'):
+            raise ValueError("s3_key should end with /")
 
     def info(self):
         """Print a concise summary of a AWS.
 
         Examples
         --------
-        >>> AWS().info()
+        >>> AWS('test.csv', 'bulk/').info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
-        bucket: 	'teis-data'
+        bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         """
         print(f"\033[1m file_name: \033[0m\t'{self.file_name}'")
         print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
@@ -107,13 +87,13 @@ class AWS:
 
         Examples
         --------
-        >>> s3 = AWS(bucket='acoe-s3')
+        >>> s3 = AWS('test.csv', 'bulk/')
         >>> s3.info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         >>> s3 = s3.s3_to_s3('test_old.csv', s3_key='bulk/test/')
         'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
         >>> s3.info()
@@ -121,7 +101,7 @@ class AWS:
         s3_key: 	'bulk/test/'
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://Redshift'
+        redshift_str: 	'mssql+pyodbc://redshift_acoe'
         
         Returns
         -------
@@ -173,7 +153,7 @@ class AWS:
 
         Examples
         --------
-        >>> aws = AWS()
+        >>> aws = AWS('test.csv', 'bulk/')
         >>> aws.s3_to_file()
         """
         file_path = os.path.join(self.file_dir, self.file_name)
@@ -192,7 +172,7 @@ class AWS:
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> AWS().df_to_s3(df)
+        >>> AWS('test.csv', 'bulk/').df_to_s3(df)
 
         Parameters
         ----------
@@ -254,14 +234,19 @@ class AWS:
                 pass
         else:
             self._create_table_like_s3(table_name, sep, types)
+        
+        config = ConfigParser()
+        config.read(get_path('.aws','credentials'))
+        aws_access_key_id = config['default']['aws_access_key_id']
+        aws_secret_access_key = config['default']['aws_secret_access_key']
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
-            access_key_id '{grizly_config["akey"]}'
-            secret_access_key '{grizly_config["skey"]}'
+            access_key_id '{aws_access_key_id}'
+            secret_access_key '{aws_secret_access_key}'
             delimiter '{sep}'
             NULL ''
             IGNOREHEADER 1

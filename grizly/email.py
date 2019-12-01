@@ -1,9 +1,13 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
 from grizly.utils import read_config
+from grizly.orchestrate import retry
+from grizly.config import (
+    Config,
+    _validate_config
+)
 from os.path import basename
 
-config = read_config()
 
 
 class Email:
@@ -20,12 +24,23 @@ class Email:
     """
 
 
-    def __init__(self, subject, body="", attachment_path=None, logger=None, is_html=False):
+    def __init__(self, subject, body, attachment_path=None, logger=None, is_html=False, email_address:str=None, email_password:str=None, config_key:str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
-        self.email_address = config["email_address"]
-        self.email_password = config["email_password"]
+        self.config_key = config_key if config_key else 'standard'
+        if email_address is None:
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            self.email_address = Config.data[self.config_key]['email']['email_address']
+        else:
+            self.email_address = email_address
+        if email_password is None:
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            self.email_password = Config.data[self.config_key]['email']['email_password']
+        else:
+            self.email_password = email_password
         self.attachment_path = attachment_path
         self.attachment_name = basename(attachment_path) if attachment_path else None
         self.attachment_content = self.get_attachment_content(attachment_path)
@@ -82,7 +97,12 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-        if not send_as:
+        if send_as is None:
+            _validate_config(config=Config.data[self.config_key],
+                            services='email')
+            send_as = Config.data[self.config_key]['email']['send_as']
+
+        if send_as == '':
             send_as = email_address
 
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings

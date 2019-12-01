@@ -40,15 +40,6 @@ def test_set_cwd():
     assert cwd == user_cwd
 
 
-def test_to_s3_and_s3_to_file():
-    in_file_path = get_path('tables.xlsx', from_where='here')
-    to_s3(in_file_path, 'test/tables.xlsx')
-    out_file_path = get_path('tables_s3.xlsx', from_where='here')
-    read_s3(out_file_path, 'test/tables.xlsx')
-    assert cmp(in_file_path, out_file_path) == True
-    os.remove(out_file_path)
-
-
 def test_file_extention():
     file_path = get_path('test.csv')
     assert file_extension(file_path) == '.csv'
