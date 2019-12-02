@@ -5,17 +5,11 @@ from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
 
-from grizly.utils import (
-    read_config,
-    check_if_exists
+from .utils import (
+    check_if_exists,
+    get_path
 )
-
-
-config = read_config()
-try:
-    os.environ["HTTPS_PROXY"] = config["https"]
-except TypeError:
-    pass
+from configparser import ConfigParser
 
 
 def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None):
@@ -204,7 +198,7 @@ def to_s3(file_path: str, s3_name: str, bucket: str=None):
         Bucket name, if None then 'teis-data'
     """
     bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    s3 = boto3.resource('s3')
     bucket = s3.Bucket(bucket_name)
 
     bucket.upload_file(file_path, 'bulk/' + s3_name)
@@ -224,7 +218,7 @@ def read_s3(file_path: str, s3_name: str, bucket: str=None):
         Bucket name, if None then 'teis-data'
     """
     bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    s3 = boto3.resource('s3')
     bucket = s3.Bucket(bucket_name)
 
     with open(file_path, 'wb') as data:
@@ -246,7 +240,7 @@ def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
         Bucket name, if None then 'teis-data'
     """
     bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    s3 = boto3.resource('s3')
     bucket = s3.Bucket(bucket_name)
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -272,7 +266,7 @@ def s3_to_csv(csv_path, bucket: str=None):
         Bucket name, if None then 'teis-data'
     """
     bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
+    s3 = boto3.resource('s3')
     bucket = s3.Bucket(bucket_name)
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -306,16 +300,12 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', delete_first=False, c
         Bucket name, if None then 'teis-data'
     """
 
-    ACCESS_KEY = config["akey"]
-    SECRET_KEY = config["skey"]
-    REGION = config["region"]
-
     redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
     bucket_name = bucket if bucket else 'teis-data'
 
     engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
-    s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
+    s3 = boto3.resource('s3')
     bucket = s3.Bucket(bucket_name)
 
     filename = table_name + '.csv'
@@ -476,6 +466,11 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
     col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
+    config = ConfigParser()
+    config.read(get_path('.aws','credentials'))
+    aws_access_key_id = config['default']['aws_access_key_id']
+    aws_secret_access_key = config['default']['aws_secret_access_key']
+
     print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
 
     sql = """
@@ -487,7 +482,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, col_names, bucket_name, s3_name, config["akey"], config["skey"], sep)
+        """.format(table_name, col_names, bucket_name, s3_name, aws_access_key_id, aws_secret_access_key, sep)
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
@@ -495,11 +490,15 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
 def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, remove_inside_quotes=False):
     bucket_name = bucket if bucket else 'teis-data'
+    config = ConfigParser()
+    config.read(get_path('.aws','credentials'))
+    aws_access_key_id = config['default']['aws_access_key_id']
+    aws_secret_access_key = config['default']['aws_secret_access_key']
 
     sql = f"""
         COPY {schema}.{table_name} FROM 's3://{bucket_name}/bulk/{file_name}'
-        access_key_id '{config["akey"]}'
-        secret_access_key '{config["skey"]}'
+        access_key_id '{aws_access_key_id}'
+        secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
         NULL ''
         IGNOREHEADER 1

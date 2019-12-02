@@ -27,6 +27,11 @@ from grizly.etl import (
     write_to
 )
 
+from .ui import(
+    SubqueryUI,
+    FieldUI
+)
+
 from grizly.utils import(
     check_if_valid_type
 )
@@ -176,8 +181,13 @@ class QFrame:
         self.data = self.validate_data(data)
         return self
 
+    def build_subquery(self, store_path):
+        return SubqueryUI(store_path=store_path).build_subquery()
 
-    def read_json(self, json_path, subquery=''):
+    def build_field(self, store_path):
+        return FieldUI(store_path=store_path).build_field(store_path, self)
+
+    def from_json(self, json_path, subquery=''):
         """Reads QFrame.data from json file.
 
         Parameters
@@ -196,12 +206,32 @@ class QFrame:
             if data != {}:
                 if subquery == '':
                     self.data = self.validate_data(data)
+                    self.engine = data["engine"]
                 else:
                     self.data = self.validate_data(data[subquery])
+                    self.engine = data[subquery]["select"]["engine"]
             else:
                 self.data = data
         return self
 
+    def read_json(self, json_path, subquery=''):
+        """Warning: this function is obsoleted, use from_json instead.
+        
+        Reads QFrame.data from json file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to json file.
+        subquery : str, optional
+            Key in json file, by default ''
+
+        Returns
+        -------
+        QFrame
+        """
+        self.from_json(json_path, subquery)
+        return self
 
     def read_dict(self, data):
         """Reads QFrame.data from dictionary.
@@ -1291,7 +1321,6 @@ def union(qframes=[], union_type=None, union_by='position'):
     print("Data unioned successfully.")
     return QFrame(data=data, engine=qframes[0].engine)
 
-
 def _validate_data(data):
     if data == {}:
         raise AttributeError("Your data is empty.")
@@ -1365,7 +1394,7 @@ def _validate_data(data):
     return data
 
 
-def initiate(columns, schema, table, json_path, subquery="", col_types=None):
+def initiate(columns, schema, table, json_path, engine_str="", subquery="", col_types=None):
     """Creates a dictionary with fields information for a Qframe and saves the data in json file.
 
     Parameters
@@ -1426,6 +1455,7 @@ def initiate(columns, schema, table, json_path, subquery="", col_types=None):
                 "table": table,
                 "schema": schema,
                 "fields": fields,
+                "engine": engine_str,
                 "where": "",
                 "distinct": "",
                 "having": "",

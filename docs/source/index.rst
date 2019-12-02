@@ -11,9 +11,7 @@ Welcome to grizly's documentation!
    :caption: Contents:
 
    content/how_to_install
-   content/tutorial_qframe
-   content/tutorial_qframe_new
-   content/tutorial_store
+   content/tutorials
    content/api_QFrame
    content/api_Email
    content/api_Extract

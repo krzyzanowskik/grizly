@@ -6,13 +6,6 @@ from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 
-class Config(dict):
-    def __init__(self):
-        dict.__init__(self)
-
-    def from_dict(self, d):
-        for key in d:
-            self[key] = d[key]
 
 
 def read_config():
@@ -25,15 +18,8 @@ def read_config():
     return config
 
 
-config = read_config()
-try:
-    os.environ["HTTPS_PROXY"] = config["https"]
-except TypeError:
-    pass
-
-
 def get_connection(db="denodo"):
-
+    config = read_config()
     engine = create_engine(config[db])
 
     try:
@@ -105,6 +91,7 @@ def get_sfdc_columns(table, columns=None, column_types=True):
     ----------
     List or Dict
     """
+    config = read_config()
 
     sfdc_username = config["sfdc_username"]
     sfdc_pw = config["sfdc_password"]
@@ -168,6 +155,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
             WHERE view_name = '{table}'
             AND database_name = '{schema}'
     """
+    config = read_config()
     engine = create_engine(config["denodo"], encoding='utf8', poolclass=NullPool)
 
     try:

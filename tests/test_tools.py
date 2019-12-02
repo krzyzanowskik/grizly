@@ -1,22 +1,12 @@
 from pandas import DataFrame
 import os
 from filecmp import cmp
-from grizly import (
+from ..grizly.tools import (
     AWS
 )
-from tests import config
-
-
-def write_out(out):
-    with open(
-        config.tests_txt_file,
-        "w",
-    ) as f:
-        f.write(out)
-
 
 def test_df_to_s3_and_s3_to_file():
-    aws = AWS(file_name='testing_aws_class.csv')
+    aws = AWS(file_name='testing_aws_class.csv', s3_key='bulk/')
     df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
     aws.df_to_s3(df)
 
