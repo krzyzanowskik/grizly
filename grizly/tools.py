@@ -16,13 +16,13 @@ from configparser import ConfigParser
 from copy import deepcopy
 
 
-class AWS:
+class S3:
     """Class that represents a file in S3.
 
         Examples
         --------
-        >>> from grizly import get_path, AWS
-        >>> s3 = AWS('emea_daily.xlsx', s3_key='dbb/ENG_EMEA/', file_dir=get_path('acoe_projects', 'dbb', 'ENG_EMEA'))
+        >>> from grizly import get_path, S3
+        >>> s3 = S3('emea_daily.xlsx', s3_key='dbb/ENG_EMEA/', file_dir=get_path('acoe_projects', 'dbb', 'ENG_EMEA'))
 
         Parameters
         ----------
@@ -53,11 +53,11 @@ class AWS:
             raise ValueError("s3_key should end with /")
 
     def info(self):
-        """Print a concise summary of a AWS.
+        """Print a concise summary of a S3.
 
         Examples
         --------
-        >>> AWS('test.csv', 'bulk/').info()
+        >>> S3('test.csv', 'bulk/').info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
         bucket: 	'acoe-s3'
@@ -71,7 +71,21 @@ class AWS:
         print(f"\033[1m redshift_str: \033[0m\t'{self.redshift_str}'")
 
 
-    def s3_to_s3(self, file_name:str=None, s3_key:str=None, bucket:str=None):
+    def list(self):
+        """Returns the list of files that are in S3.s3_key
+        """
+        files = []
+        key_list = self.s3_key.split('/')[:-1]
+        for file in self.s3_resource.meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)['Contents']:
+            file_list = file['Key'].split('/')
+            for item in key_list:
+                file_list.pop(0)
+            if len(file_list) == 1:
+                files.append(file_list[0])
+        return files
+
+
+    def copy_to(self, file_name:str=None, s3_key:str=None, bucket:str=None):
         """Copies S3 file to another S3 file.
 
         TODO: For now it moves only one file at a time, we need t improve it to move whole folders.
@@ -87,14 +101,14 @@ class AWS:
 
         Examples
         --------
-        >>> s3 = AWS('test.csv', 'bulk/')
+        >>> s3 = S3('test.csv', 'bulk/')
         >>> s3.info()
         file_name: 	'test.csv'
         s3_key: 	'bulk/'
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
         redshift_str: 	'mssql+pyodbc://redshift_acoe'
-        >>> s3 = s3.s3_to_s3('test_old.csv', s3_key='bulk/test/')
+        >>> s3 = s3.copy_to('test_old.csv', s3_key='bulk/test/')
         'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
         >>> s3.info()
         file_name: 	'test_old.csv'
@@ -105,8 +119,8 @@ class AWS:
         
         Returns
         -------
-        AWS
-            AWS class with new parameters
+        S3
+            S3 class with new parameters
         """
         file_name = file_name if file_name else self.file_name
         s3_key = s3_key if s3_key else self.s3_key
@@ -123,18 +137,18 @@ class AWS:
         s3_file.copy(copy_source)
         print(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
 
-        return AWS(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
+        return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
-    def file_to_s3(self):
+    def from_file(self):
         """Writes local file to S3.
 
         Examples
         --------
         >>> from grizly import get_path
         >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
-        >>> aws = AWS('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
-        >>> aws.file_to_s3()
+        >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
+        >>> s3.from_file()
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -148,13 +162,13 @@ class AWS:
         print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
 
-    def s3_to_file(self):
+    def to_file(self):
         """Writes S3 to local file.
 
         Examples
         --------
-        >>> aws = AWS('test.csv', 'bulk/')
-        >>> aws.s3_to_file()
+        >>> S3 = S3('test.csv', 'bulk/')
+        >>> S3.to_file()
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -165,14 +179,14 @@ class AWS:
         print(f"'{s3_key}' uploaded to '{file_path}'")
 
 
-    def df_to_s3(self, df:DataFrame, sep:str='\t'):
+    def from_df(self, df:DataFrame, sep:str='\t'):
         """Saves DataFrame in S3.
         
         Examples
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> AWS('test.csv', 'bulk/').df_to_s3(df)
+        >>> S3('test.csv', 'bulk/').from_df(df)
 
         Parameters
         ----------
@@ -192,10 +206,10 @@ class AWS:
         df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
-        self.file_to_s3()
+        self.from_file()
 
 
-    def s3_to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
+    def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
         """Writes S3 to Redshift table.    
 
         Parameters
@@ -237,16 +251,16 @@ class AWS:
         
         config = ConfigParser()
         config.read(get_path('.aws','credentials'))
-        aws_access_key_id = config['default']['aws_access_key_id']
-        aws_secret_access_key = config['default']['aws_secret_access_key']
+        S3_access_key_id = config['default']['S3_access_key_id']
+        S3_secret_access_key = config['default']['S3_secret_access_key']
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
-            access_key_id '{aws_access_key_id}'
-            secret_access_key '{aws_secret_access_key}'
+            access_key_id '{S3_access_key_id}'
+            secret_access_key '{S3_secret_access_key}'
             delimiter '{sep}'
             NULL ''
             IGNOREHEADER 1
@@ -256,38 +270,6 @@ class AWS:
 
         engine.execute(sql)
         print(f'Data has been copied to {table_name}')
-
-
-    def df_to_rds(self, df:DataFrame, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None):
-        """Writes DataFrame to Redshift table.
-        
-        Parameters
-        ----------
-        df : DataFrame
-            DataFrame object
-        table : str
-            Table name
-        schema : str, optional
-            Schema name, by default None
-        if_exists : {'fail', 'replace', 'append'}, default 'fail'
-            How to behave if the table already exists.
-
-            * fail: Raise a ValueError.
-            * replace: Clean table before inserting new values.
-            * append: Insert new values to the existing table.
-
-        sep : str, optional
-            Separator, by default '\t'
-        types : dict, optional
-            Data types to force
-        """
-        self.df_to_s3(df, sep=sep)
-        self.s3_to_rds(
-            table=table, 
-            schema=schema, 
-            if_exists=if_exists, 
-            sep=sep,
-            types=types)
 
 
     def _create_table_like_s3(self, table_name, sep, types):
