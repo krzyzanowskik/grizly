@@ -187,7 +187,7 @@ class QFrame:
     def build_field(self, store_path):
         return FieldUI(store_path=store_path).build_field(store_path, self)
 
-    def read_json(self, json_path, subquery=''):
+    def from_json(self, json_path, subquery=''):
         """Reads QFrame.data from json file.
 
         Parameters
@@ -214,6 +214,24 @@ class QFrame:
                 self.data = data
         return self
 
+    def read_json(self, json_path, subquery=''):
+        """Warning: this function is obsoleted, use from_json instead.
+        
+        Reads QFrame.data from json file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to json file.
+        subquery : str, optional
+            Key in json file, by default ''
+
+        Returns
+        -------
+        QFrame
+        """
+        self.from_json(json_path, subquery)
+        return self
 
     def read_dict(self, data):
         """Reads QFrame.data from dictionary.
@@ -1376,7 +1394,7 @@ def _validate_data(data):
     return data
 
 
-def initiate(columns, schema, table, json_path, subquery="", col_types=None):
+def initiate(columns, schema, table, json_path, engine_str="", subquery="", col_types=None):
     """Creates a dictionary with fields information for a Qframe and saves the data in json file.
 
     Parameters
@@ -1437,6 +1455,7 @@ def initiate(columns, schema, table, json_path, subquery="", col_types=None):
                 "table": table,
                 "schema": schema,
                 "fields": fields,
+                "engine": engine_str,
                 "where": "",
                 "distinct": "",
                 "having": "",

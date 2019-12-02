@@ -4,16 +4,16 @@ from copy import deepcopy
 from sqlalchemy import create_engine
 from pandas import read_sql, read_csv, merge, concat
 
-from grizly.utils import get_path
+from ..grizly.utils import get_path
 
-from grizly.qframe import (
+from ..grizly.qframe import (
     QFrame,
     union,
     join,
     initiate
 )
 
-from grizly.sqlbuilder import (
+from ..grizly.sqlbuilder import (
     build_column_strings,
     get_sql
 )
@@ -579,7 +579,8 @@ def test_initiate():
     columns = ['customer', 'billings']
     json = 'test.json'
     sq='test'
-    initiate(columns=columns, schema='test_schema', table='test_table', json_path=json, subquery=sq)
+    initiate(columns=columns, schema='test_schema', table='test_table'
+        , engine_str="engine", json_path=json, subquery=sq)
     q = QFrame().read_json(json_path=json, subquery=sq)
     os.remove('test.json')
 

@@ -6,13 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-from grizly.tools import AWS
-from grizly.utils import (
+from .tools import AWS
+from .utils import (
     file_extension, 
     read_config
 )
-from grizly.store import Store
-from grizly.config import (
+from .store import Store
+from .config import (
     Config, 
     _validate_config
 )

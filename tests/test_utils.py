@@ -1,12 +1,12 @@
 import os
 from filecmp import cmp
 
-from grizly.etl import (
+from ..grizly.etl import (
     to_s3,
     read_s3
 )
 
-from grizly.utils import (
+from ..grizly.utils import (
     check_if_exists,
     check_if_valid_type,
     set_cwd,

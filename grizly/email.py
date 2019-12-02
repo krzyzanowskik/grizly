@@ -1,8 +1,8 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
-from grizly.utils import read_config
-from grizly.orchestrate import retry
-from grizly.config import (
+from .utils import read_config
+from .orchestrate import retry
+from .config import (
     Config,
     _validate_config
 )

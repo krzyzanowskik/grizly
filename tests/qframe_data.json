@@ -1,0 +1,30 @@
+{
+    "select": {
+        "fields": {
+            "Country": {
+                "type": "dim",
+                "as": "Country"
+            },
+            "Customer": {
+                "type": "dim",
+                "as": "Customer"
+            }
+        },
+        "table": "Customers"
+    },
+    "alias": {
+        "select": {
+            "fields": {
+                "Country": {
+                    "type": "dim",
+                    "as": "Country"
+                },
+                "Customer": {
+                    "type": "dim",
+                    "as": "Customer"
+                }
+            },
+            "table": "Customers"
+        }
+    }
+}

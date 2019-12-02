@@ -1,4 +1,4 @@
-from grizly.config import Config
+from ..grizly.config import Config
 
 
 data = {

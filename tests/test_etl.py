@@ -1,4 +1,4 @@
-from grizly.etl import build_copy_statement
+from ..grizly.etl import build_copy_statement
 
 
 def test_build_copy_statement():
