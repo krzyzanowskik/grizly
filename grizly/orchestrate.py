@@ -5,7 +5,6 @@ import os
 import json
 import datetime
 import graphviz
-import pendulum
 import traceback
 import sys
 
@@ -30,7 +29,7 @@ class Schedule:
     Cron schedule.
     Args:
         - cron (str): cron string
-        - start_date (datetime, optional): an optional schedule start date
+        - start_date (datetime, optional): an optional schedule start datetime (assumed to be UTC)
         - end_date (datetime, optional): an optional schedule end date
     Raises:
         - ValueError: if the cron string is invalid
@@ -53,15 +52,13 @@ class Schedule:
         Returns:
             - Iterable[datetime]: the next scheduled dates
         """
-        if self.start_date:
-            start_date = pendulum.instance(start_date)
-        else:
-            start_date = pendulum.now()
+        if not self.start_date:
+            start_date = datetime.datetime.now(datetime.timezone.utc)
 
         cron = croniter(self.cron, start_date)
 
         while True:
-            next_date = pendulum.instance(cron.get_next(datetime.datetime))
+            next_date = cron.get_next(datetime.datetime)
             if self.end_date and next_date > self.end_date:
                 break
             yield next_date
@@ -156,7 +153,7 @@ class Listener:
         con = get_con(engine=self.engine)
         cursor = con.cursor()
         cursor.execute(sql)
-        
+
         last_data_refresh = cursor.fetchone()[0]
 
         cursor.close()
@@ -279,7 +276,7 @@ class Workflow:
         self.listener = listener
         self.is_triggered = True
 
-    
+
     def check_if_manual(self):
         if not (self.is_scheduled or self.is_triggered):
             self.is_manual = True
@@ -328,7 +325,7 @@ class Workflow:
 
         return deco_retry
 
-    
+
     @retry_task(Exception, tries=3, delay=300)
     def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
 
@@ -368,7 +365,7 @@ class Workflow:
 
         if self.check_if_manual():
             pass
-        
+
         start = time()
 
         try:
@@ -397,7 +394,7 @@ class Workflow:
             email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
         if self.status == "fail":
             email_body += f"\n\nError message: \n\n{self.error_message}"
-        
+
         cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
         to = self.owner_email if isinstance(self.owner_email, list) else [self.owner_email]
         subject = f"Workflow {self.status}"
@@ -406,7 +403,7 @@ class Workflow:
         notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
         # when ran on server, the status is handled by Runner
         if local:
-            self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time, 
+            self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time,
                                     env="local", error_value=self.error_value, error_type=self.error_type)
 
         if self.trigger_on_success:
@@ -451,14 +448,14 @@ class Runner:
 
             self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})")
 
-            now = pendulum.now()
+            now = datetime.datetime.now(datetime.timezone.utc)
             next_run = workflow.next_run
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
 
         elif workflow.is_triggered:
-            
+
             self.logger.info(f"Listening for changes in {workflow.listener.table}...")
 
             listener = workflow.listener
@@ -491,7 +488,7 @@ class Runner:
                 self.logger.info(f"Running {workflow.name}...")
                 workflow.run()
                 self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
-                workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status, 
+                workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status,
                                             workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
         else:
             self.logger.info(f"No pending workflows found")
