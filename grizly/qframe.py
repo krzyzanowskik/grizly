@@ -799,9 +799,9 @@ class QFrame:
         create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
         return self
 
-## Non SQL Processing
+    ## Non SQL Processing
 
-    def to_csv(self, csv_path, chunksize=None, cursor=None):
+    def to_csv(self, csv_path, chunksize=None, debug=False, cursor=None):
         """Writes QFrame table to csv file.
 
         Parameters
@@ -820,7 +820,9 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
+        row_count = to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
+        if debug:
+            return row_count
         return self
 
 
