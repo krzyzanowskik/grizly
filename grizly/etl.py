@@ -277,7 +277,8 @@ def s3_to_csv(csv_path, bucket: str=None):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', delete_first=False, clean_df=False, keep_csv=True, chunksize=10000, if_exists="fail", redshift_str=None, bucket=None):
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000, 
+            if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
 
     """Copies a dataframe inside a Redshift schema.table
         using the bulk upload via this process:
@@ -311,11 +312,6 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', delete_first=False, c
     filename = table_name + '.csv'
     filepath = os.path.join(os.getcwd(), filename)
 
-    if delete_first:
-        remove_from_s3(table_name)
-        s3_file = s3.Object(bucket_name, filename)
-        s3_file.delete()
-
     if clean_df:
         df = df_clean(df)
 
@@ -325,8 +321,14 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', delete_first=False, c
     df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
-    bucket.upload_file(filepath, f"bulk/{filename}")
-    print(f'bulk/{filename} file uploaded to s3')
+    s3_dir = "bulk"
+    if s3_key:
+        if s3_key.endswith("/"):
+            s3_key = s3_key[:-1]
+        s3_dir += s3_key
+
+    bucket.upload_file(filepath, f"{s3_dir}/{filename}")
+    print(f'{filename} successfully uploaded to {bucket_name}/{s3_dir}')
 
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
@@ -473,23 +475,51 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
     print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
 
-    sql = """
-        COPY {} {} FROM 's3://{}/bulk/{}'
-        access_key_id '{}'
-        secret_access_key '{}'
-        delimiter '{}'
+    sql = f"""
+        COPY {table_name} {col_names} FROM 's3://{bucket_name}/bulk/{s3_name}'
+        access_key_id '{config["akey"]}'
+        secret_access_key '{config["skey"]}'
+        delimiter '{sep}'
         NULL ''
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, col_names, bucket_name, s3_name, aws_access_key_id, aws_secret_access_key, sep)
+        """
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, remove_inside_quotes=False):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None, 
+                        remove_inside_quotes=False):
+    """[summary]
+
+    Parameters
+    ----------
+    file_name : [type]
+        [description]
+    schema : [type]
+        [description]
+    table_name : [type]
+        [description]
+    sep : str, optional
+        [description], by default "\t"
+    time_format : [type], optional
+        [description], by default None
+    bucket : [type], optional
+        [description], by default None
+    s3_dir : str, optional
+        s3_dir in the format dir1/dir2, by default None
+    remove_inside_quotes : bool, optional
+        [description], by default False
+    """
+
+
     bucket_name = bucket if bucket else 'teis-data'
+
+    if not s3_dir:
+        s3_dir = "bulk"
+
     config = ConfigParser()
     config.read(get_path('.aws','credentials'))
     aws_access_key_id = config['default']['aws_access_key_id']
@@ -519,7 +549,8 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     return sql
 
 
-def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t', redshift_str=None, bucket=None, remove_inside_quotes=False):
+def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t',
+            redshift_str=None, bucket=None, s3_key=None, remove_inside_quotes=False):
     """
     Writes s3 to Redshift database.
     
@@ -554,6 +585,14 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
     if not table_name:
         table_name = file_name.replace(".csv", "")
 
+    s3_dir = "bulk"
+    if s3_key:
+        if s3_key.endswith("/"):
+            s3_key = s3_key[:-1]
+        if s3_key.startswith("/"):
+            s3_key = s3_key[1:]
+        s3_dir += "/" + s3_key # e.g. bulk/data_loads
+
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError(f"Table {table_name} already exists")
@@ -565,7 +604,7 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
             pass
 
     sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, 
-    bucket=bucket_name, remove_inside_quotes=remove_inside_quotes)
+                                    bucket=bucket_name, s3_dir=s3_dir, remove_inside_quotes=remove_inside_quotes)
 
     print(f"Loading data into {table_name}...")
     engine.execute(sql)
