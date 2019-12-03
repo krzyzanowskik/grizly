@@ -16,7 +16,7 @@ Welcome to grizly's documentation!
    content/api_Email
    content/api_Extract
    content/api_Load
-   content/api_AWS
+   content/api_S3
 
 
 Indices and tables

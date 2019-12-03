@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-from .tools import AWS
+from .tools import S3
 from .utils import (
     file_extension, 
     read_config
@@ -325,12 +325,12 @@ class Extract():
         """
         file_name = os.path.basename(self.file_path)
         file_dir = os.path.dirname(self.file_path)
-        aws = AWS(
+        s3 = S3(
                 file_name=file_name,
                 s3_key=s3_key,
                 bucket=bucket,
                 file_dir=file_dir,
                 redshift_str=redshift_str
                 )
-        aws.s3_to_file()
+        s3.to_file()
         return self

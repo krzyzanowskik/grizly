@@ -41,7 +41,7 @@ from .excel import (
 from .email import Email
 
 from .tools import (
-    AWS
+    S3
 )
 
 from .store import Store
