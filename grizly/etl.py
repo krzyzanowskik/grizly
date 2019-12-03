@@ -12,7 +12,7 @@ from .utils import (
 from configparser import ConfigParser
 
 
-def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None):
+def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -77,6 +77,7 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, cursor=None)
     if close_cursor:
         cursor.close()
         con.close()
+
     
     return cursor_row_cunt
 
