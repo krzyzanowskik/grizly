@@ -1,5 +1,5 @@
 import ipywidgets as w
-from .utils import get_redshift_columns
+from .utils import get_redshift_columns, get_denodo_columns
 from .store import Store
 
 def get_subqueries(store_path):
@@ -9,52 +9,95 @@ def get_subqueries(store_path):
 class SubqueryUI():
     
     def __init__(self, store_path):
+        self.qf = None
+        self.subquery = ""
+        self.database = ""
         self.store_path = store_path
-        self.label = w.Label("You can select your columns and store in the json")
-        self.schema = w.Text(value='base_views', description='Schema:', disabled=False)
-        self.table = w.Text(value='sales_monthly_close', description='Table:', disabled=False)
-        self.engine = w.Text(value='mssql+pyodbc://acoe_redshift', description='Engine:', disabled=False)
-        self.subquery = w.Text(value='subquery_name', description='Subquery:', disabled=False)
-        self.button = w.Button(description='Get Columns',disabled=False)
+        self.label = w.Label('Build Your Subquery')
+        self.schema = w.Text(value='base_views', description='Schema:', disabled=False, layout=w.Layout(height='auto', width='auto'))
+        self.table = w.Text(value='sales_monthly_close', description='Table:', disabled=False, layout=w.Layout(height='auto', width='auto'))
+        self.engine = w.Text(value='mssql+pyodbc://acoe_redshift', description='Engine:', disabled=False, layout=w.Layout(height='auto', width='auto'))
+        self.button = w.Button(description='Get Columns',disabled=False
+                            , layout=w.Layout(height='auto', width='auto'))
+        self.btn_update_store = w.Button(description='Update Store',disabled=False
+                            , layout=w.Layout(height='auto', width='auto'))
+        self._as = w.Text(value='', description='As:'
+                            , disabled=False, layout=w.Layout(height='auto', width='auto'))
+        self.type = w.Dropdown(options=["dim", "num", ""], description="Type:", value="dim"
+                            , disabled=False)
+        self.group_by = w.Dropdown(options=["group", "sum"], description="Group By:", value="group"
+                            , disabled=False)
+        self.order_by = w.Text(value='', description='Oder By:'
+                            , disabled=False, layout=w.Layout(height='auto', width='auto'))
+        self.custom_type = w.Text(value='', description='Custom Type:'
+                            , disabled=False, layout=w.Layout(height='auto', width='auto'))
         self.options = None
         self.output = None
 
-    def btn_show_columns(self, button):
-        _out = self._build_subquery_step_2()
-        self.output.children += (_out,)
-        
-    def build_subquery(self):
-        row_1 = w.HBox([self.label, self.schema, self.table])
-        row_2 = w.HBox([self.engine, self.subquery, self.button])
-        self.output = w.VBox([row_1, row_2])
-        self.button.on_click(self.btn_show_columns)
+    def _btn_build_subquery_step_2(self, button):
+        self.label.value = "Select Your Columns"
+        if self.database == "redshift":
+            cols = get_redshift_columns(schema=self.schema.value
+                                    , table=self.table.value)
+        elif self.database == "denodo":
+            cols = get_denodo_columns(schema=self.schema.value
+                                    , table=self.table.value)
+        self.options = [w.Checkbox(description=col) for col in cols]
+        self._options = w.Box(self.options, layout = w.Layout(height='200px', width='auto'
+                                , display='grid'))
+        self.btn_update_store.on_click(self._btn_update_store)
+        self.output.center = self._options
+
+        right_sidebar = [self.btn_update_store, self._as, self.type, self.group_by
+                                , self.order_by, self.custom_type, self.label] #remove self.label
+        self.output.right_sidebar = w.VBox(right_sidebar)
+    
+    def _btn_update_store(self, button):
+        data = self.qf.data
+        if self.custom_type != None:
+            self.type.value = ""
+        field_attrs = {"type":self.type.value, "as":self._as.value
+                        , "group_by":self.group_by.value
+                        , "order_by":self.order_by.value
+                        , "custom_type":self.custom_type.value
+                        }
+        for option in self.options:
+            self.label.value = str(option.description)
+            if option.value == True:
+                field_name = option.description
+                self.label.value = str(field_name)
+                data["select"]["fields"][field_name] = field_attrs
+                self.label.value = str(field_name)
+        self.label.value = str(self.qf.data)
+        try:
+            self.qf.remove(["sample_field"])
+        except:
+            pass
+        data["select"]["table"] = self.table.value
+        data["select"]["schema"] = self.schema.value
+        self.qf.save_json(self.store_path, subquery=self.subquery)
+
+    def build_subquery(self, qf, subquery, database):
+        self.database = database
+        self.subquery = subquery
+        try:
+            self.qf = qf.read_json(self.store_path, subquery=subquery)
+            self.schema.value = self.qf.data["select"]["schema"]
+            self.table.value = self.qf.data["select"]["table"]
+            self.engine.value = self.qf.data["select"]["engine"]
+        except KeyError:
+            data = {'select': {'fields': {'sample_field': {'type': 'dim'}}
+                         , 'schema': 'sample_schema', 'table': 'sample_table'}}
+            self.qf = qf.read_dict(data = data)
+        self.output = w.AppLayout(left_sidebar=w.VBox([self.schema, self.table
+                                            , self.engine, self.button])
+                                    , center=None
+                                    , right_sidebar=None
+                                    , pane_widths= [2, 3, 3]
+                                    , pane_heights=[1, 5, 1])
+        self.button.on_click(self._btn_build_subquery_step_2)
         return self.output
     
-    def btn_update_store(self, button):
-        selected_options = []
-        self.label.value = "here1"
-        for option in self.options:
-            if option.value == True:
-                selected_options.append(option.description)
-        store = Store(self.store_path)
-        self.label.value = str(store)
-        store.add_query(columns = selected_options,schema=self.schema.value
-                , table=self.table.value, engine_str=self.engine.value
-                , key_query=self.subquery.value)
-        self.label.value = "here"
-        store.to_store()
-    
-    def _build_subquery_step_2(self):
-        self.label.value = str("123")
-        cols = get_redshift_columns(schema=self.schema.value, table=self.table.value)
-        self.options = [w.Checkbox(description=col) for col in cols]
-        btn = w.Button(description='Update Store',disabled=False)
-        items = [btn]
-        btn.on_click(self.btn_update_store)
-        title = w.Box(items)
-        checks = w.VBox(self.options)
-        return w.VBox([title, checks])
-
 class FieldUI():
     
     def __init__(self, store_path):

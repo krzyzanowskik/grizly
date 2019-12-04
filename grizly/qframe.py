@@ -152,7 +152,7 @@ class QFrame:
         with open(json_path, 'w') as f:
             json.dump(json_data, f, indent=4)
         print(f"Data saved in {json_path}")
-
+        return self
 
     def read_excel(self, excel_path, sheet_name="", query=""):
         """Reads fields information from excel file.
@@ -181,8 +181,8 @@ class QFrame:
         self.data = self.validate_data(data)
         return self
 
-    def build_subquery(self, store_path):
-        return SubqueryUI(store_path=store_path).build_subquery()
+    def build_subquery(self, store_path, subquery, database):
+        return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
 
     def build_field(self, store_path):
         return FieldUI(store_path=store_path).build_field(store_path, self)
@@ -206,10 +206,10 @@ class QFrame:
             if data != {}:
                 if subquery == '':
                     self.data = self.validate_data(data)
-                    self.engine = data["engine"]
+                    #self.engine = data["engine"]
                 else:
                     self.data = self.validate_data(data[subquery])
-                    self.engine = data[subquery]["select"]["engine"]
+                    #self.engine = data[subquery]["select"]["engine"]
             else:
                 self.data = data
         return self

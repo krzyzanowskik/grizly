@@ -1,7 +1,7 @@
 import os
 import dask
-from grizly.tools import S3
-from grizly.utils import file_extension
+from .tools import S3
+from .utils import file_extension
 
 
 class Load():
