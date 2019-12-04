@@ -82,7 +82,7 @@ class Listener:
     """
 
 
-    def __init__(self, workflow, schema, table, field, db="denodo", trigger="default"):
+    def __init__(self, workflow, schema, table, field, db="denodo", trigger="default", delay=300):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -91,9 +91,10 @@ class Listener:
         self.table = table
         self.field = field
         self.logger = logging.getLogger(__name__)
-        self.last_data_refresh = self.get_last_refresh() # has to be standardized to one data type (currently can be int, e.g. fiscal day, or date)
+        self.last_data_refresh = self.get_last_refresh()
         self.engine = self.get_engine()
         self.trigger = trigger
+        self.delay = delay
 
     def get_engine(self):
 
@@ -218,6 +219,8 @@ class Listener:
         if self.should_trigger(last_data_refresh):
             self.last_data_refresh = last_data_refresh
             self.update_json()
+            self.logger.info(f"Waiting {delay} seconds for the table upload to be finished before runnning workflow...")
+            sleep(delay)
             return True
 
         return False

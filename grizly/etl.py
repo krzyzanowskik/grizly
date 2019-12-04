@@ -55,19 +55,19 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False,
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
         writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
-
+        cursor_row_count = 0
         if isinstance(chunksize, int):
             if chunksize == 1:
                 while True:
                     row = cursor.fetchone()
+                    cursor_row_count += 1
                     if not row:
                         break
                     writer.writerow(row)
             else:
-                cursor_row_cunt = 0
                 while True:
                     rows = cursor.fetchmany(chunksize)
-                    cursor_row_cunt += len(rows)
+                    cursor_row_count += len(rows)
                     if not rows:
                         break
                     writer.writerows(rows)
@@ -79,7 +79,7 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False,
         con.close()
 
     
-    return cursor_row_cunt
+    return cursor_row_count
 
 
 def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
