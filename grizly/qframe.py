@@ -206,10 +206,10 @@ class QFrame:
             if data != {}:
                 if subquery == '':
                     self.data = self.validate_data(data)
-                    self.engine = data["engine"]
+                    #self.engine = data["engine"]
                 else:
                     self.data = self.validate_data(data[subquery])
-                    self.engine = data[subquery]["select"]["engine"]
+                    #self.engine = data[subquery]["select"]["engine"]
             else:
                 self.data = data
         return self
