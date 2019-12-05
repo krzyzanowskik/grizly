@@ -27,7 +27,7 @@ class Email:
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
-        self.config_key = config_key if config_key else 'standard'
+        self.config_key = config_key or 'standard'
         if email_address is None:
             _validate_config(config=Config.data[self.config_key],
                             services='email')
@@ -109,7 +109,6 @@ class Email:
         config = Configuration(server='smtp.office365.com', credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
         account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
 
-
         m = Message(
             account=account,
             subject=self.subject,
@@ -129,5 +128,6 @@ class Email:
                 self.logger.exception(f"Email not sent.")
             else:
                 print(e)
+            raise
 
         return None

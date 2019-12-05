@@ -127,9 +127,10 @@ class Extract():
         Writes Salesforce table to csv file."""
         def from_sfdc():
             if env == "prod":
+
                 if username is None:
                     _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
+                                    services='sfdc',
                                     env='prod')
                     username_prod = Config.data[self.config_key]['sfdc']['prod']['username']
                 else:
