@@ -7,9 +7,16 @@ import csv
 
 from .utils import (
     check_if_exists,
-    get_path
+    get_path,
+    read_config
 )
 from configparser import ConfigParser
+
+config = read_config()
+try:
+    os.environ["HTTPS_PROXY"] = config["https"]
+except TypeError:
+    pass
 
 
 def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
