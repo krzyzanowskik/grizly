@@ -207,11 +207,11 @@ def _validate_config(config:dict, services:list=None, env:str=None):
             if not isinstance(config['github'], dict): raise TypeError ("config['github'] must be a dictionary")
             if config['github'] == {}: raise ValueError("config['github'] is empty")
                 
-            invalid_keys = set(config['github'].keys()) - {'username', 'username_password'}
+            invalid_keys = set(config['github'].keys()) - {'username', 'username_password', 'pages', 'proxies'}
             if invalid_keys != set():
                 raise KeyError(f"Invalid keys {invalid_keys} in config['github']. Valid keys: 'username', 'username_password'")
                 
-            not_found_keys = {'username', 'username_password'} - set(config['github'].keys())
+            not_found_keys = {'username', 'username_password', 'pages', 'proxies'} - set(config['github'].keys())
             if not_found_keys != set():
                 raise KeyError(f"Keys {not_found_keys} not found in config['github']")
                 

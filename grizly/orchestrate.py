@@ -371,8 +371,12 @@ class Workflow:
 
         start = time()
 
-        with open("etc/cur_wf_start_time.txt", "w+") as f:
-            f.write(str(start))
+        try:
+            with open("etc/cur_wf_start_time.txt", "w+") as f:
+                f.write(str(start))
+        except FileNotFoundError:
+            with open("cur_wf_start_time.txt", "w+") as f:
+                f.write(str(start))
 
         try:
             graph = dask.delayed()(self.tasks)
