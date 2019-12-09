@@ -1,7 +1,7 @@
 from boto3 import resource
 import os
 import openpyxl
-from .utils import (
+from ..utils import (
     get_path,
     check_if_exists
 )
