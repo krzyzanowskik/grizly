@@ -4,11 +4,11 @@ import pandas
 import os
 from sqlalchemy import create_engine
 
-from grizly.io.etl import (write_to, csv_to_s3, s3_to_csv)
+from ..grizly.io.etl import (write_to, csv_to_s3, s3_to_csv)
 
-from grizly.core.qframe import (QFrame)
+from ..grizly.core.qframe import (QFrame)
 
-from grizly.io.sqlbuilder import (get_sql)
+from ..grizly.io.sqlbuilder import (get_sql)
 
 
 

@@ -1,6 +1,6 @@
-from grizly.etl import build_copy_statement
+from ..grizly.etl import build_copy_statement
 from configparser import ConfigParser
-from grizly.utils import get_path
+from ..grizly.utils import get_path
 
 def test_build_copy_statement():
 
