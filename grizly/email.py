@@ -23,21 +23,22 @@ class Email:
     """
 
 
-    def __init__(self, subject, body, attachment_path=None, logger=None, is_html=False, email_address:str=None, email_password:str=None, config_key:str=None):
+    def __init__(self, subject, body, attachment_path=None, logger=None, is_html=False
+                    , email_address:str=None, email_password:str=None, config_key:str="standard"):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
-        self.config_key = config_key or 'standard'
         if email_address is None:
-            _validate_config(config=Config.data[self.config_key],
+            _validate_config(config=Config.data[config_key],
                             services='email')
-            self.email_address = Config.data[self.config_key]['email']['email_address']
+            self.config = Config.data[config_key]
+            self.email_address = self.config['email']['email_address']
         else:
             self.email_address = email_address
         if email_password is None:
-            _validate_config(config=Config.data[self.config_key],
+            _validate_config(config=Config.data[config_key],
                             services='email')
-            self.email_password = Config.data[self.config_key]['email']['email_password']
+            self.email_password = self.config['email']['email_password']
         else:
             self.email_password = email_password
         self.attachment_path = attachment_path
@@ -93,13 +94,12 @@ class Email:
 
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
+        print("from ", self.config['email']['send_as'], "to ", to)
 
         email_address = self.email_address
         email_password = self.email_password
         if send_as is None:
-            _validate_config(config=Config.data[self.config_key],
-                            services='email')
-            send_as = Config.data[self.config_key]['email']['send_as']
+            send_as = self.config['email']['send_as']
 
         if send_as == '':
             send_as = email_address

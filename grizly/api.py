@@ -44,6 +44,8 @@ from .tools import (
     S3
 )
 
+from .github import GitHub
+
 from .store import Store
 
 from .config import Config

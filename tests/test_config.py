@@ -1,4 +1,4 @@
-from grizly.config import Config
+from ..grizly.config import Config
 
 
 data = {
@@ -11,7 +11,12 @@ data = {
       },
       "github": {
         "username": "my_login",
-        "username_password": "my_password"
+        "username_password": "my_password",
+        "pages": 100,
+        "proxies":  {
+          "http": "http://restrictedproxy.tycoelectronics.com:80",
+          "https": "https://restrictedproxy.tycoelectronics.com:80",
+        }
       },
       "sfdc": {
         "stage": {

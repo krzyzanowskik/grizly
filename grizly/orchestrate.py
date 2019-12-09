@@ -231,13 +231,14 @@ class Workflow:
     A class for running Dask tasks.
     """
 
-
-    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None):
+    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None,
+                execution_options: dict=None):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
         self.tasks = tasks
         self.trigger_on_success = trigger_on_success
+        self.execution_options = execution_options
         self.graph = dask.delayed()(self.tasks)
         self.run_time = 0
         self.status = "idle"
@@ -371,12 +372,20 @@ class Workflow:
 
         start = time()
 
-        with open("etc/cur_wf_start_time.txt", "w+") as f:
-            f.write(str(start))
+        try:
+            with open("etc/cur_wf_start_time.txt", "w+") as f:
+                f.write(str(start))
+        except FileNotFoundError:
+            with open("cur_wf_start_time.txt", "w+") as f:
+                f.write(str(start))
 
         try:
             graph = dask.delayed()(self.tasks)
-            graph.compute(scheduler='threads') # may need to use client.compute() for speedup and larger-than-memory datasets
+            if self.execution_options:
+                scheduler = self.execution_options["scheduler"]
+            else:
+                scheduler = "threads"
+            graph.compute(scheduler=scheduler)
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()

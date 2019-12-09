@@ -8,6 +8,11 @@
       },
       "github": {
         "username": "my_login",
+        "proxies": {
+          "http": "first_proxy",
+          "https": "second_proxy"
+        },
+        "pages": 100,
         "username_password": "my_password"
       },
       "sfdc": {
