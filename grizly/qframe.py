@@ -27,10 +27,10 @@ from .etl import (
     write_to
 )
 
-from .ui import(
-    SubqueryUI,
-    FieldUI
-)
+# from .ui import(
+#     SubqueryUI,
+#     FieldUI
+# )
 
 from .utils import(
     check_if_valid_type
@@ -181,11 +181,11 @@ class QFrame:
         self.data = self.validate_data(data)
         return self
 
-    def build_subquery(self, store_path, subquery, database):
-        return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
+    # def build_subquery(self, store_path, subquery, database):
+    #     return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
 
-    def build_field(self, store_path):
-        return FieldUI(store_path=store_path).build_field(store_path, self)
+    # def build_field(self, store_path):
+    #     return FieldUI(store_path=store_path).build_field(store_path, self)
 
     def from_json(self, json_path, subquery=''):
         """Reads QFrame.data from json file.
@@ -731,8 +731,13 @@ class QFrame:
         return self
 
 
-    def get_fields(self):
+    def get_fields(self, aliased=False):
         """Returns list of QFrame fields.
+
+        Parameters
+        ----------
+        aliased : boolean
+            Whether to return original names or aliases.
 
         Examples
         --------
@@ -745,10 +750,34 @@ class QFrame:
         list
             List of field names
         """
-
-        fields = list(self.data['select']['fields'].keys()) if self.data else []
+        
+        if aliased:
+            self.get_sql(0)
+            fields = self.data['select']['sql_blocks']["select_aliases"]
+        else:
+            fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields
+
+
+    def get_dtypes(self):
+        """Returns list of QFrame field data types.
+        The dtypes are resolved to SQL types, e.g. 'dim' will resolved to VARCHAR(500)
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.get_dtypes()
+        ['VARCHAR(500)', 'FLOAT(53)']
+
+        Returns
+        -------
+        list
+            List of field data dtypes
+        """
+        self.get_sql(0)
+        dtypes = self.data['select']['sql_blocks']["types"]
+        return dtypes
 
 
     def get_sql(self, print_sql=True):
