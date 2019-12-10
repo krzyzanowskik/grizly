@@ -326,7 +326,7 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
 
-    df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
+    df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
     s3_dir = "bulk"
