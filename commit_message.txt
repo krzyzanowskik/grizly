@@ -1,5 +1,0 @@
-Updating Config() and dependencies
-
-* add pages and proxies attrs to github service in config, updating validations too
-* all tests are running
-* note: it seems you need to be connected to the vpn to run tests
