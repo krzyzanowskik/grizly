@@ -1,6 +1,6 @@
 import os
 import dask
-from .tools import S3
+from .tools.s3 import S3
 from .utils import file_extension
 
 

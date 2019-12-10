@@ -1,5 +1,5 @@
 import ipywidgets as w
-from .utils import get_redshift_columns, get_denodo_columns
+from .utils import get_columns
 from .store import Store
 
 def get_subqueries(store_path):
@@ -36,12 +36,7 @@ class SubqueryUI():
 
     def _btn_build_subquery_step_2(self, button):
         self.label.value = "Select Your Columns"
-        if self.database == "redshift":
-            cols = get_redshift_columns(schema=self.schema.value
-                                    , table=self.table.value)
-        elif self.database == "denodo":
-            cols = get_denodo_columns(schema=self.schema.value
-                                    , table=self.table.value)
+        cols = get_columns(schema=self.schema.value, table=self.table.value, db=self.database)
         self.options = [w.Checkbox(description=col) for col in cols]
         self._options = w.Box(self.options, layout = w.Layout(height='200px', width='auto'
                                 , display='grid'))

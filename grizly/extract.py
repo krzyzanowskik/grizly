@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-from .tools import S3
+from .tools.s3 import S3
 from .utils import (
     file_extension, 
     read_config

@@ -40,16 +40,15 @@ from .excel import (
 
 from .email import Email
 
-from .tools import (
+from .tools.s3 import (
     S3
 )
 
-from .github import GitHub
+from .tools.github import GitHub
 
 from .store import Store
 
 from .config import Config
-
 
 from os import environ
 

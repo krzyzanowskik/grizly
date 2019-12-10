@@ -8,18 +8,18 @@ import json
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
-from grizly.sqlbuilder import (
+from .sqlbuilder import (
     get_duplicated_columns,
     get_sql,
     build_column_strings
 )
 
-from grizly.excel import (
+from .excel import (
     read_excel,
     copy_df_to_excel
 )
 
-from grizly.etl import (
+from .etl import (
     to_csv,
     create_table,
     csv_to_s3,
@@ -27,12 +27,12 @@ from grizly.etl import (
     write_to
 )
 
-from .ui import(
-    SubqueryUI,
-    FieldUI
-)
+# from .ui import(
+#     SubqueryUI,
+#     FieldUI
+# )
 
-from grizly.utils import(
+from .utils import(
     check_if_valid_type
 )
 
@@ -181,11 +181,11 @@ class QFrame:
         self.data = self.validate_data(data)
         return self
 
-    def build_subquery(self, store_path, subquery, database):
-        return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
+    # def build_subquery(self, store_path, subquery, database):
+    #     return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
 
-    def build_field(self, store_path):
-        return FieldUI(store_path=store_path).build_field(store_path, self)
+    # def build_field(self, store_path):
+    #     return FieldUI(store_path=store_path).build_field(store_path, self)
 
     def from_json(self, json_path, subquery=''):
         """Reads QFrame.data from json file.
@@ -216,7 +216,7 @@ class QFrame:
 
     def read_json(self, json_path, subquery=''):
         """Warning: this function is obsoleted, use from_json instead.
-        
+
         Reads QFrame.data from json file.
 
         Parameters
@@ -245,9 +245,9 @@ class QFrame:
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
         >>> qf.get_sql()
-            SELECT CustomerId,
-                Sales
-            FROM schema.table
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
 
         Returns
         -------
@@ -285,7 +285,7 @@ class QFrame:
         sq_fields = deepcopy(self.data["select"]["fields"])
         new_fields = {}
 
-        if isinstance(fields, str): 
+        if isinstance(fields, str):
             if fields == "*":
                 fields = sq_fields
             else:
@@ -443,7 +443,7 @@ class QFrame:
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
 
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -584,7 +584,7 @@ class QFrame:
         ----------
         aggtype : {'sum', 'count', 'min', 'max', 'avg'}
             Aggregation type.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -626,7 +626,7 @@ class QFrame:
             Fields in list or field as a string.
         ascending : bool or list, optional
             Sort ascending vs. descending. Specify list for multiple sort orders, by default True
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -674,7 +674,7 @@ class QFrame:
         ----------
         limit : int or str
             Number of rows to select.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -701,7 +701,7 @@ class QFrame:
         ----------
         fields : list or str
             Fields in list or field as a string.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -731,8 +731,13 @@ class QFrame:
         return self
 
 
-    def get_fields(self):
+    def get_fields(self, aliased=False):
         """Returns list of QFrame fields.
+
+        Parameters
+        ----------
+        aliased : boolean
+            Whether to return original names or aliases.
 
         Examples
         --------
@@ -745,10 +750,34 @@ class QFrame:
         list
             List of field names
         """
-
-        fields = list(self.data['select']['fields'].keys()) if self.data else []
+        
+        if aliased:
+            self.get_sql(0)
+            fields = self.data['select']['sql_blocks']["select_aliases"]
+        else:
+            fields = list(self.data['select']['fields'].keys()) if self.data else []
 
         return fields
+
+
+    def get_dtypes(self):
+        """Returns list of QFrame field data types.
+        The dtypes are resolved to SQL types, e.g. 'dim' will resolved to VARCHAR(500)
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf.get_dtypes()
+        ['VARCHAR(500)', 'FLOAT(53)']
+
+        Returns
+        -------
+        list
+            List of field data dtypes
+        """
+        self.get_sql(0)
+        dtypes = self.data['select']['sql_blocks']["types"]
+        return dtypes
 
 
     def get_sql(self, print_sql=True):
@@ -881,22 +910,22 @@ class QFrame:
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
         csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
 
-        s3_to_rds_qf(self, 
-                    table, 
-                    s3_name=os.path.basename(csv_path), 
-                    schema=schema, 
-                    if_exists=if_exists, 
-                    sep=sep, 
-                    use_col_names=use_col_names, 
+        s3_to_rds_qf(self,
+                    table,
+                    s3_name=os.path.basename(csv_path),
+                    schema=schema,
+                    if_exists=if_exists,
+                    sep=sep,
+                    use_col_names=use_col_names,
                     redshift_str=redshift_str,
                     bucket=bucket)
 
         return self
 
-    
+
     def to_table(self, table, schema='', if_exists='fail'):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-        
+
         Parameters
         ----------
         table: str
@@ -935,7 +964,7 @@ class QFrame:
         df = pandas.read_sql(sql=self.sql, con=con)
         return df
 
-      
+
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
@@ -1067,13 +1096,13 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        s3_to_rds_qf(self, 
-                    table, 
-                    s3_name=s3_name, 
-                    schema=schema , 
-                    if_exists=if_exists, 
-                    sep=sep, 
-                    use_col_names=use_col_names, 
+        s3_to_rds_qf(self,
+                    table,
+                    s3_name=s3_name,
+                    schema=schema ,
+                    if_exists=if_exists,
+                    sep=sep,
+                    use_col_names=use_col_names,
                     redshift_str=redshift_str,
                     bucket=bucket)
         return self
@@ -1240,7 +1269,7 @@ def union(qframes=[], union_type=None, union_by='position'):
 
         * position: union by position of the field
         * name: union by the field aliases
-    
+
     Examples
     --------
     >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
@@ -1263,7 +1292,7 @@ def union(qframes=[], union_type=None, union_by='position'):
     assert set(item.upper() for item in union_type) <= {"UNION", "UNION ALL"}, "Incorrect union type. Valid types: 'UNION', 'UNION ALL'."
     if union_by not in {'position', 'name'}:
         raise ValueError("Invalid value for union_by. Valid values: 'position', 'name'.")
-    
+
     data = {'select': {'fields': {}}}
 
     main_qf = qframes[0]
@@ -1280,7 +1309,7 @@ def union(qframes=[], union_type=None, union_by='position'):
         qf.create_sql_blocks()
         qf_aliases = qf.data["select"]["sql_blocks"]["select_aliases"]
         assert len(new_fields) == len(qf_aliases), f"Amount of fields in {iterator}. QFrame doesn't match amount of fields in 1. QFrame."
-        
+
         if union_by == 'name':
             field_diff_1 = set(new_fields) - set(qf_aliases)
             field_diff_2 = set(qf_aliases) - set(new_fields)
@@ -1475,3 +1504,9 @@ def initiate(columns, schema, table, json_path, engine_str="", subquery="", col_
         json.dump(json_data, f)
 
     print(f"Data saved in {json_path}")
+
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()

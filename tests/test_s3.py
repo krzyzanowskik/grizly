@@ -1,7 +1,7 @@
 from pandas import DataFrame
 import os
 from filecmp import cmp
-from grizly.tools import (
+from ..grizly.tools.s3 import (
     S3
 )
 

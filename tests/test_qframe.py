@@ -4,16 +4,16 @@ from copy import deepcopy
 from sqlalchemy import create_engine
 from pandas import read_sql, read_csv, merge, concat
 
-from grizly.utils import get_path
+from ..grizly.utils import get_path
 
-from grizly.qframe import (
+from ..grizly.qframe import (
     QFrame,
     union,
     join,
     initiate
 )
 
-from grizly.sqlbuilder import (
+from ..grizly.sqlbuilder import (
     build_column_strings,
     get_sql
 )

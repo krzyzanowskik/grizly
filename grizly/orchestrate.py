@@ -465,7 +465,6 @@ class Runner:
 
             now = datetime.datetime.now(datetime.timezone.utc)
             next_run = workflow.next_run
-            self.logger.info(f"{now}, {next_run}")
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
