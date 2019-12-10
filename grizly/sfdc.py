@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-
+from .config import Config
+from .utils import get_path
+from logging import Logger
 
 class SFDC:
     """A class for extracting with Salesforce data.
@@ -19,41 +21,69 @@ class SFDC:
     response.to_csv(file_path)
     # df = response.to_df()
     """
-    
-    def __init__(self, username, password, organization_id=None, instance_url=None, env="prod", logger=None):
-        self.username = username
-        self.password = password
-        self.organization_id = organization_id
+
+    def __init__(self, username: str=None, password: str=None, organization_id: str=None,
+                instance_url: str=None, env="prod", logger: Logger=None, proxies: dict=None,
+                config_key: str="standard"):
+
+        self.global_config = self.get_config(config_key)
+        self.config = self.get_config(config_key, service="sfdc")
+        # first lookup in parameters, then config, then env variables
+        self.proxies = proxies or self.get_config_proxies() or {
+            "http": os.getenv("HTTP_PROXY"),
+            "https": os.getenv("HTTPS_PROXY"),
+        }
+        self.username = username or self.config[env]["username"]
+        self.password = password or self.config[env]["password"]
+        self.organization_id = organization_id or self.config[env]["organizationId"]
         self.instance_url = instance_url
         self.env = env
         self.logger = logger if logger else logging.getLogger(__name__)
-        self.http_proxy = r"http://restrictedproxy.tycoelectronics.com:80" # os.getenv("HTTP_PROXY") or None
-        self.https_proxy = r"http://restrictedproxy.tycoelectronics.com:80" # os.getenv("HTTPS_PROXY") or None
-        self.proxies = {
-            "http": self.http_proxy,
-            "https": self.https_proxy,
-        }
+
+    def _validate_proxies(proxies):
+        if not (proxies["http"] or proxies["https"]):
+            self.proxies = None
+
+    def get_config_proxies(self):
+        try:
+            proxies = self.global_config["proxies"]
+        except KeyError:
+            return None
+        if not (proxies["http"] and proxies["https"]):
+            return None
+        return proxies
+
+    def get_config(self, config_key, service=None):
+        config_path = get_path('.grizly', 'config.json')
+        if service:
+            config = Config().from_json(config_path).data[config_key][service]
+        else:
+            config = Config().from_json(config_path).data[config_key]
+        return config
 
     def _connect(self):
 
         if self.env == "prod":
             try:
-                sf_conn = Salesforce(username=self.username, password=self.password, organizationId=self.organization_id, proxies=self.proxies)
+                sf_conn = Salesforce(username=self.username, password=self.password,
+                                    organizationId=self.organization_id, proxies=self.proxies)
             except SalesforceAuthenticationFailed:
-                self.logger.exception("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                self.logger.exception("Could not log in to SFDC. \
+                Are you sure your password hasn't expired and your proxy is set up correctly?")
                 raise
 
         elif self.env == "stage":
             try:
                 sf_conn = Salesforce(instance_url=self.instance_url,
                                 username=self.username,
-                                password=self.password, 
-                                organizationId=self.organization_id, 
-                                sandbox=True, 
+                                password=self.password,
+                                organizationId=self.organization_id,
+                                sandbox=True,
                                 security_token='',
                                 proxies=self.proxies)
             except SalesforceAuthenticationFailed:
-                self.logger.exception("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
+                self.logger.exception("Could not log in to SFDC. \
+                Are you sure your password hasn't expired and your proxy is set up correctly?")
                 raise
 
         else:
@@ -64,7 +94,7 @@ class SFDC:
 
     def query(self, query):
         """Query a SFDC table. Only simple SELECTs are supported.
-        
+
         Parameters
         ----------
         columns : list
@@ -92,7 +122,7 @@ class SFDC:
 
         return response
 
-        
+
 class SFDCResponse:
     def __init__(self, data, logger=None):
         self.data = data
