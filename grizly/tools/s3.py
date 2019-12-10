@@ -88,8 +88,6 @@ class S3:
     def copy_to(self, file_name:str=None, s3_key:str=None, bucket:str=None):
         """Copies S3 file to another S3 file.
 
-        TODO: For now it moves only one file at a time, we need t improve it to move whole folders.
-        
         Parameters
         ----------
         file_name : str, optional
@@ -116,7 +114,7 @@ class S3:
         bucket: 	'acoe-s3'
         file_dir: 	'C:/Users/XXX/s3_loads'
         redshift_str: 	'mssql+pyodbc://redshift_acoe'
-        
+
         Returns
         -------
         S3
@@ -163,12 +161,13 @@ class S3:
 
 
     def to_file(self):
-        """Writes S3 to local file.
+        r"""Writes S3 to local file.
 
         Examples
         --------
         >>> S3 = S3('test.csv', 'bulk/')
         >>> S3.to_file()
+        'bulk/test.csv' uploaded to 'C:\Users\TE386850\s3_loads\test.csv'
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -181,7 +180,7 @@ class S3:
 
     def from_df(self, df:DataFrame, sep:str='\t'):
         """Saves DataFrame in S3.
-        
+
         Examples
         --------
         >>> from pandas import DataFrame
@@ -210,7 +209,7 @@ class S3:
 
 
     def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
-        """Writes S3 to Redshift table.    
+        """Writes S3 to Redshift table.
 
         Parameters
         ----------
@@ -248,7 +247,7 @@ class S3:
                 pass
         else:
             self._create_table_like_s3(table_name, sep, types)
-        
+
         config = ConfigParser()
         config.read(get_path('.aws','credentials'))
         S3_access_key_id = config['default']['S3_access_key_id']
@@ -298,14 +297,14 @@ class S3:
                 return not s.isdigit()
             except ValueError:
                 return False
-            
+
         count = 0
         for row in csv_reader:
             if count == 0:
                 column_names = row
                 column_isfloat = [[] for i in row]
             else:
-                i = 0 
+                i = 0
                 for item in row:
                     column_isfloat[i].append(isfloat(item))
                     i+=1
@@ -328,7 +327,7 @@ class S3:
         if types:
             other_cols = list(types.keys())
             print(f"Columns {other_cols} were not found.")
-            
+
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
@@ -342,3 +341,8 @@ class _AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(_AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
