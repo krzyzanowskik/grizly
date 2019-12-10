@@ -1,6 +1,6 @@
 import pandas
 import requests
-from .config import Config, _validate_config
+from ..config import Config, _validate_config
 
 
 class GitHub:
