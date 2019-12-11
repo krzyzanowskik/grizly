@@ -212,7 +212,7 @@ class Listener:
 
     def detect_change(self):
 
-        if not any(self.field, self.query):
+        if not any([self.field, self.query]):
             raise ValueError("Please specify the trigger for the listener")
 
         try:
