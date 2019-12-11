@@ -82,7 +82,7 @@ class Listener:
     """
 
 
-    def __init__(self, workflow, schema, table, field, db="denodo", trigger="default", delay=300):
+    def __init__(self, workflow, schema, table, field=None, query=None, db="denodo", trigger="default", delay=300):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -90,6 +90,7 @@ class Listener:
         self.schema = schema
         self.table = table
         self.field = field
+        self.query = query
         self.logger = logging.getLogger(__name__)
         self.last_data_refresh = self.get_last_refresh()
         self.engine = self.get_engine()
@@ -148,8 +149,10 @@ class Listener:
 
     def get_table_refresh_date(self):
 
-        sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
-
+        if self.query:
+            sql = self.query
+        else:
+            sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
 
         con = get_con(engine=self.engine)
         cursor = con.cursor()
@@ -168,7 +171,7 @@ class Listener:
             last_data_refresh = datetime.datetime.date(last_data_refresh)
 
         if not self._validate_table_refresh_value(last_data_refresh):
-            raise TypeError(f"{self.field} (type {type(self.field)}) is not of type (int, datetime.datetime.date)")
+            raise TypeError(f"The specified trigger field is not of type (int, datetime.datetime.date)")
 
         return last_data_refresh
 
@@ -208,6 +211,9 @@ class Listener:
 
 
     def detect_change(self):
+
+        if not any(self.field, self.query):
+            raise ValueError("Please specify the trigger for the listener")
 
         try:
             last_data_refresh = self.get_table_refresh_date()
