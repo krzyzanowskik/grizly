@@ -436,12 +436,11 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-
     def __init__(self, workflows, logger=None, env=None):
         self.workflows = workflows
         self.env = env if env else "prod"
         self.logger = logging.getLogger(__name__)
-
+        self.run_params=None
 
     def should_run(self, workflow):
         """Determines whether a workflow should run based on its next scheduled run.
@@ -483,7 +482,6 @@ class Runner:
 
         return False
 
-
     # def get_pending_workflows(self, pending=None):
 
     #     pending = []
@@ -493,10 +491,44 @@ class Runner:
 
     #     return pending
 
+    def overwrite_params(self, workflow, params):
+        # params: dict fof the form {"listener": {"delay": 0}, "backup_email": "test@example.com"}
+        for param in params:
+    
+            # modify parameters of classes stored in Workflow, e.g. Listener of Schedule
+            if type(params[param]) == dict:
+                _class = param
+                
+                # only apply listener params to triggered workflows
+                if _class == "listener":
+                    if not workflow.is_triggered:
+                        continue
+                        
+                # only apply schedule params to scheduled workflows
+                elif _class == "schedule":
+                    if not workflow.is_scheduled:
+                        continue
+                
+                # retrieve object and names of attributes to set
+                obj = eval(f"workflow.{_class}") 
+                obj_params = params[param]
+                
+                for obj_param in obj_params:
+                    new_param_value = obj_params[obj_param]
+                    setattr(obj, obj_param, new_param_value)
+                    
+            # modify Workflow object's parameters
+            else:
+                setattr(workflow, param, params[param])
 
-    def run(self, workflows):
+    def run(self, workflows, overwrite_params=None):
 
         self.logger.info(f"Checking for pending workflows...")
+
+        if overwrite_params:
+            self.logger.debug(f"Overwriting workflow parameters: {overwrite_params}")
+            for workflow in workflows:
+                self.overwrite_params(workflow, params=overwrite_params)
 
         for workflow in workflows:
             if self.should_run(workflow):
