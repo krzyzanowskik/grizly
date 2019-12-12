@@ -153,9 +153,6 @@ def create_table(qf, table, engine, schema='', char_size=500):
         Specify the schema.
     char_size : int, size of the VARCHAR field in the database column
     """
-    print('Engine string is {}'.format(engine))
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
