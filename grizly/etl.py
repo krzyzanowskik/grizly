@@ -153,6 +153,8 @@ def create_table(qf, table, engine, schema='', char_size=500):
         Specify the schema.
     char_size : int, size of the VARCHAR field in the database column
     """
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+    
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
@@ -595,5 +597,5 @@ def write_to(qf, table, schema, if_exists):
             engine.execute(sql_statement)
             print(f'Data has been appended to {table}')
     else:
-        create_table(qf=qf, table=table, engine=engine, schema=schema)
+        create_table(qf=qf, table=table, engine=qf.engine, schema=schema)
         engine.execute(sql_statement)
