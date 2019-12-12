@@ -79,7 +79,7 @@ class Config():
 
         Examples
         --------
-        >>> json_path = get_path('grizly', 'notebooks', 'config.json')
+        >>> json_path = get_path('dev', 'grizly', 'notebooks', 'config.json')
         >>> conf = Config().from_json(json_path)
         Config data has been saved.
 

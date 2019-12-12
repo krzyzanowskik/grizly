@@ -1,4 +1,4 @@
-from IPython.display import HTML, display
+from IPython import display
 import pandas
 import re
 import os
@@ -80,6 +80,7 @@ class QFrame:
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
 
+
     def create_sql_blocks(self):
         """Creates blocks which are used to generate an SQL"""
         if self.data == {}:
@@ -88,6 +89,11 @@ class QFrame:
         else:
             self.data['select']['sql_blocks'] = build_column_strings(self.data)
             return self
+
+
+    def display_data(self):
+        """Displays QFrame.data"""
+        return display.JSON(data=self.data)
 
 
     def validate_data(self, data):
