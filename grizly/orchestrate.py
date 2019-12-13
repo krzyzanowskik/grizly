@@ -97,6 +97,48 @@ class Listener:
         self.trigger = trigger
         self.delay = delay
 
+    def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
+        """
+        Retry calling the decorated function using an exponential backoff.
+
+        Args:
+            exceptions: The exception to check. may be a tuple of
+                exceptions to check.
+            tries: Number of times to try (not retry) before giving up.
+            delay: Initial delay between retries in seconds.
+            backoff: Backoff multiplier (e.g. value of 2 will double the delay
+                each retry).
+            logger: Logger to use. If None, print.
+        """
+
+        if not logger:
+            logger = logging.getLogger(__name__)
+
+        def deco_retry(f):
+
+            @wraps(f)
+            def f_retry(*args, **kwargs):
+
+                mtries, mdelay = tries, delay
+
+                while mtries > 1:
+
+                    try:
+                        return f(*args, **kwargs)
+
+                    except exceptions as e:
+                        msg = f'{e}, \nRetrying in {mdelay} seconds...'
+                        logger.warning(msg)
+                        sleep(mdelay)
+                        mtries -= 1
+                        mdelay *= backoff
+
+                return f(*args, **kwargs)
+
+            return f_retry  # true decorator
+
+        return deco_retry
+
     def get_engine(self):
 
         config = read_config()
@@ -138,7 +180,7 @@ class Listener:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
         with open("etc/listener_store.json", "w") as f_write:
-            json.dump(listener_store, f_write)
+            json.dump(listener_store, f_write, indent=4)
 
 
     def _validate_table_refresh_value(self, value):
@@ -147,6 +189,7 @@ class Listener:
         return True
 
 
+    @retry_task(TypeError, tries=3, delay=10)
     def get_table_refresh_date(self):
 
         if self.query:
@@ -158,7 +201,11 @@ class Listener:
         cursor = con.cursor()
         cursor.execute(sql)
 
-        last_data_refresh = cursor.fetchone()[0]
+        try:
+            last_data_refresh = cursor.fetchone()[0]
+        except TypeError:
+            self.logger.exception(f"{self.name}'s trigger field is empty")
+            raise
 
         cursor.close()
         con.close()
@@ -255,6 +302,8 @@ class Workflow:
         self.logger = logging.getLogger(__name__)
         self.error_value = None
         self.error_type = None
+        self.scheduler = "threads"
+        self.num_workers = 8
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
 
@@ -388,10 +437,11 @@ class Workflow:
         try:
             graph = dask.delayed()(self.tasks)
             if self.execution_options:
-                scheduler = self.execution_options["scheduler"]
+                scheduler = self.execution_options.get("scheduler") or self.scheduler
+                num_workers = self.execution_options.get("num_workers") or self.num_workers
             else:
                 scheduler = "threads"
-            graph.compute(scheduler=scheduler)
+            graph.compute(scheduler=scheduler, num_workers=num_workers)
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
