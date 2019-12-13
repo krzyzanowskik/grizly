@@ -13,13 +13,28 @@ from logging import Logger
 class SFDC:
     """A class for extracting with Salesforce data.
 
+    Examples:
     -------
-    Usage:
-
-    query = "SELECT Id FROM User"
-    response = SFDC(username=usr, password=pw, organization_id=org_id).query(query)
-    response.to_csv(file_path)
-    # df = response.to_df()
+    >>> from grizly.sfdc import SFDC
+    >>> from grizly.utils import get_path
+    >>> from grizly.config import Config
+    >>> 
+    >>> organization_id = "00DE0000000Hkve"
+    >>> 
+    >>> config_path = get_path('.grizly', 'config.json') # contains SFDC username and password
+    >>> Config().from_json(config_path)
+    >>> 
+    >>> query = "SELECT Id FROM User LIMIT 3"
+    >>> 
+    >>> sf = SFDC(organization_id=organization_id)
+    >>> response = sf.query(query).to_df()
+    >>> 
+    >>> len(response)
+    3
+    
+    Returns
+    -------
+    CSV or DataFrame
     """
 
     def __init__(self, username: str=None, password: str=None, organization_id: str=None,
