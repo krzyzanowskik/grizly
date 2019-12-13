@@ -1,6 +1,7 @@
 import csv
 import logging
 import os
+import json
 
 import numpy as np
 import pandas as pd
@@ -107,7 +108,7 @@ class SFDC:
         return sf_conn
 
 
-    def query(self, query):
+    def query(self, query, bulk=False):
         """Query a SFDC table. Only simple SELECTs are supported.
 
         Parameters
@@ -122,30 +123,37 @@ class SFDC:
             Where clause, by default None
         """
 
+        query_words = query.lower().split()
+        table = query_words[query_words.index("from") + 1]
         sf = self._connect()
 
+        self.logger.info("Querying {table}...")
+
         try:
-            raw_response = sf.query_all(query)
-            response = SFDCResponse(raw_response, logger=self.logger)
+            if bulk:
+                raw_response = eval(f"sf.bulk.{table}.query(query)")
+                response = SFDCResponseBulk(raw_response, logger=self.logger)
+            else:
+                raw_response = sf.query_all(query)
+                response = SFDCResponse(raw_response, logger=self.logger)
         except:
             self.logger.exception("Error when connecting to SFDC")
             raise
-
-        query_words = query.lower().split()
-        table = query_words[query_words.index("from") + 1]
+        
         self.logger.debug(f"SFDC table {table} was successfully queried")
 
         return response
 
 
 class SFDCResponse:
+
     def __init__(self, data, logger=None):
         self.data = data
         self.columns = [item for item in data["records"][0] if item != "attributes"]
         self.logger = logger if logger else logging.getLogger(__name__)
 
     def __str__(self):
-        return self.data
+        return json.dumps(self.data, indent=4)
 
     def to_df(self):
 
@@ -163,7 +171,7 @@ class SFDCResponse:
 
         return df
 
-    def to_csv(self, file_path):
+    def to_csv(self, file_path, sep="\t"):
 
         if not file_path:
             raise ValueError("File path is required")
@@ -178,6 +186,47 @@ class SFDCResponse:
 
         with open(file_path, "w", newline="", encoding="utf-8") as csv_file:
             self.logger.debug(f"Writing to {os.path.basename(file_path)}...")
-            writer = csv.writer(csv_file, delimiter='\t')
+            writer = csv.writer(csv_file, delimiter=sep)
+            writer.writerows(rows)
+            self.logger.debug(f"Successfuly wrote to {os.path.basename(file_path)}")
+
+
+class SFDCResponseBulk(SFDCResponse):
+
+    def __init__(self, data, logger):
+        self.data = data
+        self.columns = [item for item in data[0] if item != "attributes"]
+
+    def to_df(self):
+        l = []
+        for item in self.data:
+            row = []
+            for column in self.columns:
+                row.append(item[column])
+            l.append(row)
+
+        df = (pd
+                .DataFrame(l, columns=self.columns)
+                .replace(to_replace=["None"], value=np.nan)
+                )
+
+        return df
+
+    def to_csv(self, file_path, sep="\t"):
+
+        if not file_path:
+            raise ValueError("File path is required")
+
+        rows = []
+        rows.append(self.columns)
+        for item in self.data:
+            row = []
+            for column in self.columns:
+                row.append(item[column])
+            rows.append(row)
+
+        with open(file_path, "w", newline="", encoding="utf-8") as csv_file:
+            self.logger.debug(f"Writing to {os.path.basename(file_path)}...")
+            writer = csv.writer(csv_file, delimiter=sep)
             writer.writerows(rows)
             self.logger.debug(f"Successfuly wrote to {os.path.basename(file_path)}")
