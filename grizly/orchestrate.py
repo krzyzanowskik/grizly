@@ -441,11 +441,12 @@ class Workflow:
                 num_workers = self.execution_options.get("num_workers") or self.num_workers
             else:
                 scheduler = "threads"
+                num_workers = self.num_workers
             graph.compute(scheduler=scheduler, num_workers=num_workers)
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value)[:255]
+            self.error_value = str(exc_value)[:250]
             self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
@@ -471,7 +472,7 @@ class Workflow:
         subject = f"Workflow {self.status}"
 
         notification = Email(subject=subject, body=email_body, logger=self.logger)
-        notification.send(to=to, cc=cc, send_as="acoe_team@te.com")
+        notification.send(to=to, cc=cc, send_as="")
         # when ran on server, the status is handled by Runner
         if local:
             self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time,
