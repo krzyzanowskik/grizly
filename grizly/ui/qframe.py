@@ -1,6 +1,6 @@
 import ipywidgets as w
-from .utils import get_redshift_columns, get_denodo_columns
-from .store import Store
+from ..utils import get_redshift_columns, get_denodo_columns
+from ..store import Store
 
 def get_subqueries(store_path):
     store = Store(store_path)
