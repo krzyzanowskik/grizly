@@ -119,7 +119,7 @@ class QFrame:
         -------
         QFrame
         """
-        duplicates = show_duplicated_columns(self.data)
+        duplicates = get_duplicated_columns(self.data)
 
         if duplicates != {}:
             print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
