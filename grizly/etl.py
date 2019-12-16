@@ -19,7 +19,7 @@ except TypeError:
     pass
 
 
-def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
+def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -85,7 +85,6 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False,
         cursor.close()
         con.close()
 
-    
     return cursor_row_count
 
 
@@ -333,7 +332,7 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_
     if s3_key:
         if s3_key.endswith("/"):
             s3_key = s3_key[:-1]
-        s3_dir += s3_key
+        s3_dir += "/" + s3_key
 
     bucket.upload_file(filepath, f"{s3_dir}/{filename}")
     print(f'{filename} successfully uploaded to {bucket_name}/{s3_dir}')
@@ -534,7 +533,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     aws_secret_access_key = config['default']['aws_secret_access_key']
 
     sql = f"""
-        COPY {schema}.{table_name} FROM 's3://{bucket_name}/bulk/{file_name}'
+        COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_dir}/{file_name}'
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'

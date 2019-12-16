@@ -52,7 +52,6 @@ from .store import Store
 
 from .config import Config
 
-
 from os import environ
 
 try:

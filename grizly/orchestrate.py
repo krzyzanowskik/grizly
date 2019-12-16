@@ -82,7 +82,7 @@ class Listener:
     """
 
 
-    def __init__(self, workflow, schema, table, field, db="denodo", trigger="default", delay=300):
+    def __init__(self, workflow, schema, table, field=None, query=None, db="denodo", trigger="default", delay=300):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -90,11 +90,54 @@ class Listener:
         self.schema = schema
         self.table = table
         self.field = field
+        self.query = query
         self.logger = logging.getLogger(__name__)
         self.last_data_refresh = self.get_last_refresh()
         self.engine = self.get_engine()
         self.trigger = trigger
         self.delay = delay
+
+    def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
+        """
+        Retry calling the decorated function using an exponential backoff.
+
+        Args:
+            exceptions: The exception to check. may be a tuple of
+                exceptions to check.
+            tries: Number of times to try (not retry) before giving up.
+            delay: Initial delay between retries in seconds.
+            backoff: Backoff multiplier (e.g. value of 2 will double the delay
+                each retry).
+            logger: Logger to use. If None, print.
+        """
+
+        if not logger:
+            logger = logging.getLogger(__name__)
+
+        def deco_retry(f):
+
+            @wraps(f)
+            def f_retry(*args, **kwargs):
+
+                mtries, mdelay = tries, delay
+
+                while mtries > 1:
+
+                    try:
+                        return f(*args, **kwargs)
+
+                    except exceptions as e:
+                        msg = f'{e}, \nRetrying in {mdelay} seconds...'
+                        logger.warning(msg)
+                        sleep(mdelay)
+                        mtries -= 1
+                        mdelay *= backoff
+
+                return f(*args, **kwargs)
+
+            return f_retry  # true decorator
+
+        return deco_retry
 
     def get_engine(self):
 
@@ -137,7 +180,7 @@ class Listener:
             listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
         with open("etc/listener_store.json", "w") as f_write:
-            json.dump(listener_store, f_write)
+            json.dump(listener_store, f_write, indent=4)
 
 
     def _validate_table_refresh_value(self, value):
@@ -146,16 +189,23 @@ class Listener:
         return True
 
 
+    @retry_task(TypeError, tries=3, delay=10)
     def get_table_refresh_date(self):
 
-        sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
-
+        if self.query:
+            sql = self.query
+        else:
+            sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
 
         con = get_con(engine=self.engine)
         cursor = con.cursor()
         cursor.execute(sql)
 
-        last_data_refresh = cursor.fetchone()[0]
+        try:
+            last_data_refresh = cursor.fetchone()[0]
+        except TypeError:
+            self.logger.exception(f"{self.name}'s trigger field is empty")
+            raise
 
         cursor.close()
         con.close()
@@ -168,7 +218,7 @@ class Listener:
             last_data_refresh = datetime.datetime.date(last_data_refresh)
 
         if not self._validate_table_refresh_value(last_data_refresh):
-            raise TypeError(f"{self.field} (type {type(self.field)}) is not of type (int, datetime.datetime.date)")
+            raise TypeError(f"The specified trigger field is not of type (int, datetime.datetime.date)")
 
         return last_data_refresh
 
@@ -208,6 +258,9 @@ class Listener:
 
 
     def detect_change(self):
+
+        if not any([self.field, self.query]):
+            raise ValueError("Please specify the trigger for the listener")
 
         try:
             last_data_refresh = self.get_table_refresh_date()
@@ -249,6 +302,8 @@ class Workflow:
         self.logger = logging.getLogger(__name__)
         self.error_value = None
         self.error_type = None
+        self.scheduler = "threads"
+        self.num_workers = 8
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
 
@@ -382,10 +437,11 @@ class Workflow:
         try:
             graph = dask.delayed()(self.tasks)
             if self.execution_options:
-                scheduler = self.execution_options["scheduler"]
+                scheduler = self.execution_options.get("scheduler") or self.scheduler
+                num_workers = self.execution_options.get("num_workers") or self.num_workers
             else:
                 scheduler = "threads"
-            graph.compute(scheduler=scheduler)
+            graph.compute(scheduler=scheduler, num_workers=num_workers)
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
@@ -436,12 +492,11 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-
     def __init__(self, workflows, logger=None, env=None):
         self.workflows = workflows
         self.env = env if env else "prod"
         self.logger = logging.getLogger(__name__)
-
+        self.run_params=None
 
     def should_run(self, workflow):
         """Determines whether a workflow should run based on its next scheduled run.
@@ -465,7 +520,6 @@ class Runner:
 
             now = datetime.datetime.now(datetime.timezone.utc)
             next_run = workflow.next_run
-            self.logger.info(f"{now}, {next_run}")
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
@@ -484,7 +538,6 @@ class Runner:
 
         return False
 
-
     # def get_pending_workflows(self, pending=None):
 
     #     pending = []
@@ -494,10 +547,44 @@ class Runner:
 
     #     return pending
 
+    def overwrite_params(self, workflow, params):
+        # params: dict fof the form {"listener": {"delay": 0}, "backup_email": "test@example.com"}
+        for param in params:
+    
+            # modify parameters of classes stored in Workflow, e.g. Listener of Schedule
+            if type(params[param]) == dict:
+                _class = param
+                
+                # only apply listener params to triggered workflows
+                if _class == "listener":
+                    if not workflow.is_triggered:
+                        continue
+                        
+                # only apply schedule params to scheduled workflows
+                elif _class == "schedule":
+                    if not workflow.is_scheduled:
+                        continue
+                
+                # retrieve object and names of attributes to set
+                obj = eval(f"workflow.{_class}") 
+                obj_params = params[param]
+                
+                for obj_param in obj_params:
+                    new_param_value = obj_params[obj_param]
+                    setattr(obj, obj_param, new_param_value)
+                    
+            # modify Workflow object's parameters
+            else:
+                setattr(workflow, param, params[param])
 
-    def run(self, workflows):
+    def run(self, workflows, overwrite_params=None):
 
         self.logger.info(f"Checking for pending workflows...")
+
+        if overwrite_params:
+            self.logger.debug(f"Overwriting workflow parameters: {overwrite_params}")
+            for workflow in workflows:
+                self.overwrite_params(workflow, params=overwrite_params)
 
         for workflow in workflows:
             if self.should_run(workflow):
