@@ -188,7 +188,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         print("Table {} has been created successfully.".format(sql))
 
 
-def to_s3(file_path: str, s3_name: str, bucket: str=None):
+def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
     """Writes local file to s3 with prefix 'bulk/'.
 
     Examples
@@ -210,6 +210,9 @@ def to_s3(file_path: str, s3_name: str, bucket: str=None):
 
     bucket.upload_file(file_path, 'bulk/' + s3_name)
     print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), 'bulk/' + s3_name))
+
+    if not keep_csv:
+        os.remove(file_path)
 
 
 def read_s3(file_path: str, s3_name: str, bucket: str=None):
@@ -493,7 +496,8 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         ;commit;
         """
 
-    engine.execute(sql)
+    result = engine.execute(sql)
+    result.close()
     print('Data has been copied to {}'.format(table_name))
 
 
