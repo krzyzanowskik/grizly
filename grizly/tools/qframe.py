@@ -1,4 +1,3 @@
-from IPython.display import HTML, display
 import pandas
 import re
 import os
@@ -8,18 +7,18 @@ import json
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
-from .sqlbuilder import (
+from ..sqlbuilder import (
     get_duplicated_columns,
     get_sql,
     build_column_strings
 )
 
-from .excel import (
+from ..excel import (
     read_excel,
     copy_df_to_excel
 )
 
-from .etl import (
+from ..etl import (
     to_csv,
     create_table,
     csv_to_s3,
@@ -27,16 +26,14 @@ from .etl import (
     write_to
 )
 
-# from .ui import(
-#     SubqueryUI,
-#     FieldUI
-# )
-
-from .utils import(
-    check_if_valid_type
+from ..ui.qframe import(
+    SubqueryUI,
+    FieldUI
 )
 
-import openpyxl
+from ..utils import(
+    check_if_valid_type
+)
 
 
 def prepend_table(data, expression):
@@ -154,35 +151,8 @@ class QFrame:
         print(f"Data saved in {json_path}")
         return self
 
-    def read_excel(self, excel_path, sheet_name="", query=""):
-        """Reads fields information from excel file.
-
-        Parameters
-        ----------
-        excel_path : str
-            Path to excel file.
-        sheet_name : str, optional
-            Sheet name, by default ""
-        query : str, optional
-            Filter for rows in excel file, by default ""
-
-        Returns
-        -------
-        QFrame
-        """
-        schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
-
-        data = {"select": {
-                    "fields": columns_qf,
-                    "schema": schema,
-                    "table": table
-                }}
-
-        self.data = self.validate_data(data)
-        return self
-
-    # def build_subquery(self, store_path, subquery, database):
-    #     return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
+    def build_subquery(self, store_path, subquery, database):
+        return SubqueryUI(store_path=store_path).build_subquery(self, subquery, database)
 
     # def build_field(self, store_path):
     #     return FieldUI(store_path=store_path).build_field(store_path, self)
@@ -783,11 +753,6 @@ class QFrame:
     def get_sql(self, print_sql=True):
         """Overwrites the SQL statement inside the class and prints saved string.
 
-        Parameters
-        ----------
-        print_sql : bool, optional
-            If True prints generated SQL statement, by default True
-
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -802,11 +767,7 @@ class QFrame:
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
-
-        if print_sql:
-            print(self.sql)
-
-        return self
+        return self.sql
 
 
     def create_table(self, table, schema='', char_size=500):
@@ -1121,6 +1082,9 @@ class QFrame:
         getfields = deepcopy(self.getfields)
         return QFrame(data=data, engine=engine, sql=sql, getfields=getfields)
 
+    def __str__(self):
+        sql = self.get_sql()
+        return sql
 
     def __getitem__(self, getfields):
         self.getfields = []

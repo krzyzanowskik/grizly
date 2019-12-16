@@ -1,6 +1,11 @@
 import ipywidgets as w
+<<<<<<< HEAD:grizly/ui/qframe.py
+from ..utils import get_redshift_columns, get_denodo_columns
+from ..store import Store
+=======
 from .utils import get_columns
 from .store import Store
+>>>>>>> a98719b2f7a753e433ea803d97b77e36b4bb29f1:grizly/ui.py
 
 def get_subqueries(store_path):
     store = Store(store_path)
