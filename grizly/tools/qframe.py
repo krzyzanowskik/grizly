@@ -1,5 +1,4 @@
-from IPython import display
-import pandas
+from pandas import read_sql
 import re
 import os
 import sqlparse
@@ -15,7 +14,6 @@ from ..sqlbuilder import (
 )
 
 from ..excel import (
-    read_excel,
     copy_df_to_excel
 )
 
@@ -33,7 +31,8 @@ from ..ui.qframe import(
 )
 
 from ..utils import(
-    check_if_valid_type
+    check_if_valid_type,
+    get_path
 )
 
 
@@ -89,11 +88,6 @@ class QFrame:
             return self
 
 
-    def display_data(self):
-        """Displays QFrame.data"""
-        return display.JSON(data=self.data)
-
-
     def validate_data(self, data):
         """Validates loaded data.
 
@@ -122,7 +116,7 @@ class QFrame:
         if duplicates != {}:
             print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
             for key in duplicates.keys():
-                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
+                print(f"{key}:\t {duplicates[key]}\n")
             print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
 
         else:
@@ -221,7 +215,7 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.get_sql()
+        >>> print(qf)
         SELECT CustomerId,
             Sales
         FROM schema.table
@@ -242,11 +236,19 @@ class QFrame:
 
         Examples
         --------
-        q -> fields : customer_id as 'customer', date, order
-
-        >>> q.select(["customer_id", "order"])
-
-        q -> fields : sq.customer_id, sq.order
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim', 'as': 'Id'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> print(qf)
+        SELECT CustomerId AS Id,
+            Sales
+        FROM schema.table
+        >>> qf = qf.select(["CustomerId", "Sales"])
+        >>> print(qf)
+        SELECT sq.Id AS Id,
+            sq.Sales AS Sales
+        FROM
+        (SELECT CustomerId AS Id,
+                Sales
+        FROM schema.table) sq
 
         Parameters
         ----------
@@ -302,8 +304,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.rename({'Sales': 'Billings'})
-        >>> qf.get_sql()
+        >>> qf = qf.rename({'Sales': 'Billings'})
+        >>> print(qf)
         SELECT CustomerId,
             Sales AS Billings
         FROM schema.table
@@ -329,8 +331,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.remove(['Sales'])
-        >>> qf.get_sql()
+        >>> qf = qf.remove(['Sales'])
+        >>> print(qf)
         SELECT CustomerId
         FROM schema.table
 
@@ -352,8 +354,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.distinct()
-        >>> qf.get_sql()
+        >>> qf = qf.distinct()
+        >>> print(qf)
         SELECT DISTINCT CustomerId,
                         Sales
         FROM schema.table
@@ -382,8 +384,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.query("Sales != 0")
-        >>> qf.get_sql()
+        >>> qf = qf.query("Sales != 0")
+        >>> print(qf)
         SELECT CustomerId,
             Sales
         FROM schema.table
@@ -420,13 +422,12 @@ class QFrame:
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
 
-
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
-        >>> qf.having("sum(sales)>100")
-        >>> qf.get_sql()
+        >>> qf = qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> qf = qf.having("sum(sales)>100")
+        >>> print(qf)
         SELECT CustomerId,
             sum(Sales) AS Sales
         FROM schema.table
@@ -477,16 +478,16 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.assign(Sales_Div="Sales/100", type='num')
-        >>> qf.get_sql()
+        >>> qf = qf.assign(Sales_Div="Sales/100", type='num')
+        >>> print(qf)
         SELECT CustomerId,
             Sales,
             Sales/100 AS Sales_Div
         FROM schema.table
 
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.assign(Sales_Positive="CASE WHEN Sales>0 THEN 1 ELSE 0 END")
-        >>> qf.get_sql()
+        >>> qf = qf.assign(Sales_Positive="CASE WHEN Sales>0 THEN 1 ELSE 0 END")
+        >>> print(qf)
         SELECT CustomerId,
             Sales,
             CASE
@@ -533,8 +534,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
-        >>> qf.get_sql()
+        >>> qf = qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> print(qf)
         SELECT CustomerId,
             sum(Sales) AS Sales
         FROM schema.table
@@ -565,8 +566,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.groupby(['CustomerId'])['Sales'].agg('sum')
-        >>> qf.get_sql()
+        >>> qf = qf.groupby(['CustomerId'])['Sales'].agg('sum')
+        >>> print(qf)
         SELECT CustomerId,
             sum(Sales) AS Sales
         FROM schema.table
@@ -607,16 +608,16 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.orderby(["Sales"])
-        >>> qf.get_sql()
+        >>> qf = qf.orderby(["Sales"])
+        >>> print(qf)
         SELECT CustomerId,
             Sales
         FROM schema.table
         ORDER BY Sales
 
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.orderby(["Sales"], ascending=False)
-        >>> qf.get_sql()
+        >>> qf = qf.orderby(["Sales"], ascending=False)
+        >>> print(qf)
         SELECT CustomerId,
             Sales
         FROM schema.table
@@ -655,8 +656,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.limit(100)
-        >>> qf.get_sql()
+        >>> qf = qf.limit(100)
+        >>> print(qf)
         SELECT CustomerId,
             Sales
         FROM schema.table
@@ -682,8 +683,8 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.rearrange(['Sales', 'CustomerId'])
-        >>> qf.get_sql()
+        >>> qf = qf.rearrange(['Sales', 'CustomerId'])
+        >>> print(qf)
         SELECT Sales,
             CustomerId
         FROM schema.table
@@ -727,7 +728,7 @@ class QFrame:
         list
             List of field names
         """
-        
+
         if aliased:
             self.get_sql(0)
             fields = self.data['select']['sql_blocks']["select_aliases"]
@@ -763,7 +764,7 @@ class QFrame:
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
-        >>> qf.get_sql()
+        >>> print(qf.get_sql())
         SELECT CustomerId,
             Sales
         FROM schema.table
@@ -858,15 +859,14 @@ class QFrame:
 
         Examples
         --------
-        With defaults:
-
-        >>> q = QFrame(
-        >>>   ).to_rds(table='some_table', csv_path='some_path')
-
-        With schema:
-
-        >>> q = QFrame(
-        >>>   ).to_rds(schema='some_schema', table='some_table', csv_path='some_path')
+        >>> engine_string = "sqlite:///" + get_path("dev", "grizly", "tests", "Chinook.sqlite")
+        >>> playlist_track = {"select": {"fields":{"PlaylistId": {"type" : "dim"}, "TrackId": {"type" : "dim"}}, "table" : "PlaylistTrack"}}
+        >>> qf = QFrame(engine=engine_string).read_dict(playlist_track).limit(5)
+        >>> qf = qf.to_rds(table='test', csv_path=get_path('test.csv'), schema='sandbox', if_exists='replace', redshift_str='mssql+pyodbc://redshift_acoe', bucket='acoe-s3', keep_csv=False)
+        test.csv uploaded to s3 as test.csv
+        SQL table has been cleaned up successfully.
+        Loading test.csv data into sandbox.test ...
+        Data has been copied to sandbox.test
 
         Returns
         -------
@@ -929,7 +929,7 @@ class QFrame:
         self.sql = get_sql(self.data)
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
-        df = pandas.read_sql(sql=self.sql, con=con)
+        df = read_sql(sql=self.sql, con=con)
         return df
 
 
@@ -1130,61 +1130,32 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
     Examples
     --------
-    qframes:
-    q1 -> fields: customer_id, orders
-    q2 -> fields: customer_id, orders as 'ord'
-
-    >>> q_joined = join(qframes=[q1,q2], join_type="LEFT JOIN", on="sq1.customer_id=sq2.customer_id")
-
-    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
-                        sq2.ord as 'ord'
-
-    >>> q_joined.get_sql()
-        SELECT  sq1.customer_id as 'customer_id',
-                sq1.orders as 'orders',
-                sq2.ord as 'ord'
-        FROM
-            (q1.sql) sq1
-        LEFT JOIN
-            (q2.sql) sq2
-        ON sq1.customer_id=sq2.customer_id
-
-
-    qframes:
-    q1 -> fields: customer_id, orders
-    q2 -> fields: customer_id, orders as 'ord'
-    q3 -> fields: id, orders, date
-
-    >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", "inner join"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
-
-    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
-                        sq2.customer_id as 'customer_id', sq2.ord as 'ord',
-                        sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
-
-    >>> q_joined.show_duplicated_columns()
-        DUPLICATED COLUMNS:
-            customer_id : ['sq1.customer_id', 'sq2.customer_id']
-            orders : ['sq1.orders', 'sq3.orders']
-
-    >>> q_joined.remove(['sq2.customer_id', 'sq3.id'])
-    >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})
-
-    q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1',
-                        sq2.ord as 'orders_2',
-                        sq3.orders as 'orders_3', sq3.date as 'date
-
-    >>> q_joined.get_sql()
-        SELECT  sq1.customer_id as 'customer_id',
-                sq1.orders as 'orders_1',
-                sq2.ord as 'orders_2',
-                sq3.orders as 'orders_3',
-                sq3.date as 'date
-        FROM
-            (q1.sql) sq1
-        CROSS JOIN
-            (q2.sql) sq2
-        INNER JOIN
-            (q3.sql) sq3 ON sq2.customer_id=sq3.id
+    >>> playlist_track = {"select": {"fields":{"PlaylistId": {"type" : "dim"}, "TrackId": {"type" : "dim"}}, "table" : "PlaylistTrack"}}
+    >>> playlist_track_qf = QFrame().read_dict(playlist_track)
+    >>> print(playlist_track_qf)
+    SELECT PlaylistId,
+        TrackId
+    FROM PlaylistTrack
+    >>> playlists = {"select": {"fields": {"PlaylistId": {"type" : "dim"}, "Name": {"type" : "dim"}}, "table" : "Playlist"}}
+    >>> playlists_qf = QFrame().read_dict(playlists)
+    >>> print(playlists_qf)
+    SELECT PlaylistId,
+        Name
+    FROM Playlist
+    >>> joined_qf = join(qframes=[playlist_track_qf, playlists_qf], join_type='left join', on='sq1.PlaylistId=sq2.PlaylistId')
+    Data joined successfully.
+    >>> print(joined_qf)
+    SELECT sq1.PlaylistId AS PlaylistId,
+           sq1.TrackId AS TrackId,
+           sq2.Name AS Name
+    FROM
+      (SELECT PlaylistId,
+              TrackId
+       FROM PlaylistTrack) sq1
+    LEFT JOIN
+      (SELECT PlaylistId,
+              Name
+       FROM Playlist) sq2 ON sq1.PlaylistId=sq2.PlaylistId
 
     Returns
     -------
@@ -1198,6 +1169,10 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
     iterator = 0
     for q in qframes:
+        if iterator == 0:
+            first_engine = q.engine
+        else:
+            assert first_engine == q.engine, "QFrames have different engine strings."
         q.create_sql_blocks()
         iterator += 1
         data[f"sq{iterator}"] = deepcopy(q.data)
@@ -1243,14 +1218,24 @@ def union(qframes=[], union_type=None, union_by='position'):
 
     Examples
     --------
-    >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
-    >>> q_unioned.get_sql()
-        q1.sql
-        UNION ALL
-        q2.sql
-        UNION
-        q3.sql
-
+    >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+    >>> qf1 = qf.copy()
+    >>> qf2 = qf.copy()
+    >>> qf3 = qf.copy()
+    >>> q_unioned = union(qframes=[qf1, qf2, qf3], union_type=["UNION ALL", "UNION"])
+    Data unioned successfully.
+    >>> print(q_unioned)
+    SELECT CustomerId,
+           Sales
+    FROM schema.table
+    UNION ALL
+    SELECT CustomerId,
+           Sales
+    FROM schema.table
+    UNION
+    SELECT CustomerId,
+           Sales
+    FROM schema.table
 
     Returns
     -------
