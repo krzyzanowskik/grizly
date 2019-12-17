@@ -7,7 +7,7 @@ Welcome to grizly's documentation!
 ==================================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
    :caption: Contents:
 
    content/how_to_install
@@ -17,6 +17,7 @@ Welcome to grizly's documentation!
    content/api_Extract
    content/api_Load
    content/api_S3
+   content/api_Config
 
 
 Indices and tables

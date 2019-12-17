@@ -250,8 +250,8 @@ class S3:
 
         config = ConfigParser()
         config.read(get_path('.aws','credentials'))
-        S3_access_key_id = config['default']['S3_access_key_id']
-        S3_secret_access_key = config['default']['S3_secret_access_key']
+        S3_access_key_id = config['default']['aws_access_key_id']
+        S3_secret_access_key = config['default']['aws_secret_access_key']
 
         s3_key = self.s3_key + self.file_name
         print("Loading {} data into {} ...".format(s3_key, table_name))
