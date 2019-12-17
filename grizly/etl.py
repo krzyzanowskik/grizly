@@ -19,7 +19,7 @@ except TypeError:
     pass
 
 
-def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
+def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -85,7 +85,6 @@ def to_csv(qf,csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False,
         cursor.close()
         con.close()
 
-    
     return cursor_row_count
 
 
@@ -189,7 +188,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         print("Table {} has been created successfully.".format(sql))
 
 
-def to_s3(file_path: str, s3_name: str, bucket: str=None):
+def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
     """Writes local file to s3 with prefix 'bulk/'.
 
     Examples
@@ -211,6 +210,9 @@ def to_s3(file_path: str, s3_name: str, bucket: str=None):
 
     bucket.upload_file(file_path, 'bulk/' + s3_name)
     print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), 'bulk/' + s3_name))
+
+    if not keep_csv:
+        os.remove(file_path)
 
 
 def read_s3(file_path: str, s3_name: str, bucket: str=None):
@@ -326,14 +328,14 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
 
-    df.to_csv(filepath, sep="\t", encoding="utf-8", index=False, chunksize=chunksize)
+    df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
 
     s3_dir = "bulk"
     if s3_key:
         if s3_key.endswith("/"):
             s3_key = s3_key[:-1]
-        s3_dir += s3_key
+        s3_dir += "/" + s3_key
 
     bucket.upload_file(filepath, f"{s3_dir}/{filename}")
     print(f'{filename} successfully uploaded to {bucket_name}/{s3_dir}')
@@ -494,7 +496,8 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
         ;commit;
         """
 
-    engine.execute(sql)
+    result = engine.execute(sql)
+    result.close()
     print('Data has been copied to {}'.format(table_name))
 
 
@@ -534,7 +537,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     aws_secret_access_key = config['default']['aws_secret_access_key']
 
     sql = f"""
-        COPY {schema}.{table_name} FROM 's3://{bucket_name}/bulk/{file_name}'
+        COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_dir}/{file_name}'
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
