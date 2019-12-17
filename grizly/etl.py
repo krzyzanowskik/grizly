@@ -1,21 +1,21 @@
-import boto3
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-import pandas as pd
 import csv
-
-from .utils import (
-    check_if_exists,
-    get_path,
-    read_config
-)
+import os
 from configparser import ConfigParser
 
-config = read_config()
+import boto3
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
+from grizly.config import Config
+
+from .utils import check_if_exists, get_path, read_config
+
+config_path = get_path('.grizly', 'config.json')
+config = Config().from_json(config_path)
 try:
-    os.environ["HTTPS_PROXY"] = config["https"]
-except TypeError:
+    os.environ["HTTPS_PROXY"] = config.data["standard"]["https_proxy"] or read_config()["https"] # remove the second option once whole team has moved to Config
+except:
     pass
 
 
@@ -56,7 +56,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
                 cursor.execute(sql)
             except:
                 raise
-                
+
         close_cursor = True
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
@@ -287,7 +287,7 @@ def s3_to_csv(csv_path, bucket: str=None):
     print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000, 
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
             if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
 
     """Copies a dataframe inside a Redshift schema.table
@@ -501,7 +501,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None, 
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
                         remove_inside_quotes=False):
     """[summary]
 
@@ -564,7 +564,7 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
             redshift_str=None, bucket=None, s3_key=None, remove_inside_quotes=False):
     """
     Writes s3 to Redshift database.
-    
+
     Parameters:
     -----------
     file_name : string
@@ -588,7 +588,7 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
 
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError(f"'{if_exists}' is not valid for if_exists")
-        
+
     redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
     bucket_name = bucket if bucket else 'teis-data'
     engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
@@ -614,7 +614,7 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
         else:
             pass
 
-    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format, 
+    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format,
                                     bucket=bucket_name, s3_dir=s3_dir, remove_inside_quotes=remove_inside_quotes)
 
     print(f"Loading data into {table_name}...")
