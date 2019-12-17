@@ -1,21 +1,21 @@
-import boto3
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-import pandas as pd
 import csv
-
-from .utils import (
-    check_if_exists,
-    get_path,
-    read_config
-)
+import os
 from configparser import ConfigParser
 
-config = read_config()
+import boto3
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
+from grizly.config import Config
+
+from .utils import check_if_exists, get_path, read_config
+
+config_path = get_path('.grizly', 'config.json')
+config = Config().from_json(config_path)
 try:
-    os.environ["HTTPS_PROXY"] = config["https"]
-except TypeError:
+    os.environ["HTTPS_PROXY"] = config.data["standard"]["https_proxy"] or read_config()["https"] # remove the second option once whole team has moved to Config
+except:
     pass
 
 
@@ -464,7 +464,7 @@ def df_clean(df):
 
     return df
 
-
+  
 def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
                         remove_inside_quotes=False):
     """[summary]

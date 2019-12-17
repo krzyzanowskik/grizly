@@ -118,7 +118,7 @@ class SFDC:
         table = query_words[query_words.index("from") + 1]
         sf = self._connect()
 
-        self.logger.info("Querying {table}...")
+        self.logger.info(f"Querying {table}...")
 
         try:
             if bulk:

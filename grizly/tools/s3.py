@@ -171,7 +171,7 @@ class S3:
         --------
         >>> S3 = S3('test.csv', 'bulk/')
         >>> S3.to_file()
-        'bulk/test.csv' uploaded to 'C:\Users\TE386850\s3_loads\test.csv'
+        'bulk/test.csv' was successfully downloaded to 'C:\Users\TE386850\s3_loads\test.csv'
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -179,8 +179,26 @@ class S3:
         s3_file = self.s3_resource.Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
-        print(f"'{s3_key}' uploaded to '{file_path}'")
+        print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
 
+    def to_df(self, **kwargs):
+
+        if not self.file_name.endswith("csv") or self.file_name.endswith("parquet"):
+            raise NotImplementedError("Unsupported file format. Please use CSV or Parquet files.")
+
+        file_path = os.path.join(self.file_dir, self.file_name)
+        self.to_file()
+
+        if self.file_name.endswith("csv"):
+            sep = kwargs.get("sep")
+            if not sep:
+                sep = "\t"
+            df = pd.read_csv(file_path, sep=sep)
+        else:
+            columns = kwargs.get("columns")
+            df = pd.read_parquet(file_path, columns=columns)
+
+        return df
 
     def from_df(self, df:DataFrame, sep:str='\t', keep_file=True):
         """Saves DataFrame in S3.
