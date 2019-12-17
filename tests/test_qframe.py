@@ -6,7 +6,7 @@ from pandas import read_sql, read_csv, merge, concat
 
 from ..grizly.utils import get_path
 
-from ..grizly.qframe import (
+from ..grizly.tools.qframe import (
     QFrame,
     union,
     join,
@@ -111,14 +111,6 @@ def test_read_dict():
     assert q.data["select"]["fields"]["Value"] == {"type": "num"}
 
 
-def test_read_excel():
-    q = QFrame().read_excel(excel_path,sheet_name="orders")
-    assert q.data["select"]["fields"]["Order_Nr"] == {
-        "type": "dim",
-        "group_by": "group",
-        "as": "Order_Number",
-    }
-
 def test_create_sql_blocks():
     q = QFrame().read_dict(deepcopy(orders))
     assert build_column_strings(q.data)["select_names"] == ["Order as Bookings","Part", "Customer", "Value"]
@@ -142,7 +134,7 @@ def test_remove():
 def test_distinct():
     q = QFrame().read_dict(deepcopy(orders))
     q.distinct()
-    sql = q.get_sql().sql
+    sql = q.get_sql()
     assert sql[7:15].upper() == 'DISTINCT'
 
 
@@ -214,8 +206,7 @@ def test_orderby():
     assert q.data["select"]["fields"]["Order"]["order_by"] == 'DESC'
     assert q.data["select"]["fields"]["Part"]["order_by"] == 'ASC'
 
-    q.get_sql()
-    sql = q.sql
+    sql = q.get_sql()
 
     testsql = """
             SELECT
@@ -234,7 +225,7 @@ def test_orderby():
 def test_limit():
     q = QFrame().read_dict(deepcopy(orders))
     q.limit(10)
-    sql = q.get_sql().sql
+    sql = q.get_sql()
     assert sql[-8:].upper() == 'LIMIT 10'
 
 
@@ -242,9 +233,8 @@ def test_select():
     q = QFrame().read_dict(deepcopy(orders))
     q.select(['Customer', 'Value'])
     q.groupby('sq.Customer')['sq.Value'].agg('sum')
-    q.get_sql()
 
-    sql = q.sql
+    sql = q.get_sql()
     # write_out(str(sql))
     testsql = """
             SELECT sq.Customer AS Customer,
@@ -292,36 +282,10 @@ def test_get_sql():
                         New_case
                 LIMIT 5
             """
-    sql = q.get_sql().sql
+    sql = q.get_sql()
     # write_out(str(sql))
     assert clean_testexpr(sql) == clean_testexpr(testsql)
-    assert q.get_sql().sql == get_sql(q.data)
-
-
-def test_get_sql_with_select_attr():
-    q = QFrame().read_excel(excel_path, sheet_name="orders")
-
-    testsql = """
-        SELECT Order_Nr AS Order_Number,
-                Part,
-                CustomerID_1,
-                sum(Value) AS Value,
-                CASE
-                    WHEN CustomerID_1 <> NULL THEN CustomerID_1
-                    ELSE CustomerID_2
-                END AS CustomerID
-        FROM orders_schema.orders
-        GROUP BY Order_Number,
-                Part,
-                CustomerID_1,
-                CustomerID_2
-            """
-
-    sql = q.get_sql().sql
-    # write_out(str(sql))
-    assert clean_testexpr(sql) == clean_testexpr(testsql)
-    assert clean_testexpr(q.get_sql().sql) == clean_testexpr(get_sql(q.data))
-
+    assert sql == get_sql(q.data)
 
 
 def test_to_csv():
@@ -350,10 +314,16 @@ def test_to_csv():
 
 
 def test_to_df():
-    q = QFrame(engine=engine_string).read_excel(
-        excel_path,
-        sheet_name="cb_invoices",
-    )
+    data = {'select':{
+        'fields':{  'InvoiceLineId':{'type': 'dim'},
+                    'InvoiceId': {'type': 'dim'},
+                    'TrackId': {'type': 'dim'},
+                    'UnitPrice': {'type': 'num'},
+                    'Quantity': {'type': 'num'}
+                },
+        'table':'InvoiceLine'}}
+
+    q = QFrame(engine=engine_string).read_dict(data)
     q.assign(sales="Quantity*UnitPrice", type='num')
     q.groupby(["TrackId"])["Quantity"].agg("sum")
     df_from_qf = q.to_df()
@@ -362,16 +332,6 @@ def test_to_df():
     test_df = read_sql(sql=q.sql, con=engine)
     # write_out(str(test_df))
     assert df_from_qf.equals(test_df)
-
-
-def test_copy():
-    qf = QFrame().read_excel(excel_path, sheet_name="orders")
-
-    qf_copy = qf.copy()
-    assert qf_copy.data == qf.data and qf_copy.sql == qf.sql and qf_copy.engine == qf.engine
-
-    qf_copy.remove('Part').get_sql()
-    assert qf_copy.data != qf.data and qf_copy.sql != qf.sql and qf_copy.engine == qf.engine
 
 
 playlists = {
@@ -411,6 +371,17 @@ tracks = {  'select': {
                 'table': 'Track'
             }
 }
+
+
+
+def test_copy():
+    qf = QFrame().read_dict(deepcopy(playlist_track))
+
+    qf_copy = qf.copy()
+    assert qf_copy.data == qf.data and qf_copy.sql == qf.sql and qf_copy.engine == qf.engine
+
+    qf_copy.remove('TrackId').get_sql()
+    assert qf_copy.data != qf.data and qf_copy.sql != qf.sql and qf_copy.engine == qf.engine
 
 
 def test_join_1():
@@ -462,7 +433,7 @@ def test_join_2():
 
     joined_qf = join([playlist_track_qf,playlists_qf], join_type="cross join", on=0)
 
-    sql = joined_qf.get_sql().sql
+    sql = joined_qf.get_sql()
 
     testsql = """
             SELECT sq1.PlaylistId AS PlaylistId,
@@ -482,7 +453,7 @@ def test_join_2():
 
     joined_qf = join([joined_qf, playlist_track_qf,playlists_qf], join_type=["RIGHT JOIN","full join"], on=['sq1.PlaylistId=sq2.PlaylistId', 'sq2.PlaylistId=sq3.PlaylistId'])
 
-    sql = joined_qf.get_sql().sql
+    sql = joined_qf.get_sql()
 
     testsql = """
                 SELECT sq1.PlaylistId AS PlaylistId,
@@ -527,7 +498,7 @@ def test_union():
                 Name
             FROM Playlist
             """
-    sql = unioned_qf.get_sql().sql
+    sql = unioned_qf.get_sql()
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(playlists_qf.to_df())
@@ -543,7 +514,7 @@ def test_union():
                 Name
             FROM Playlist
             """
-    sql = unioned_qf.get_sql().sql
+    sql = unioned_qf.get_sql()
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
@@ -569,7 +540,7 @@ def test_union():
                 Name AS New_name
             FROM Playlist
             """
-    sql = unioned_qf.get_sql().sql
+    sql = unioned_qf.get_sql()
 
     # write_out(sql)
     assert clean_testexpr(sql) == clean_testexpr(testsql)
@@ -590,5 +561,5 @@ def test_initiate():
         FROM test_schema.test_table
         """
 
-    sql = q.get_sql().sql
+    sql = q.get_sql()
     assert clean_testexpr(testsql) == clean_testexpr(testsql) 

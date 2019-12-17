@@ -19,11 +19,6 @@ from copy import deepcopy
 class S3:
     """Class that represents a file in S3.
 
-        Examples
-        --------
-        >>> from grizly import get_path, S3
-        >>> s3 = S3('emea_daily.xlsx', s3_key='dbb/ENG_EMEA/', file_dir=get_path('acoe_projects', 'dbb', 'ENG_EMEA'))
-
         Parameters
         ----------
         file_name : str
@@ -57,18 +52,18 @@ class S3:
 
         Examples
         --------
-        >>> S3('test.csv', 'bulk/').info()
-        file_name: 	'test.csv'
-        s3_key: 	'bulk/'
-        bucket: 	'acoe-s3'
-        file_dir: 	'C:/Users/XXX/s3_loads'
-        redshift_str: 	'mssql+pyodbc://redshift_acoe'
+        >>> S3('test.csv', 'bulk/', file_dir=r'C:\\Users').info()
+        file_name:      'test.csv'
+        s3_key:         'bulk/'
+        bucket:         'acoe-s3'
+        file_dir:       'C:\\Users'
+        redshift_str:   'mssql+pyodbc://redshift_acoe'
         """
-        print(f"\033[1m file_name: \033[0m\t'{self.file_name}'")
-        print(f"\033[1m s3_key: \033[0m\t'{self.s3_key}'")
-        print(f"\033[1m bucket: \033[0m\t'{self.bucket}'")
-        print(f"\033[1m file_dir: \033[0m\t'{self.file_dir}'")
-        print(f"\033[1m redshift_str: \033[0m\t'{self.redshift_str}'")
+        print(f"file_name: \t'{self.file_name}'")
+        print(f"s3_key: \t'{self.s3_key}'")
+        print(f"bucket: \t'{self.bucket}'")
+        print(f"file_dir: \t'{self.file_dir}'")
+        print(f"redshift_str: \t'{self.redshift_str}'")
 
 
     def list(self):
@@ -99,20 +94,20 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test.csv', 'bulk/')
+        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users')
         >>> s3.info()
-        file_name: 	'test.csv'
-        s3_key: 	'bulk/'
-        bucket: 	'acoe-s3'
-        file_dir: 	'C:/Users/XXX/s3_loads'
+        file_name: 	    'test.csv'
+        s3_key: 	    'bulk/'
+        bucket: 	    'acoe-s3'
+        file_dir: 	    'C:\\Users'
         redshift_str: 	'mssql+pyodbc://redshift_acoe'
         >>> s3 = s3.copy_to('test_old.csv', s3_key='bulk/test/')
         'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
         >>> s3.info()
-        file_name: 	'test_old.csv'
-        s3_key: 	'bulk/test/'
-        bucket: 	'acoe-s3'
-        file_dir: 	'C:/Users/XXX/s3_loads'
+        file_name: 	    'test_old.csv'
+        s3_key: 	    'bulk/test/'
+        bucket: 	    'acoe-s3'
+        file_dir: 	    'C:\\Users'
         redshift_str: 	'mssql+pyodbc://redshift_acoe'
 
         Returns
@@ -138,15 +133,20 @@ class S3:
         return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
-    def from_file(self):
+    def from_file(self, keep_file=True):
         """Writes local file to S3.
+
+        Parameters
+        ----------
+        keep_file:
+            Whether to keep the local file copy after uploading it to Amazon S3, by default True
 
         Examples
         --------
-        >>> from grizly import get_path
         >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
         >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
         >>> s3.from_file()
+        'test_table.csv' uploaded to 'acoe-s3' bucket as 'analytics_project_starter/test/test_table.csv'
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -159,15 +159,20 @@ class S3:
 
         print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
+        if not keep_file:
+            os.remove(file_path)
+            print(f"'{file_path}' has been removed")
+
 
     def to_file(self):
         r"""Writes S3 to local file.
 
         Examples
         --------
-        >>> S3 = S3('test.csv', 'bulk/')
+        >>> S3 = S3('test.csv', 'bulk/', file_dir='C:\\Users')
         >>> S3.to_file()
-        'bulk/test.csv' uploaded to 'C:\Users\TE386850\s3_loads\test.csv'
+        'bulk/test.csv' was successfully downloaded to 'C:\Users\test.csv'
+        >>> os.remove('C:\\Users\\test.csv')
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -175,17 +180,40 @@ class S3:
         s3_file = self.s3_resource.Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
-        print(f"'{s3_key}' uploaded to '{file_path}'")
+        print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
 
 
-    def from_df(self, df:DataFrame, sep:str='\t'):
+    def to_df(self, **kwargs):
+
+        if not self.file_name.endswith("csv") or self.file_name.endswith("parquet"):
+            raise NotImplementedError("Unsupported file format. Please use CSV or Parquet files.")
+
+        file_path = os.path.join(self.file_dir, self.file_name)
+        self.to_file()
+
+        if self.file_name.endswith("csv"):
+            sep = kwargs.get("sep")
+            if not sep:
+                sep = "\t"
+            df = pd.read_csv(file_path, sep=sep)
+        else:
+            columns = kwargs.get("columns")
+            df = pd.read_parquet(file_path, columns=columns)
+
+        return df
+
+
+    def from_df(self, df:DataFrame, sep:str='\t', keep_file=True):
         """Saves DataFrame in S3.
 
         Examples
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> S3('test.csv', 'bulk/').from_df(df)
+        >>> S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
+        DataFrame saved in 'C:\\Users\\test.csv'
+        'test.csv' uploaded to 'acoe-s3' bucket as 'bulk/test.csv'
+        'C:\\Users\\test.csv' has been removed
 
         Parameters
         ----------
@@ -205,7 +233,7 @@ class S3:
         df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
-        self.from_file()
+        self.from_file(keep_file=keep_file)
 
 
     def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :

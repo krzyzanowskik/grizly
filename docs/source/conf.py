@@ -37,7 +37,7 @@ extensions = ['sphinx.ext.autodoc'
                 , 'jupyter_sphinx.execute'
                 ]
 
-nbsphinx_execute = 'always'
+nbsphinx_execute = 'never'
 nbsphinx_allow_errors = True
 nbsphinx_requirejs_path = ''
 
