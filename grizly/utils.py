@@ -351,21 +351,6 @@ def delete_where(table, schema='', redshift_str=None, *argv):
         Specify the schema.
     redshift_str : str, optional
         Redshift engine string, if None then 'mssql+pyodbc://Redshift'
-
-    Examples:
-    --------
-        >>> delete_where('test_table', schema='testing', "fiscal_year = '2019'")
-
-        Will generate and execute query:
-        "DELETE FROM testing.test WHERE fiscal_year = '2019'"
-
-
-        >>> delete_where('test_table', schema='testing', "fiscal_year = '2017' OR fiscal_year = '2018'", "customer in ('Enel', 'Agip')")
-
-        Will generate and execute two queries:
-        "DELETE FROM testing.test WHERE fiscal_year = '2017' OR fiscal_year = '2018'"
-        "DELETE FROM testing.test WHERE customer in ('Enel', 'Agip')"
-
     """
     table_name = f'{schema}.{table}' if schema else f'{table}'
     redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'

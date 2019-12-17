@@ -12,7 +12,7 @@ from time import time, sleep
 from croniter import croniter
 from datetime import timedelta
 from .etl import df_to_s3, s3_to_rds
-from .qframe import QFrame
+from .tools.qframe import QFrame
 from .utils import read_config, get_path
 from .email import Email
 from functools import wraps

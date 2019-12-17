@@ -10,29 +10,20 @@ from simple_salesforce.login import SalesforceAuthenticationFailed
 from .config import Config
 from .utils import get_path
 from logging import Logger
+from .tools.s3 import S3
 
 class SFDC:
     """A class for extracting with Salesforce data.
 
-    Examples:
-    -------
-    >>> from grizly.sfdc import SFDC
-    >>> from grizly.utils import get_path
-    >>> from grizly.config import Config
-    >>> 
-    >>> organization_id = "00DE0000000Hkve"
-    >>> 
-    >>> config_path = get_path('.grizly', 'config.json') # contains SFDC username and password
-    >>> Config().from_json(config_path)
-    >>> 
-    >>> query = "SELECT Id FROM User LIMIT 3"
-    >>> 
-    >>> sf = SFDC(organization_id=organization_id)
-    >>> response = sf.query(query).to_df()
-    >>> 
-    >>> len(response)
-    3
-    
+    Examples
+    --------
+    >>> S3(file_name='acoe_config.json', s3_key='config/', file_dir=r'C:\\Users').to_file()
+    'config/acoe_config.json' uploaded to 'C:\\Users\\acoe_config.json'
+    >>> config_path = get_path('.grizly', 'acoe_config.json') # contains SFDC username and password
+    >>> config = Config().from_json(config_path)
+    Config data has been saved.
+    >>> os.remove(r'C:\\Users\\acoe_config.json')
+
     Returns
     -------
     CSV or DataFrame

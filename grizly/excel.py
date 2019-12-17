@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import openpyxl
 
+# KM: QFrame method to be removed
 def read_excel(excel_path, sheet_name="", query=""):
     if sheet_name != "":
         fields = pd.read_excel(excel_path, sheet_name=sheet_name).fillna("")

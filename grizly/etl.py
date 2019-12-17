@@ -37,7 +37,6 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
     cursor : Cursor, optional
         The cursor to be used to execute the SQL, by default None
     """
-
     if cursor:
         cursor.execute(sql)
         close_cursor = False
@@ -88,64 +87,6 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
     return cursor_row_count
 
 
-def to_csv_1(qf,csv_path, sql, engine, sep='\t', chunksize=None, compress=False):
-    """
-    Writes table to csv file.
-
-    Parameters
-    ----------
-    csv_path : string
-        Path to csv file.
-    sql : string
-        SQL query.
-    engine : str
-        Engine string.
-    sep : string, default '\t'
-        Separtor/delimiter in csv file.
-    chunksize : int, default None
-        If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-    """
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-
-    if chunksize:
-        iterator = 0
-        limit_reached = False
-        if qf.data["select"]["limit"] != '':
-            row_limit = qf.data["select"]["limit"]
-        while True:
-            row_limit -= chunksize
-            if row_limit < 0:
-                chunksize += row_limit
-                limit_reached = True
-
-            qf.limit(f"{chunksize} OFFSET {iterator}")
-            iterator += chunksize
-            qf.get_sql()
-
-            try:
-                con = engine.connect().connection
-                cursor = con.cursor()
-                cursor.execute(qf.sql)
-            except:
-                con = engine.connect().connection
-                cursor = con.cursor()
-                cursor.execute(qf.sql)
-
-            with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
-                writer = csv.writer(csvfile, delimiter=sep)
-                writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
-
-                writer.writerows(cursor.fetchall())
-
-            cursor.close()
-            con.close()
-
-            if limit_reached:
-                break
-    else:
-        to_csv(qf,csv_path, sql, engine, sep=sep, compress=compress)
-
-
 def create_table(qf, table, engine, schema='', char_size=500):
     """
     Creates a new table in database if the table doesn't exist.
@@ -186,243 +127,6 @@ def create_table(qf, table, engine, schema='', char_size=500):
         con.close()
 
         print("Table {} has been created successfully.".format(sql))
-
-
-def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
-    """Writes local file to s3 with prefix 'bulk/'.
-
-    Examples
-    --------
-    >>> to_s3('emea_daily.xlsx', 'dbb/ENG_EMEA/emea_daily.xlsx')
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the file.
-    s3_name : str
-        Name of s3_file. Should be: 'repo_name/file_name'.
-    bucket : str, optional
-        Bucket name, if None then 'teis-data'
-    """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    bucket.upload_file(file_path, 'bulk/' + s3_name)
-    print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), 'bulk/' + s3_name))
-
-    if not keep_csv:
-        os.remove(file_path)
-
-
-def read_s3(file_path: str, s3_name: str, bucket: str=None):
-    """Downloads s3 file with prefix 'bulk/' to local file.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the file.
-    s3_name : str
-        Name of s3_file.
-    bucket : str, optional
-        Bucket name, if None then 'teis-data'
-    """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    with open(file_path, 'wb') as data:
-        bucket.download_fileobj('bulk/' + s3_name, data)
-    print('{} uploaded to {}'.format('bulk/' + s3_name, os.path.basename(file_path)))
-
-
-def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
-    """
-    Writes csv file to s3.
-
-    Parameters
-    ----------
-    csv_path : string
-        Path to csv file.
-    keep_csv : bool, optional
-        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
-    bucket : str, optional
-        Bucket name, if None then 'teis-data'
-    """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
-
-    s3_name = os.path.basename(csv_path)
-
-    bucket.upload_file(csv_path, 'bulk/' + s3_name)
-    print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), 'bulk/' + s3_name))
-
-    if not keep_csv:
-        os.remove(csv_path)
-
-
-def s3_to_csv(csv_path, bucket: str=None):
-    """
-    Writes s3 to csv file .
-
-    Parameters
-    ----------
-    csv_path : string
-        Path to csv file.
-    bucket : str, optional
-        Bucket name, if None then 'teis-data'
-    """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
-    s3_name = os.path.basename(csv_path)
-
-    with open(csv_path, 'wb') as data:
-        bucket.download_fileobj('bulk/' + s3_name, data)
-    print('{} uploaded to {}'.format('bulk/' + s3_name, csv_path))
-
-
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
-            if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
-
-    """Copies a dataframe inside a Redshift schema.table
-        using the bulk upload via this process:
-        df -> local csv -> s3 csv -> redshift table
-
-        NOTE: currently this function performs a delete * in
-        the target table, append is in TODO list, also we
-        need to add a timestamp column
-
-        COLUMN TYPES: right now you need to do a DROP TABLE to
-        change the column type, this needs to be changed TODO
-
-    Parameters
-    ----------
-    keep_csv : bool, optional
-        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
-    redshift_str : str, optional
-        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
-    bucket : str, optional
-        Bucket name, if None then 'teis-data'
-    """
-
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
-    bucket_name = bucket if bucket else 'teis-data'
-
-    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
-
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    filename = table_name + '.csv'
-    filepath = os.path.join(os.getcwd(), filename)
-
-    if clean_df:
-        df = df_clean(df)
-
-    df = clean_colnames(df)
-    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
-
-    df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
-    print(f'{filename} created in {filepath}')
-
-    s3_dir = "bulk"
-    if s3_key:
-        if s3_key.endswith("/"):
-            s3_key = s3_key[:-1]
-        s3_dir += "/" + s3_key
-
-    bucket.upload_file(filepath, f"{s3_dir}/{filename}")
-    print(f'{filename} successfully uploaded to {bucket_name}/{s3_dir}')
-
-    if check_if_exists(table_name, schema, redshift_str=redshift_str):
-        if if_exists == 'fail':
-            raise ValueError(f"Table {table_name} already exists")
-        elif if_exists == 'replace':
-            sql = f"DELETE FROM {schema}.{table_name}"
-            engine.execute(sql)
-            print('SQL table has been cleaned up successfully.')
-        else:
-            pass
-    else:
-        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
-
-    if not keep_csv:
-        os.remove(filepath)
-
-
-def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
-    """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
-
-    os.system(f"SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156 && aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}")
-
-    return None
-
-
-def clean_colnames(df):
-
-    reserved_words = ["user"]
-
-    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
-    df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
-
-    return df
-
-
-def df_clean(df):
-
-
-    def remove_inside_quotes(string):
-        """ removes double single quotes ('') inside a string,
-        e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
-
-        # pandas often parses timestamp values obtained from SQL as objects
-        if type(string) == pd.Timestamp:
-            return string
-
-        if pd.notna(string):
-            if isinstance(string, str):
-                if string.find("'") != -1:
-                    first_quote_loc = string.find("'")
-                    if string.find("'", first_quote_loc+1) != -1:
-                        second_quote_loc = string.find("'", first_quote_loc+1)
-                        string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
-                        return string_cleaned
-        return string
-
-
-    def remove_inside_single_quote(string):
-        """ removes a single single quote ('') from the beginning of a string,
-        e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
-        if type(string) == pd.Timestamp:
-            return string
-
-        if pd.notna(string):
-            if isinstance(string, str):
-                if string.startswith("'"):
-                    return string[1:]
-        return string
-
-
-    df_string_cols = df.select_dtypes(object)
-    df_string_cols = (
-        df_string_cols
-        .applymap(remove_inside_quotes)
-        .applymap(remove_inside_single_quote)
-        .replace(to_replace="\\", value="")
-        .replace(to_replace="\n", value="", regex=True) # regex=True means "find anywhere within the string"
-    )
-    df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
-
-    bool_cols = df.select_dtypes(bool).columns
-    df[bool_cols] = df[bool_cols].astype(int)
-
-    return df
 
 
 def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None, bucket=None):
@@ -483,10 +187,10 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     aws_access_key_id = config['default']['aws_access_key_id']
     aws_secret_access_key = config['default']['aws_secret_access_key']
 
-    print("Loading {} data into {} ...".format('bulk/'+s3_name,table_name))
+    print("Loading {} data into {} ...".format(s3_name,table_name))
 
     sql = f"""
-        COPY {table_name} {col_names} FROM 's3://{bucket_name}/bulk/{s3_name}'
+        COPY {table_name} {col_names} FROM 's3://{bucket_name}/{s3_name}'
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
@@ -501,6 +205,266 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     print('Data has been copied to {}'.format(table_name))
 
 
+def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
+    """
+    Writes csv file to s3.
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    keep_csv : bool, optional
+        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    bucket_name = bucket if bucket else 'teis-data'
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+
+    s3_name = os.path.basename(csv_path)
+
+    bucket.upload_file(csv_path, s3_name)
+    print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
+
+    if not keep_csv:
+        os.remove(csv_path)
+
+
+def write_to(qf, table, schema, if_exists):
+    """
+    Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+    Warning: QFrame object should not have Denodo defined as an engine.
+    Parameters:
+    -----
+    qf: QFrame object
+    table: string
+    schema: string
+    """
+    sql = qf.get_sql().sql
+    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
+    if schema!='':
+        sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {schema}.{table}"
+    else:
+        sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
+        sql_del_statement = f"DELETE FROM {table}"
+    engine = create_engine(qf.engine)
+
+    if check_if_exists(table=table, schema=schema, redshift_str=qf.engine):
+        if if_exists=='replace':
+            engine.execute(sql_del_statement)
+            engine.execute(sql_statement)
+            print(f'Data has been owerwritten into {schema}.{table}')
+        elif if_exists=='fail':
+            raise ValueError("Table already exists")
+        elif if_exists=='append':
+            engine.execute(sql_statement)
+            print(f'Data has been appended to {table}')
+    else:
+        create_table(qf=qf, table=table, engine=engine, schema=schema)
+        engine.execute(sql_statement)
+
+
+# KM: To be removed
+def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
+    """Writes local file to s3.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the file.
+    s3_name : str
+        Name of s3_file. Should be: 'repo_name/file_name'.
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    bucket_name = bucket if bucket else 'teis-data'
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    bucket.upload_file(file_path, s3_name)
+    print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), s3_name))
+
+    if not keep_csv:
+        os.remove(file_path)
+
+
+# KM: To be removed
+def read_s3(file_path: str, s3_name: str, bucket: str=None):
+    """Downloads s3 file with prefix to local file.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the file.
+    s3_name : str
+        Name of s3_file.
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    bucket_name = bucket if bucket else 'teis-data'
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    with open(file_path, 'wb') as data:
+        bucket.download_fileobj(s3_name, data)
+    print('{} uploaded to {}'.format(s3_name, os.path.basename(file_path)))
+
+
+# KM: To be removed
+def s3_to_csv(csv_path, bucket: str=None):
+    """
+    Writes s3 to csv file .
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    bucket_name = bucket if bucket else 'teis-data'
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+    s3_name = os.path.basename(csv_path)
+
+    with open(csv_path, 'wb') as data:
+        bucket.download_fileobj(s3_name, data)
+    print('{} uploaded to {}'.format(s3_name, csv_path))
+
+
+def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
+            if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
+
+    """Copies a dataframe inside a Redshift schema.table
+        using the upload via this process:
+        df -> local csv -> s3 csv -> redshift table
+
+        NOTE: currently this function performs a delete * in
+        the target table, append is in TODO list, also we
+        need to add a timestamp column
+
+        COLUMN TYPES: right now you need to do a DROP TABLE to
+        change the column type, this needs to be changed TODO
+
+    Parameters
+    ----------
+    keep_csv : bool, optional
+        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+    redshift_str : str, optional
+        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    bucket_name = bucket if bucket else 'teis-data'
+
+    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
+
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    filename = table_name + '.csv'
+    filepath = os.path.join(os.getcwd(), filename)
+
+    if clean_df:
+        df = df_clean(df)
+
+    df = clean_colnames(df)
+    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+
+    df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
+    print(f'{filename} created in {filepath}')
+
+    if s3_key:
+        if s3_key.endswith("/"):
+            s3_key = s3_key[:-1]
+
+    bucket.upload_file(filepath, f"{s3_key}/{filename}")
+    print(f'{filename} successfully uploaded to {bucket_name}/{s3_key}/{filename}')
+
+    if check_if_exists(table_name, schema, redshift_str=redshift_str):
+        if if_exists == 'fail':
+            raise ValueError(f"Table {table_name} already exists")
+        elif if_exists == 'replace':
+            sql = f"DELETE FROM {schema}.{table_name}"
+            engine.execute(sql)
+            print('SQL table has been cleaned up successfully.')
+        else:
+            pass
+    else:
+        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
+
+    if not keep_csv:
+        os.remove(filepath)
+
+
+def clean_colnames(df):
+
+    reserved_words = ["user"]
+
+    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+    df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
+
+    return df
+
+
+def df_clean(df):
+
+    def remove_inside_quotes(string):
+        """ removes double single quotes ('') inside a string,
+        e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
+
+        # pandas often parses timestamp values obtained from SQL as objects
+        if type(string) == pd.Timestamp:
+            return string
+
+        if pd.notna(string):
+            if isinstance(string, str):
+                if string.find("'") != -1:
+                    first_quote_loc = string.find("'")
+                    if string.find("'", first_quote_loc+1) != -1:
+                        second_quote_loc = string.find("'", first_quote_loc+1)
+                        string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
+                        return string_cleaned
+        return string
+
+
+    def remove_inside_single_quote(string):
+        """ removes a single single quote ('') from the beginning of a string,
+        e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
+        if type(string) == pd.Timestamp:
+            return string
+
+        if pd.notna(string):
+            if isinstance(string, str):
+                if string.startswith("'"):
+                    return string[1:]
+        return string
+
+
+    df_string_cols = df.select_dtypes(object)
+    df_string_cols = (
+        df_string_cols
+        .applymap(remove_inside_quotes)
+        .applymap(remove_inside_single_quote)
+        .replace(to_replace="\\", value="")
+        .replace(to_replace="\n", value="", regex=True) # regex=True means "find anywhere within the string"
+    )
+    df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
+
+    bool_cols = df.select_dtypes(bool).columns
+    df[bool_cols] = df[bool_cols].astype(int)
+
+    return df
+
+  
 def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
                         remove_inside_quotes=False):
     """[summary]
@@ -525,11 +489,12 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         [description], by default False
     """
 
-
     bucket_name = bucket if bucket else 'teis-data'
 
     if not s3_dir:
-        s3_dir = "bulk"
+        s3_key = file_name
+    else:
+        s3_key = s3_dir + file_name if s3_dir.endswith('/') else s3_dir + '/' + file_name
 
     config = ConfigParser()
     config.read(get_path('.aws','credentials'))
@@ -537,7 +502,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     aws_secret_access_key = config['default']['aws_secret_access_key']
 
     sql = f"""
-        COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_dir}/{file_name}'
+        COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_key}'
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
@@ -596,14 +561,6 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
     if not table_name:
         table_name = file_name.replace(".csv", "")
 
-    s3_dir = "bulk"
-    if s3_key:
-        if s3_key.endswith("/"):
-            s3_key = s3_key[:-1]
-        if s3_key.startswith("/"):
-            s3_key = s3_key[1:]
-        s3_dir += "/" + s3_key # e.g. bulk/data_loads
-
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == 'fail':
             raise ValueError(f"Table {table_name} already exists")
@@ -615,43 +572,8 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
             pass
 
     sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format,
-                                    bucket=bucket_name, s3_dir=s3_dir, remove_inside_quotes=remove_inside_quotes)
+                                    bucket=bucket_name, s3_dir=s3_key, remove_inside_quotes=remove_inside_quotes)
 
     print(f"Loading data into {table_name}...")
     engine.execute(sql)
     print(f'Data has been copied to {table_name}')
-
-
-def write_to(qf, table, schema, if_exists):
-    """
-    Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-    Warning: QFrame object should not have Denodo defined as an engine.
-    Parameters:
-    -----
-    qf: QFrame object
-    table: string
-    schema: string
-    """
-    sql = qf.get_sql().sql
-    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
-    if schema!='':
-        sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
-        sql_del_statement = f"DELETE FROM {schema}.{table}"
-    else:
-        sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
-        sql_del_statement = f"DELETE FROM {table}"
-    engine = create_engine(qf.engine)
-
-    if check_if_exists(table=table, schema=schema, redshift_str=qf.engine):
-        if if_exists=='replace':
-            engine.execute(sql_del_statement)
-            engine.execute(sql_statement)
-            print(f'Data has been owerwritten into {schema}.{table}')
-        elif if_exists=='fail':
-            raise ValueError("Table already exists")
-        elif if_exists=='append':
-            engine.execute(sql_statement)
-            print(f'Data has been appended to {table}')
-    else:
-        create_table(qf=qf, table=table, engine=engine, schema=schema)
-        engine.execute(sql_statement)
