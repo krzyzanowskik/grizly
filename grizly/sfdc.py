@@ -155,7 +155,7 @@ class SFDCResponse:
     def __str__(self):
         return json.dumps(self.data, indent=4)
 
-    def to_df(self):
+    def to_df(self, dtype=None):
 
         l = []
         for item in self.data['records']:
@@ -165,7 +165,7 @@ class SFDCResponse:
             l.append(row)
 
         df = (pd
-                .DataFrame(l, columns=self.columns)
+                .DataFrame(l, columns=self.columns, dtype=dtype)
                 .replace(to_replace=["None"], value=np.nan)
                 )
 
@@ -196,8 +196,9 @@ class SFDCResponseBulk(SFDCResponse):
     def __init__(self, data, logger):
         self.data = data
         self.columns = [item for item in data[0] if item != "attributes"]
+        self.logger = logger
 
-    def to_df(self):
+    def to_df(self, dtype=None):
         l = []
         for item in self.data:
             row = []
@@ -206,7 +207,7 @@ class SFDCResponseBulk(SFDCResponse):
             l.append(row)
 
         df = (pd
-                .DataFrame(l, columns=self.columns)
+                .DataFrame(l, columns=self.columns, dtype=dtype)
                 .replace(to_replace=["None"], value=np.nan)
                 )
 
