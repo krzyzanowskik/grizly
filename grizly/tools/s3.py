@@ -169,9 +169,10 @@ class S3:
 
         Examples
         --------
-        >>> S3 = S3('test.csv', 'bulk/')
+        >>> S3 = S3('test.csv', 'bulk/', file_dir='C:\\Users')
         >>> S3.to_file()
-        'bulk/test.csv' was successfully downloaded to 'C:\Users\TE386850\s3_loads\test.csv'
+        'bulk/test.csv' was successfully downloaded to 'C:\Users\test.csv'
+        >>> os.remove('C:\\Users\\test.csv')
         """
         file_path = os.path.join(self.file_dir, self.file_name)
 
@@ -180,6 +181,7 @@ class S3:
         s3_file.download_file(file_path)
 
         print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
+
 
     def to_df(self, **kwargs):
 
@@ -199,6 +201,7 @@ class S3:
             df = pd.read_parquet(file_path, columns=columns)
 
         return df
+
 
     def from_df(self, df:DataFrame, sep:str='\t', keep_file=True):
         """Saves DataFrame in S3.

@@ -7,14 +7,14 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
-from grizly.config import Config
+from .config import Config
 
 from .utils import check_if_exists, get_path, read_config
 
-config_path = get_path('.grizly', 'config.json')
-config = Config().from_json(config_path)
+# config_path = get_path('.grizly', 'config.json')
+# config = Config().from_json(config_path)
 try:
-    os.environ["HTTPS_PROXY"] = config.data["standard"]["https_proxy"] or read_config()["https"] # remove the second option once whole team has moved to Config
+    os.environ["HTTPS_PROXY"] = read_config()["https"] # remove the second option once whole team has moved to Config
 except:
     pass
 

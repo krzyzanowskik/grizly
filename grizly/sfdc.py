@@ -18,7 +18,7 @@ class SFDC:
     Examples
     --------
     >>> S3(file_name='acoe_config.json', s3_key='config/', file_dir=r'C:\\Users').to_file()
-    'config/acoe_config.json' uploaded to 'C:\\Users\\acoe_config.json'
+    'config/acoe_config.json' was successfully downloaded to 'C:\\Users\\acoe_config.json'
     >>> config_path = get_path('.grizly', 'acoe_config.json') # contains SFDC username and password
     >>> config = Config().from_json(config_path)
     Config data has been saved.
