@@ -176,7 +176,7 @@ def _validate_config(config:dict, services:list=None, env:str=None):
     if not isinstance(config, dict): raise TypeError("config must be a dictionary")
     if config == {}: raise ValueError("config is empty")
 
-    invalid_keys = set(config.keys()) - {'email', 'github', 'sfdc'}
+    invalid_keys = set(config.keys()) - {'email', 'github', 'sfdc', 'proxies'}
     if invalid_keys != set() :
         raise KeyError(f"Invalid keys {invalid_keys} in config. Valid keys: 'email', 'github', 'sfdc'")
 
@@ -184,7 +184,7 @@ def _validate_config(config:dict, services:list=None, env:str=None):
     if isinstance(services, str): services = [services]
     if not isinstance(services, list) : raise TypeError("services must be a list or string")
 
-    invalid_services = set(services) - {'email', 'github', 'sfdc'}
+    invalid_services = set(services) - {'email', 'github', 'sfdc', 'proxies'}
     if invalid_services != set():
         raise ValueError(f"Invalid values in services {invalid_services}. Valid values: 'email', 'github', 'sfdc'")
 
