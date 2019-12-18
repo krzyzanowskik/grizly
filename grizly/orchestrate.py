@@ -24,6 +24,27 @@ from dask.dot import _get_display_cls
 from dask.core import get_dependencies
 
 
+def _validate_date(maybe_date):
+    if not isinstance(maybe_date, (datetime.date, int)):
+        return False
+    return True
+
+
+def cast_to_date(maybe_date):
+
+    if isinstance(maybe_date, str):
+        date = datetime.datetime.strptime(maybe_date, "%Y-%m-%d")
+    elif isinstance(maybe_date, datetime.datetime):
+        date = datetime.datetime.date(maybe_date)
+    else:
+        date = maybe_date
+
+    if not _validate_date(date):
+        raise TypeError(f"The specified trigger field is not of type (int, datetime.datetime.date)")
+
+    return date
+
+
 class Schedule:
     """
     Cron schedule.
@@ -75,6 +96,14 @@ class Schedule:
         return dates
 
 
+class Trigger:
+    
+    def __init__(self, func, params=None):
+        self.check = func
+        self.kwargs = params or {}
+        self.should_run = self.check(**self.kwargs)
+
+
 class Listener:
     """A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
 
@@ -82,7 +111,7 @@ class Listener:
     """
 
 
-    def __init__(self, workflow, schema, table, field=None, query=None, db="denodo", trigger="default", delay=300):
+    def __init__(self, workflow, schema, table, field=None, query=None, db="denodo", trigger=None, trigger_type="default", delay=300):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -92,9 +121,11 @@ class Listener:
         self.field = field
         self.query = query
         self.logger = logging.getLogger(__name__)
+        self.trigger_type = trigger_type
+        self.trigger = trigger
         self.last_data_refresh = self.get_last_refresh()
         self.engine = self.get_engine()
-        self.trigger = trigger
+        self.last_trigger_run = self.get_last_trigger_run()
         self.delay = delay
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
@@ -148,46 +179,44 @@ class Listener:
         return engine
 
     def get_last_refresh(self):
-
         with open("etc/listener_store.json") as f:
-
+            listener_store = json.load(f)
+            last_data_refresh = listener_store[self.name].get("last_data_refresh") # int or serialized date
             try:
-                listener_store = json.load(f)
-                last_data_refresh = listener_store[self.name]["last_data_refresh"] # int or serialized date
-            except (KeyError, JSONDecodeError) as e:
-                return None
-
-            try:
-                # convert the serialized datetime to a date object
+                # attempt to convert the serialized datetime to a date object
                 last_data_refresh = datetime.datetime.date(datetime.datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
             except:
                 pass
+            return last_data_refresh
 
-        return last_data_refresh
-
+    def get_last_trigger_run(self):
+        with open("etc/listener_store.json") as f:
+            listener_store = json.load(f)
+            last_trigger_run = listener_store[self.name].get("last_trigger_run")
+            try:
+                # attempt to convert the serialized datetime to a date object
+                last_trigger_run = datetime.datetime.date(datetime.datetime.strptime(last_trigger_run, r"%Y-%m-%d"))
+            except:
+                pass
+            return last_trigger_run
 
     def update_json(self):
-
         with open("etc/listener_store.json") as json_file:
             try:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
                 listener_store = {}
 
-        if isinstance(self.last_data_refresh, datetime.date):
-            listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+        if self.trigger:
+            listener_store[self.name] = {"last_trigger_run": str(self.last_trigger_run)}
         else:
-            listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
+            if isinstance(self.last_data_refresh, datetime.date):
+                listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+            else:
+                listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
 
         with open("etc/listener_store.json", "w") as f_write:
             json.dump(listener_store, f_write, indent=4)
-
-
-    def _validate_table_refresh_value(self, value):
-        if not isinstance(value, (datetime.date, int)):
-            return False
-        return True
-
 
     @retry_task(TypeError, tries=3, delay=10)
     def get_table_refresh_date(self):
@@ -210,22 +239,21 @@ class Listener:
         cursor.close()
         con.close()
 
-        if isinstance(last_data_refresh, str):
-            # try casting to date
-            last_data_refresh = datetime.datetime.strptime(last_data_refresh, "%Y-%m-%d")
-
-        if isinstance(last_data_refresh, datetime.datetime):
-            last_data_refresh = datetime.datetime.date(last_data_refresh)
-
-        if not self._validate_table_refresh_value(last_data_refresh):
-            raise TypeError(f"The specified trigger field is not of type (int, datetime.datetime.date)")
+        # try casting to date
+        last_data_refresh = cast_to_date(last_data_refresh)
 
         return last_data_refresh
 
 
-    def should_trigger(self, table_refresh_date):
+    def should_trigger(self, table_refresh_date=None):
 
-        if self.trigger == "default":
+        if self.trigger:
+            today = datetime.datetime.today().date()
+            if today == self.last_trigger_run:
+                return False # workflow was already ran today
+            return self.trigger.should_run()
+
+        else:
             # first run
             if not self.last_data_refresh:
                 return True
@@ -237,44 +265,52 @@ class Listener:
             if table_refresh_date != self.last_data_refresh:
                 return True
 
-        elif isinstance(self.trigger, Schedule):
-            next_check_on = datetime.date(self.trigger.next_run)
-            if next_check_on == table_refresh_date:
-                return True
-        if self.trigger == "fiscal day":
-            # date_fiscal_day = to_fiscal(table_last_refresh, "day")
-            # date_fiscal_week = to_fiscal(table_last_refresh, "week")
-            # date_json_fiscal_day = to_fiscal(self.last_refresh_date, "day")
-            # date_json_fiscal_week = to_fiscal(self.last_refresh_date, "week")
-            # if (date_fiscal_day == date_json_fiscal_day) and (date_fiscal_day != date_json_fiscal_week): # means a week has passed
-            #     return True
-            pass
-        elif self.trigger == "fiscal week":
-            # date_fiscal_week = to_fiscal(table_last_refresh, "week")
-            pass
-        elif self.trigger == "fiscal year":
-            # date_fiscal_year = to_fiscal(table_last_refresh, "week")
-            pass
-
+        # elif isinstance(self.trigger_type, Schedule):
+        #     next_check_on = datetime.date(self.trigger_type.next_run)
+        #     if next_check_on == table_refresh_date:
+        #         return True
+        # if self.trigger_type == "fiscal day":
+        #     # date_fiscal_day = to_fiscal(table_last_refresh, "day")
+        #     # date_fiscal_week = to_fiscal(table_last_refresh, "week")
+        #     # date_json_fiscal_day = to_fiscal(self.last_refresh_date, "day")
+        #     # date_json_fiscal_week = to_fiscal(self.last_refresh_date, "week")
+        #     # if (date_fiscal_day == date_json_fiscal_day) and (date_fiscal_day != date_json_fiscal_week): # means a week has passed
+        #     #     return True
+        #     pass
+        # elif self.trigger == "fiscal week":
+        #     # date_fiscal_week = to_fiscal(table_last_refresh, "week")
+        #     pass
+        # elif self.trigger == "fiscal year":
+        #     # date_fiscal_year = to_fiscal(table_last_refresh, "week")
+        #     pass
 
     def detect_change(self):
 
-        if not any([self.field, self.query]):
+        if not any([self.field, self.query, self.trigger]):
             raise ValueError("Please specify the trigger for the listener")
 
-        try:
-            last_data_refresh = self.get_table_refresh_date()
-        except:
-            self.logger.exception(f"Connection or query error when connecting to {self.db}")
-            last_data_refresh = None
+        if self.trigger:
+            if self.should_trigger():
+                today = datetime.datetime.today().date()
+                self.last_trigger_run = today
+                self.update_json()
+                self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
+                sleep(self.delay)
+                return True
 
+        else:
+            try:
+                last_data_refresh = self.get_table_refresh_date()
+            except:
+                self.logger.exception(f"Connection or query error when connecting to {self.db}")
+                last_data_refresh = None
 
-        if self.should_trigger(last_data_refresh):
-            self.last_data_refresh = last_data_refresh
-            self.update_json()
-            self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
-            sleep(self.delay)
-            return True
+            if self.should_trigger(last_data_refresh):
+                self.last_data_refresh = last_data_refresh
+                self.update_json()
+                self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
+                sleep(self.delay)
+                return True
 
         return False
 
@@ -408,12 +444,12 @@ class Workflow:
         status_data = pd.DataFrame(status_data)
 
         try:
-            df_to_s3(status_data, table, schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3")
+            df_to_s3(status_data, table, schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', s3_key="bulk", bucket="acoe-s3")
         except Exception as e:
             self.logger.exception(f"{self.name} status could not be uploaded to S3")
             return None
 
-        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', bucket="acoe-s3")
+        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', s3_key="bulk", bucket="acoe-s3")
 
         self.logger.info(f"{self.name} status successfully uploaded to Redshift")
 
