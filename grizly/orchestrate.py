@@ -102,6 +102,7 @@ class Trigger:
         self.check = func
         self.kwargs = params or {}
         self.should_run = self.check(**self.kwargs)
+        self.table = params.get("table")
 
 
 class Listener:
@@ -111,13 +112,13 @@ class Listener:
     """
 
 
-    def __init__(self, workflow, schema, table, field=None, query=None, db="denodo", trigger=None, trigger_type="default", delay=300):
+    def __init__(self, workflow, schema=None, table=None, field=None, query=None, db="denodo", trigger=None, trigger_type="default", delay=300):
 
         self.workflow = workflow
         self.name = workflow.name
         self.db = db
         self.schema = schema
-        self.table = table
+        self.table = table or trigger.table
         self.field = field
         self.query = query
         self.logger = logging.getLogger(__name__)
@@ -251,7 +252,7 @@ class Listener:
             today = datetime.datetime.today().date()
             if today == self.last_trigger_run:
                 return False # workflow was already ran today
-            return self.trigger.should_run()
+            return self.trigger.should_run
 
         else:
             # first run
