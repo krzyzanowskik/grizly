@@ -98,6 +98,30 @@ class SFDC:
 
         return sf_conn
 
+    def get_next_batch(self, sf, raw_response):
+
+        next_batch_url = raw_response[-1].get("nextRecordsUrl")
+
+        if not next_batch_url:
+            return None
+    
+        next_batch_id = next_batch_url.split("/")[-1]
+        next_batch = sf.query_more(next_batch_id)
+
+        return next_batch
+
+    def get_response_in_batches(self, sf, table, query):
+
+        raw_response = eval(f"sf.bulk.{table}.query(query)")
+        next_batch = self.get_next_batch(sf, raw_response)
+        # raw_response.extend(next_part)
+        while next_batch:
+            self.logger.info(f"Batch of size {len(next_batch)} added. Loading next batch...")
+            # next_part = self.get_next_batch(sf, raw_response)
+            raw_response.extend(next_batch)
+            next_batch = self.get_next_batch(sf, next_batch)
+        
+        return raw_response
 
     def query(self, query, bulk=False):
         """Query a SFDC table. Only simple SELECTs are supported.
@@ -122,7 +146,11 @@ class SFDC:
 
         try:
             if bulk:
-                raw_response = eval(f"sf.bulk.{table}.query(query)")
+                raw_response = self.get_response_in_batches(sf, table, query)
+                with open("raw_response.txt", "w") as f:
+                    for line in raw_response:
+                        f.write(str(line))
+                        f.write("\n")
                 response = SFDCResponseBulk(raw_response, logger=self.logger)
             else:
                 raw_response = sf.query_all(query)
@@ -190,17 +218,19 @@ class SFDCResponseBulk(SFDCResponse):
         self.logger = logger
 
     def to_df(self, dtype=None):
-        l = []
-        for item in self.data:
-            row = []
-            for column in self.columns:
-                row.append(item[column])
-            l.append(row)
+        # l = []
+        # for item in self.data:
+        #     row = []
+        #     for column in self.columns:
+        #         row.append(item[column])
+        #     l.append(row)
 
-        df = (pd
-                .DataFrame(l, columns=self.columns, dtype=dtype)
-                .replace(to_replace=["None"], value=np.nan)
-                )
+        # df = (pd
+        #         .DataFrame(l, columns=self.columns, dtype=dtype)
+        #         .replace(to_replace=["None"], value=np.nan)
+        #         )
+
+        df = pd.DataFrame(self.data).drop("attributes", axis=1).replace(to_replace=["None"], value=np.nan)
 
         return df
 
