@@ -8,5 +8,4 @@ Tutorials
    :caption: Tutorials:
 
    api/tutorial_qframe_new
-   api/tutorial_store
    api/config
