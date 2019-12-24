@@ -153,11 +153,11 @@ def create_table(qf, table, engine, schema='', char_size=500):
         Specify the schema.
     char_size : int, size of the VARCHAR field in the database column
     """
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-
+    engine_con = create_engine(engine, encoding='utf8', poolclass=NullPool)
+    
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
-    if check_if_exists(table, schema):
+    if check_if_exists(table, schema, engine):
         print("Table {} already exists...".format(table_name))
 
     else:
@@ -173,7 +173,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         columns_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
 
-        con = engine.connect()
+        con = engine_con.connect()
         con.execute(sql)
         con.close()
 
@@ -576,7 +576,7 @@ def write_to(qf, table, schema, if_exists):
     table: string
     schema: string
     """
-    sql = qf.get_sql().sql
+    sql = qf.get_sql(print_sql=False).sql
     columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
     if schema!='':
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
@@ -597,5 +597,5 @@ def write_to(qf, table, schema, if_exists):
             engine.execute(sql_statement)
             print(f'Data has been appended to {table}')
     else:
-        create_table(qf=qf, table=table, engine=engine, schema=schema)
+        create_table(qf=qf, table=table, engine=qf.engine, schema=schema)
         engine.execute(sql_statement)
