@@ -562,4 +562,4 @@ def test_initiate():
         """
 
     sql = q.get_sql()
-    assert clean_testexpr(testsql) == clean_testexpr(testsql) 
+    assert clean_testexpr(sql) == clean_testexpr(testsql) 
