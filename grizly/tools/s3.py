@@ -1,4 +1,5 @@
 from boto3 import resource
+from botocore.exceptions import ClientError
 import os
 import openpyxl
 from ..utils import (
@@ -6,7 +7,9 @@ from ..utils import (
     check_if_exists
 )
 from pandas import (
-    DataFrame
+    DataFrame,
+    read_csv,
+    read_parquet
 )
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
@@ -14,6 +17,7 @@ from io import StringIO
 from csv import reader
 from configparser import ConfigParser
 from copy import deepcopy
+from functools import wraps
 
 
 class S3:
@@ -46,6 +50,21 @@ class S3:
 
         if not self.s3_key.endswith('/'):
             raise ValueError("s3_key should end with /")
+
+
+    def _check_if_s3_exists(f):
+        @wraps(f)
+        def wrapped(self, *args, **kwargs):
+            s3_key = self.s3_key + self.file_name
+            try:
+                self.s3_resource.Object(self.bucket, s3_key).load()
+            except ClientError as e:
+                if e.response['Error']['Code'] == "404":
+                    raise FileNotFoundError(f'{s3_key} file not found')
+
+            return f(self, *args, **kwargs)
+        return wrapped
+
 
     def info(self):
         """Print a concise summary of a S3.
@@ -80,7 +99,19 @@ class S3:
         return files
 
 
-    def copy_to(self, file_name:str=None, s3_key:str=None, bucket:str=None):
+    @_check_if_s3_exists
+    def delete(self):
+        """Removes S3 file.
+        """
+        s3_key = self.s3_key + self.file_name
+        self.s3_resource.Object(self.bucket, s3_key).delete()
+
+        print(f"'{s3_key}' has been removed successfully")
+        return self
+
+
+    @_check_if_s3_exists
+    def copy_to(self, file_name:str=None, s3_key:str=None, bucket:str=None, keep_file:bool=True):
         """Copies S3 file to another S3 file.
 
         Parameters
@@ -91,6 +122,8 @@ class S3:
             New S3 key, if None then the same as in class
         bucket : str, optional
             New bucket, if None then the same as in class
+        keep_file:
+            Whether to keep the original S3 file after copying it to another S3 file, by default True
 
         Examples
         --------
@@ -130,6 +163,9 @@ class S3:
         s3_file.copy(copy_source)
         print(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
 
+        if not keep_file:
+            self.delete()
+
         return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
@@ -164,13 +200,13 @@ class S3:
             print(f"'{file_path}' has been removed")
 
 
+    @_check_if_s3_exists
     def to_file(self):
         r"""Writes S3 to local file.
 
         Examples
         --------
-        >>> S3 = S3('test.csv', 'bulk/', file_dir='C:\\Users')
-        >>> S3.to_file()
+        >>> S3('test.csv', 'bulk/', file_dir='C:\\Users').to_file()
         'bulk/test.csv' was successfully downloaded to 'C:\Users\test.csv'
         >>> os.remove('C:\\Users\\test.csv')
         """
@@ -195,10 +231,10 @@ class S3:
             sep = kwargs.get("sep")
             if not sep:
                 sep = "\t"
-            df = pd.read_csv(file_path, sep=sep)
+            df = read_csv(file_path, sep=sep)
         else:
             columns = kwargs.get("columns")
-            df = pd.read_parquet(file_path, columns=columns)
+            df = read_parquet(file_path, columns=columns)
 
         return df
 
@@ -236,6 +272,7 @@ class S3:
         self.from_file(keep_file=keep_file)
 
 
+    @_check_if_s3_exists
     def to_rds(self, table:str, schema:str=None, if_exists:{'fail', 'replace', 'append'}='fail', sep:str='\t', types:dict=None) :
         """Writes S3 to Redshift table.
 
@@ -364,13 +401,3 @@ class S3:
 
         print("Table {} has been created successfully.".format(table_name))
 
-
-class _AttrDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(_AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
