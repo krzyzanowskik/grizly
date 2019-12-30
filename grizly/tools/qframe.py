@@ -817,7 +817,8 @@ class QFrame:
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
-
+        if "denodo" in self.engine.lower():
+            self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
         row_count = to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
         if debug:
             return row_count
