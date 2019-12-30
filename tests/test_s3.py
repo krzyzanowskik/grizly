@@ -14,6 +14,7 @@ def test_df_to_s3_and_s3_to_file():
     second_file_path = os.path.join(s3.file_dir, 'testing_aws_class_1.csv')
 
     os.rename(first_file_path, second_file_path)
+    print(os.path.join(s3.file_dir, s3.file_name))
     s3.to_file()
 
     assert cmp(first_file_path, second_file_path) == True
