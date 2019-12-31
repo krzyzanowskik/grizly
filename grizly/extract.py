@@ -19,16 +19,15 @@ from .config import (
 
 class Extract():
     """Writes data to file.
+
+    Parameters
+    ----------
+    file_path : str, optional
+        Path to local output file, by default None
+    config_key : str, optional
+        Config key , by default 'standard'
     """
     def __init__(self, file_path:str=None, config_key:str=None):
-        """
-        Parameters
-        ----------
-        file_path : str, optional
-            Path to local output file, by default None
-        config_key : str, optional
-            Config key , by default 'standard'
-        """
         self.file_path = file_path
         self.rows = None
         self.task = None
@@ -37,7 +36,7 @@ class Extract():
 
     def get_path(self):
         """Returns path stored in extract.file_path
-        
+
         Returns
         -------
         str
@@ -128,7 +127,7 @@ class Extract():
         def from_sfdc():
             if env == "prod":
                 if None in [username, password, organizationId]:
-                    config = Config().get_service(service='sfdc', env=env)
+                    config = Config().get_service(service='sfdc', env=env, config_key=self.config_key)
                 username_prod = username or config['username']
                 password_prod = password or config['password']
                 organizationId_prod = organizationId or config['organizationId']
@@ -142,7 +141,7 @@ class Extract():
 
             elif env == "stage":
                 if None in [username, password, organizationId, instance_url]:
-                    config = Config().get_service(service='sfdc', env=env)
+                    config = Config().get_service(service='sfdc', env=env, config_key=self.config_key)
                 username_stage = username or config['username']
                 password_stage = password or config['password']
                 organizationId_stage = organizationId or config['organizationId']
@@ -210,7 +209,7 @@ class Extract():
         """Writes GitHub data in csv file.
         """
         if None in [username, username_password, pages]:
-            config_github = Config().get_service(service='github')
+            config_github = Config().get_service(service='github', config_key=self.config_key)
 
         username = username or config_github['username']
         username_password = username_password or config_github['username_password']
