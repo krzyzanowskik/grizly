@@ -1,6 +1,6 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
-from .utils import read_config
+from .utils import read_config, get_path
 from .config import (
     Config,
     _validate_config
@@ -10,44 +10,43 @@ from os.path import basename
 
 
 class Email:
-    """Sends email using Exchange Web Services (EWS) API.
+    """Class used to build and send email using Exchange Web Services (EWS) API.
 
-    Usage
-    -------
-    to = "test@example.com"
-    cc = ["test2@example.com", test3@example.com"]
-    team_email_address = "shared_mailbox@example.com"
-    attachment_path = "path/to/attachment/myattachment.pdf"
-    email = Email("test", "testing body")
-    email.send(to=to, cc=cc, send_as=team_email_address)
-    """
-
-
-    def __init__(self, subject, body, attachment_path=None, logger=None, is_html=False
-                    , email_address:str=None, email_password:str=None, config_key:str="standard"):
+    Parameters
+    ----------
+    subject : str
+        Email subject
+    body : str
+        Email body
+    attachment_path : str, optional
+        Path to local file to be attached in the email , by default None
+    logger : [type], optional
+        [description], by default None
+    is_html : bool, optional
+        [description], by default False
+    email_address : str, optional
+        Email address used to send an email, by default None
+    email_password : str, optional
+        Password to the email sepcified in email_address, by default None
+    config_key : str, optional
+        Config key, by default 'standard'"""
+    def __init__(self, subject:str, body:str, attachment_path:str=None, logger=None, is_html:bool=False
+                    , email_address:str=None, email_password:str=None, config_key:str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
-        if email_address is None:
-            _validate_config(config=Config.data[config_key],
-                            services='email')
-            self.config = Config.data[config_key]
-            self.email_address = self.config['email']['email_address']
-        else:
-            self.email_address = email_address
-        if email_password is None:
-            _validate_config(config=Config.data[config_key],
-                            services='email')
-            self.email_password = self.config['email']['email_password']
-        else:
-            self.email_password = email_password
+        self.config_key = config_key or "standard"
+        if None in [email_address, email_password]:
+            config = Config().get_service(config_key=self.config_key, service="email")
+        self.email_address = email_address or config["email_address"]
+        self.email_password = email_password or config["email_password"]
         self.attachment_path = attachment_path
         self.attachment_name = basename(attachment_path) if attachment_path else None
         self.attachment_content = self.get_attachment_content(attachment_path)
         self.attachment = self.get_attachment()
 
-    def get_attachment(self):
 
+    def get_attachment(self):
         """ Returns FileAttachment object """
 
         if not self.attachment_path:
@@ -55,8 +54,8 @@ class Email:
 
         return FileAttachment(name=self.attachment_name, content=self.attachment_content)
 
-    def get_attachment_content(self, attachment_path):
 
+    def get_attachment_content(self, attachment_path:str):
         """ Get the content of a file in binary format """
 
         if not self.attachment_path:
@@ -90,23 +89,60 @@ class Email:
         return binary_content
 
 
-    def send(self, to, cc=None, send_as=None):
+    def send(self, to:list, cc:list=None, send_as:str=None):
+        """Sends an email
 
+        Parameters
+        ----------
+        to : str or list
+            Email recepients
+        cc : str or list, optional
+            Cc recepients, by default None
+        send_as : str, optional
+            Author of the email, by default None
+
+        Examples
+        --------
+        >>> personal = {
+        ...        "personal": {
+        ...        "email": {
+        ...            "email_address": "john_snow@example.com",
+        ...            "email_password": "wolf123",
+        ...            "send_as": "John Snow"
+        ...        }
+        ...        }
+        ...    }
+        >>> conf = Config().add_keys(personal)
+        Key 'personal' has been added.
+        >>> attachment_path = get_path("dev", "grizly", "tests", "output.txt")
+        >>> email = Email(subject="Test", body="Testing body.", attachment_path=attachment_path, config_key="personal")
+        >>> to = "test@example.com"
+        >>> cc = ["test2@example.com", "test3@example.com"]
+        >>> team_email_address = "shared_mailbox@example.com"
+        >>> #email.send(to=to, cc=cc, send_as=team_email_address) #uncomment this line to send an email
+
+        Returns
+        -------
+        None
+        """
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
-        print("from ", self.config['email']['send_as'], "to ", to)
+
+        if send_as is None:
+            config = Config(config_key=self.config_key).get_service(service="email")
+            send_as = config["send_as"]
+
+        if send_as == "":
+            send_as = self.email_address
+
+        print("from ", send_as, "to ", to)
 
         email_address = self.email_address
         email_password = self.email_password
-        if send_as is None:
-            send_as = self.config['email']['send_as']
-
-        if send_as == '':
-            send_as = email_address
 
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
         credentials = Credentials(email_address, email_password)
-        config = Configuration(server='smtp.office365.com', credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
+        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
         account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
 
         m = Message(
