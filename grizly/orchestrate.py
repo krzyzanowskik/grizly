@@ -1,48 +1,68 @@
-import pandas as pd
-import dask
+import json
 import logging
 import os
-import json
-import datetime
-import graphviz
-import traceback
 import sys
-
-from time import time, sleep
-from croniter import croniter
-from datetime import timedelta
-from .etl import df_to_s3, s3_to_rds
-from .tools.qframe import QFrame
-from .utils import read_config, get_path
-from .email import Email
+import traceback
+import datetime as dt
+from datetime import datetime, timedelta, timezone
 from functools import wraps
+from json.decoder import JSONDecodeError
+from logging import Logger
+from time import sleep, time
+from typing import Any, Dict, Iterable, List
+
+import dask
+import graphviz
+import pandas as pd
+from croniter import croniter
+from dask.core import get_dependencies
+from dask.dot import _get_display_cls
+from dask.optimization import key_split
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
-from json.decoder import JSONDecodeError
-from dask.optimization import key_split
-from dask.dot import _get_display_cls
-from dask.core import get_dependencies
+
+from .email import Email
+from .etl import df_to_s3, s3_to_rds
+from .tools.qframe import QFrame
+from .utils import get_path, read_config
 
 
-def _validate_date(maybe_date):
-    if not isinstance(maybe_date, (datetime.date, int)):
-        return False
-    return True
+def cast_to_date(maybe_date: Any) -> dt.date:
+    """
+    Casts a date/datetime-like value to a Date object.
+    
+    Parameters
+    ----------
+    maybe_date : Any
+        The date/datetime-like value to be conveted to a Date object.
+    
+    Returns
+    -------
+    _date
+        The date-like object converted to an actual Date object.
+    
+    Raises
+    ------
+    TypeError
+        When maybe_date is not of one of the supported types.
+    """
 
-
-def cast_to_date(maybe_date):
+    def _validate_date(maybe_date: Any) -> bool:
+        if not isinstance(maybe_date, (dt.date, int)):
+            return False
+        return True
 
     if isinstance(maybe_date, str):
-        date = datetime.datetime.strptime(maybe_date, "%Y-%m-%d")
-    elif isinstance(maybe_date, datetime.datetime):
-        date = datetime.datetime.date(maybe_date)
+        _date = datetime.strptime(maybe_date, "%Y-%m-%d")
+    elif isinstance(maybe_date, datetime):
+        _date = datetime.date(maybe_date)
     else:
-        date = maybe_date
+        _date = maybe_date
 
-    if not _validate_date(date):
-        raise TypeError(f"The specified trigger field is not of type (int, datetime.datetime.date)")
+    if not _validate_date(_date):
+        raise TypeError(f"The specified trigger field is not of type (int, date)")
 
-    return date
+    return _date
 
 
 class Schedule:
@@ -65,7 +85,7 @@ class Schedule:
         self.end_date = end_date
 
 
-    def emit_dates(self, start_date=None):
+    def emit_dates(self, start_date: datetime=None) -> Iterable[datetime]:
         """
         Generator that emits workflow run dates
         Args:
@@ -74,12 +94,12 @@ class Schedule:
             - Iterable[datetime]: the next scheduled dates
         """
         if not self.start_date:
-            start_date = datetime.datetime.now(datetime.timezone.utc)
+            start_date = datetime.now(timezone.utc)
 
         cron = croniter(self.cron, start_date)
 
         while True:
-            next_date = cron.get_next(datetime.datetime)
+            next_date = cron.get_next(datetime)
             if self.end_date and next_date > self.end_date:
                 break
             yield next_date
@@ -106,9 +126,10 @@ class Trigger:
 
 
 class Listener:
-    """A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
+    """
+    A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
 
-    Check and stores table's last refresh date.
+    Checks and stores table's last refresh/trigger date.
     """
 
 
@@ -185,7 +206,7 @@ class Listener:
             last_data_refresh = listener_store[self.name].get("last_data_refresh") # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
-                last_data_refresh = datetime.datetime.date(datetime.datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
+                last_data_refresh = datetime.date(datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
             except:
                 pass
             return last_data_refresh
@@ -196,7 +217,7 @@ class Listener:
             last_trigger_run = listener_store[self.name].get("last_trigger_run")
             try:
                 # attempt to convert the serialized datetime to a date object
-                last_trigger_run = datetime.datetime.date(datetime.datetime.strptime(last_trigger_run, r"%Y-%m-%d"))
+                last_trigger_run = datetime.date(datetime.strptime(last_trigger_run, r"%Y-%m-%d"))
             except:
                 pass
             return last_trigger_run
@@ -211,7 +232,7 @@ class Listener:
         if self.trigger:
             listener_store[self.name] = {"last_trigger_run": str(self.last_trigger_run)}
         else:
-            if isinstance(self.last_data_refresh, datetime.date):
+            if isinstance(self.last_data_refresh, dt.date):
                 listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
             else:
                 listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
@@ -249,7 +270,7 @@ class Listener:
     def should_trigger(self, table_refresh_date=None):
 
         if self.trigger:
-            today = datetime.datetime.today().date()
+            today = datetime.today().date()
             if today == self.last_trigger_run:
                 return False # workflow was already ran today
             return self.trigger.should_run
@@ -285,14 +306,27 @@ class Listener:
         #     # date_fiscal_year = to_fiscal(table_last_refresh, "week")
         #     pass
 
-    def detect_change(self):
+    def detect_change(self) -> bool:
+        """Determine whether the listener should trigger a worfklow run.
+        
+        Returns
+        -------
+        bool
+            Whether the field (specified by a Trigger function or the field parameter) has changed since it was last checked,
+            as determined by Listener.should_trigger().
+        
+        Raises
+        ------
+        ValueError
+            If neither of [field, query, trigger] is provided.
+        """
 
         if not any([self.field, self.query, self.trigger]):
             raise ValueError("Please specify the trigger for the listener")
 
         if self.trigger:
             if self.should_trigger():
-                today = datetime.datetime.today().date()
+                today = datetime.today().date()
                 self.last_trigger_run = today
                 self.update_json()
                 self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
@@ -345,11 +379,11 @@ class Workflow:
         self.logger.info(f"Workflow {self.name} initiated successfully")
 
 
-    def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
-        tasks = [load_qf(qf, depends_on=None)]
-        fnretry = retry(fn)
-        self.tasks
-        return fn_decorated
+    # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
+    #     tasks = [load_qf(qf, depends_on=None)]
+    #     fnretry = retry(fn)
+    #     self.tasks
+    #     return fn_decorated
 
     def __str__(self):
         return self.tasks
@@ -457,7 +491,9 @@ class Workflow:
         return None
 
 
-    def run(self, local=False):
+    def run(self, env="local"):
+
+        self.env = env
 
         if self.check_if_manual():
             pass
@@ -511,9 +547,9 @@ class Workflow:
         notification = Email(subject=subject, body=email_body, logger=self.logger)
         notification.send(to=to, cc=cc, send_as="")
         # when ran on server, the status is handled by Runner
-        if local:
+        if env == "local":
             self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time,
-                                    env="local", error_value=self.error_value, error_type=self.error_type)
+                                    env=self.env, error_value=self.error_value, error_type=self.error_type)
 
         if self.trigger_on_success:
             triggered_wf = self.trigger_on_success
@@ -521,7 +557,7 @@ class Workflow:
             triggered_wf.run()
             self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
             triggered_wf.write_status_to_rds(triggered_wf.name, triggered_wf.owner_email, triggered_wf.backup_email,
-                                            triggered_wf.status, triggered_wf.run_time, env="prod",
+                                            triggered_wf.status, triggered_wf.run_time, env=self.env,
                                             error_value=triggered_wf.error_value, error_type=triggered_wf.error_type)
 
         return self.status
@@ -529,14 +565,16 @@ class Workflow:
 
 class Runner:
     """Workflow runner"""
+    
+    
 
-    def __init__(self, workflows, logger=None, env=None):
+    def __init__(self, workflows: List[Workflow], logger: Logger=None, env: str="prod") -> None:
         self.workflows = workflows
-        self.env = env if env else "prod"
+        self.env = env
         self.logger = logging.getLogger(__name__)
-        self.run_params=None
+        self.run_params = None
 
-    def should_run(self, workflow):
+    def should_run(self, workflow: Workflow) -> bool:
         """Determines whether a workflow should run based on its next scheduled run.
 
         Parameters
@@ -544,11 +582,11 @@ class Runner:
         workflow : Workflow
             A workflow instance. This function assumes the instance is generated on scheduler tick.
             Currently, this is accomplished by calling wf.generate_workflow() on each workflow every time Runner.get_pending_workflows() is called,
-            which means wf.next_run recalculated every time should_run() is called.
+            which means wf.next_run recalculated every time should_run() is called
 
         Returns
         -------
-        boolean
+        bool
             Whether the workflow's scheduled next run coincides with current time
         """
 
@@ -556,7 +594,7 @@ class Runner:
 
             self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})")
 
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.now(timezone.utc)
             next_run = workflow.next_run
             if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
@@ -585,7 +623,16 @@ class Runner:
 
     #     return pending
 
-    def overwrite_params(self, workflow, params):
+    def overwrite_params(self, workflow: Workflow, params: Dict) -> None:
+        """Overwrites specified workflow's parameters
+        
+        Parameters
+        ----------
+        workflow : Workflow
+            The workflow to modify.
+        params : Dict
+            Parameters and values which will be used to modify the Workflow instance.
+        """
         # params: dict fof the form {"listener": {"delay": 0}, "backup_email": "test@example.com"}
         for param in params:
     
@@ -615,7 +662,21 @@ class Runner:
             else:
                 setattr(workflow, param, params[param])
 
-    def run(self, workflows, overwrite_params=None):
+    def run(self, workflows: List[Workflow], overwrite_params: Dict=None) -> Dict:
+        """[summary]
+        
+        Parameters
+        ----------
+        workflows : List[Workflow]
+            Workflows to run.
+        overwrite_params : Dict, optional
+            Workflow parameters to overwrite (applies to all passed workflows), by default None
+        
+        Returns
+        -------
+        Dict
+            Dictionary including each workflow together with its run status.
+        """
 
         self.logger.info(f"Checking for pending workflows...")
 
@@ -627,7 +688,7 @@ class Runner:
         for workflow in workflows:
             if self.should_run(workflow):
                 self.logger.info(f"Running {workflow.name}...")
-                workflow.run()
+                workflow.run(env=self.env)
                 self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
                 workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status,
                                             workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
