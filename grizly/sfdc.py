@@ -49,6 +49,7 @@ class SFDC:
         self.logger = logger if logger else logging.getLogger(__name__)
 
     def get_config_proxies(self):
+        #proxes = self.global_config.get_service("proxies")
         try:
             proxies = self.global_config["proxies"]
         except KeyError:
@@ -97,7 +98,7 @@ class SFDC:
 
     def get_next_batch(self, sf, raw_response):
 
-        next_batch_url = raw_response[-1].get("nextRecordsUrl")
+        next_batch_url = raw_response.pop("nextRecordsUrl", None)
 
         if not next_batch_url:
             return None
@@ -110,11 +111,11 @@ class SFDC:
     def get_response_in_batches(self, sf, table, query):
 
         raw_response = eval(f"sf.bulk.{table}.query(query)")
+        return raw_response
         next_batch = self.get_next_batch(sf, raw_response)
-        # raw_response.extend(next_part)
+        
         while next_batch:
             self.logger.info(f"Batch of size {len(next_batch)} added. Loading next batch...")
-            # next_part = self.get_next_batch(sf, raw_response)
             raw_response.extend(next_batch)
             next_batch = self.get_next_batch(sf, next_batch)
         
