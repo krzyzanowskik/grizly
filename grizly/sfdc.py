@@ -11,6 +11,7 @@ from .config import Config
 from .utils import get_path
 from logging import Logger
 from .tools.s3 import S3
+from typing import Dict
 
 class SFDC:
     """A class for extracting with Salesforce data.
@@ -46,10 +47,6 @@ class SFDC:
         self.instance_url = instance_url
         self.env = env
         self.logger = logger if logger else logging.getLogger(__name__)
-
-    def _validate_proxies(proxies):
-        if not (proxies["http"] or proxies["https"]):
-            self.proxies = None
 
     def get_config_proxies(self):
         try:
@@ -147,11 +144,8 @@ class SFDC:
         try:
             if bulk:
                 raw_response = self.get_response_in_batches(sf, table, query)
-                with open("raw_response.txt", "w") as f:
-                    for line in raw_response:
-                        f.write(str(line))
-                        f.write("\n")
-                response = SFDCResponseBulk(raw_response, logger=self.logger)
+                return raw_response
+                # response = SFDCResponseBulk(raw_response, logger=self.logger)
             else:
                 raw_response = sf.query_all(query)
                 response = SFDCResponse(raw_response, logger=self.logger)
