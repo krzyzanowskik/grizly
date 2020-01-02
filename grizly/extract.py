@@ -19,16 +19,15 @@ from .config import (
 
 class Extract():
     """Writes data to file.
+
+    Parameters
+    ----------
+    file_path : str, optional
+        Path to local output file, by default None
+    config_key : str, optional
+        Config key , by default 'standard'
     """
     def __init__(self, file_path:str=None, config_key:str=None):
-        """
-        Parameters
-        ----------
-        file_path : str, optional
-            Path to local output file, by default None
-        config_key : str, optional
-            Config key , by default 'standard'
-        """
         self.file_path = file_path
         self.rows = None
         self.task = None
@@ -37,7 +36,7 @@ class Extract():
 
     def get_path(self):
         """Returns path stored in extract.file_path
-        
+
         Returns
         -------
         str
@@ -127,76 +126,32 @@ class Extract():
         Writes Salesforce table to csv file."""
         def from_sfdc():
             if env == "prod":
-
-                if username is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc',
-                                    env='prod')
-                    username_prod = Config.data[self.config_key]['sfdc']['prod']['username']
-                else:
-                    username_prod = username
-
-                if password is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='prod')
-                    password_prod = Config.data[self.config_key]['sfdc']['prod']['password']
-                else:
-                    password_prod = password
-
-                if organizationId is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='prod')
-                    organizationId_prod = Config.data[self.config_key]['sfdc']['prod']['organizationId']
-                else:
-                    organizationId_prod = organizationId
+                if None in [username, password, organizationId]:
+                    config = Config().get_service(service='sfdc', env=env, config_key=self.config_key)
+                username_prod = username or config['username']
+                password_prod = password or config['password']
+                organizationId_prod = organizationId or config['organizationId']
                 try:
-                    sf = Salesforce(password=password_prod, 
-                                    username=username_prod, 
+                    sf = Salesforce(password=password_prod,
+                                    username=username_prod,
                                     organizationId=organizationId_prod)
                 except SalesforceAuthenticationFailed:
                     print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
                     raise SalesforceAuthenticationFailed
 
             elif env == "stage":
-                if username is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='stage')
-                    username_stage = Config.data[self.config_key]['sfdc']['stage']['username']
-                else:
-                    username_stage = username
-
-                if password is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='stage')
-                    password_stage = Config.data[self.config_key]['sfdc']['stage']['password']
-                else:
-                    password_stage = password
-
-                if organizationId is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='stage')
-                    organizationId_stage = Config.data[self.config_key]['sfdc']['stage']['organizationId']
-                else:
-                    organizationId_stage = organizationId
-
-                if instance_url is None:
-                    _validate_config(config=Config.data[self.config_key], 
-                                    services='sfdc', 
-                                    env='stage')
-                    instance_url_stage = Config.data[self.config_key]['sfdc']['stage']['instance_url']
-                else:
-                    instance_url_stage = instance_url
+                if None in [username, password, organizationId, instance_url]:
+                    config = Config().get_service(service='sfdc', env=env, config_key=self.config_key)
+                username_stage = username or config['username']
+                password_stage = password or config['password']
+                organizationId_stage = organizationId or config['organizationId']
+                instance_url_stage = instance_url or config['instance_url']
                 try:
-                    sf = Salesforce(instance_url=instance_url_stage, 
-                                    password=password_stage, 
+                    sf = Salesforce(instance_url=instance_url_stage,
+                                    password=password_stage,
                                     username=username_stage,
-                                    organizationId=organizationId_stage, 
-                                    sandbox=True, 
+                                    organizationId=organizationId_stage,
+                                    sandbox=True,
                                     security_token='')
                 except SalesforceAuthenticationFailed:
                     print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
@@ -250,33 +205,18 @@ class Extract():
         return self
 
 
-    def from_github(self, username:str=None, username_password:str=None, pages:int=100):
+    def from_github(self, username:str=None, username_password:str=None, pages:int=100, proxies:dict=None):
         """Writes GitHub data in csv file.
-        
-        Parameters
-        ----------
-        username : str
-            [description]
-        username_password : str
-            [description]
-        pages : int, optional
-            [description], by default 100
-        
-        Returns
-        -------
-        Extract
         """
-        proxies = {
-            "http": "http://restrictedproxy.tycoelectronics.com:80",
-            "https": "https://restrictedproxy.tycoelectronics.com:80",
-            }
+        if None in [username, username_password, pages]:
+            config_github = Config().get_service(service='github', config_key=self.config_key)
+
+        username = username or config_github['username']
+        username_password = username_password or config_github['username_password']
+        pages = pages or config_github['pages']
+        proxies = proxies or config_github['proxies']
+
         records = []
-        if username is None:
-            username = _validate_config(config=Config.data[self.config_key], 
-                                        services='github')['github']['username']
-        if username_password is None:
-            username_password = _validate_config(config=Config.data[self.config_key], 
-                                                services='github')['github']['username_password']
 
         for page in range(pages):
             page += 1

@@ -533,8 +533,12 @@ class Workflow:
         if self.is_scheduled:
             email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
         elif self.is_triggered:
-            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-            \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+            if self.trigger:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_trigger_run}"""
+            else:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
         else:
             email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
         if self.status == "fail":
