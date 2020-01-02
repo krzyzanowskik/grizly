@@ -6,7 +6,7 @@ from .config import (
     _validate_config
 )
 from os.path import basename
-
+import os
 
 
 class Email:
@@ -31,7 +31,7 @@ class Email:
     config_key : str, optional
         Config key, by default 'standard'"""
     def __init__(self, subject:str, body:str, attachment_path:str=None, logger=None, is_html:bool=False
-                    , email_address:str=None, email_password:str=None, config_key:str=None):
+                    , email_address:str=None, email_password:str=None, config_key:str=None, proxy: str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger
@@ -44,6 +44,10 @@ class Email:
         self.attachment_name = basename(attachment_path) if attachment_path else None
         self.attachment_content = self.get_attachment_content(attachment_path)
         self.attachment = self.get_attachment()
+        try:
+            self.proxy = proxy or os.getenv("HTTPS_PROXY") or Config().get_service(config_key=self.config_key, service="proxies").get("https")
+        except:
+            self.proxy = None
 
 
     def get_attachment(self):
@@ -128,23 +132,27 @@ class Email:
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
-        if send_as is None:
-            config = Config(config_key=self.config_key).get_service(service="email")
-            send_as = config["send_as"]
+        if not send_as:
+            try:
+                send_as = Config().get_service(config_key=self.config_key, service="email").get('send_as')
+            except KeyError:
+                pass
 
-        if send_as == "":
+        if send_as == "": # it's added as empty string in config
             send_as = self.email_address
-
-        print("from ", send_as, "to ", to)
 
         email_address = self.email_address
         email_password = self.email_password
 
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
         credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
-        account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
-
+        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2*60))
+        try:
+            account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
+        except:
+            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
         m = Message(
             account=account,
             subject=self.subject,
