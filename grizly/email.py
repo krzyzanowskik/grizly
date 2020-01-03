@@ -7,6 +7,7 @@ from .config import (
 )
 from os.path import basename
 import os
+import logging
 from typing import Union, List
 
 
@@ -36,7 +37,7 @@ class Email:
                     , email_address:str=None, email_password:str=None, config_key:str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
         self.config_key = config_key or "standard"
         if None in [email_address, email_password]:
             config = Config().get_service(config_key=self.config_key, service="email")
@@ -97,7 +98,6 @@ class Email:
         """ Returns FileAttachment object """
         return FileAttachment(name=attachment_name, content=attachment_content)
 
-
     def send(self, to:list, cc:list=None, send_as:str=None):
         """Sends an email
 
@@ -155,8 +155,8 @@ class Email:
         try:
             account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
         except:
-            if self.logger:
-                self.logger.exception("Email account could not be accessed.")
+            self.logger.exception("Email account could not be accessed.")
+            raise
 
         m = Message(
             account=account,
@@ -174,10 +174,7 @@ class Email:
         try:
             m.send()
         except Exception as e:
-            if self.logger:
-                self.logger.exception(f"Email not sent.")
-            else:
-                print(e)
+            self.logger.exception(f"Email not sent.")
             raise
 
         return None
