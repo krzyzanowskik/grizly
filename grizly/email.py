@@ -6,7 +6,8 @@ from .config import (
     _validate_config
 )
 from os.path import basename
-
+import os
+from typing import Union, List
 
 
 class Email:
@@ -30,7 +31,8 @@ class Email:
         Password to the email sepcified in email_address, by default None
     config_key : str, optional
         Config key, by default 'standard'"""
-    def __init__(self, subject:str, body:str, attachment_path:str=None, logger=None, is_html:bool=False
+
+    def __init__(self, subject:str, body:str, attachment_paths:Union[list, str]=None, logger=None, is_html:bool=False
                     , email_address:str=None, email_password:str=None, config_key:str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
@@ -40,53 +42,60 @@ class Email:
             config = Config().get_service(config_key=self.config_key, service="email")
         self.email_address = email_address or config["email_address"]
         self.email_password = email_password or config["email_password"]
-        self.attachment_path = attachment_path
-        self.attachment_name = basename(attachment_path) if attachment_path else None
-        self.attachment_content = self.get_attachment_content(attachment_path)
-        self.attachment = self.get_attachment()
+        self.attachment_paths = self.to_list(attachment_paths)
+        self.attachments = self.get_attachments(self.attachment_paths)
+        try:
+            self.proxy = proxy or os.getenv("HTTPS_PROXY") or Config().get_service(config_key=self.config_key, service="proxies").get("https")
+        except:
+            self.proxy = None
 
+    def to_list(self, maybe_list:Union[List[str], str]):
+        if isinstance(maybe_list, str):
+            maybe_list = [maybe_list]
+        return maybe_list
 
-    def get_attachment(self):
-        """ Returns FileAttachment object """
+    def get_attachments(self, attachment_paths):
 
-        if not self.attachment_path:
+        if not attachment_paths:
             return None
 
-        return FileAttachment(name=self.attachment_name, content=self.attachment_content)
+        names = [self.get_attachment_name(attachment_path) for attachment_path in attachment_paths]
+        contents = [self.get_attachment_content(attachment_path, name) for attachment_path, name in zip(attachment_paths, names)]
+        attachments = [self.get_attachment(name, content) for name, content in zip(names, contents)]
 
+        return attachments
 
-    def get_attachment_content(self, attachment_path:str):
+    def get_attachment_name(self, attachment_path:str):
+        """Return attachment name"""
+        return basename(attachment_path)
+
+    def get_attachment_content(self, attachment_path, attachment_name):
         """ Get the content of a file in binary format """
-
-        if not self.attachment_path:
-            return None
-
-        attachment_name = self.attachment_name
 
         image_formats = ["png", "jpeg", "jpg", "gif", "psd", "tiff"]
         doc_formats = ["pdf", "ppt", "pptx", "xls", "xlsx", "doc", "docx"]
         archive_formats = ["zip", "7z", "tar", "rar", "iso"]
         compression_formats = ["pkl", "gzip", "bz", "bz2"]
-
         binary_formats = image_formats + doc_formats + archive_formats + compression_formats
         text_formats = ["txt", "log", "html", "xml", "json", "py", "md", "ini", "yaml", "yml", "toml", "cfg", "csv", "tsv"]
 
         attachment_format = attachment_name.split(".")[-1]
-
         if attachment_format in binary_formats:
             with open(attachment_path, "rb") as f:
                 binary_content = f.read()
-
         elif attachment_format in text_formats:
             with open(attachment_path) as f:
                 text_content = f.read()
                 binary_content = text_content.encode("utf-8")
-
         else:
             raise NotImplementedError(f"Attaching files with {attachment_format} type is not yet supported.\n"
                                       f"Try putting the file inside an archive.")
 
         return binary_content
+
+    def get_attachment(self, attachment_name, attachment_content):
+        """ Returns FileAttachment object """
+        return FileAttachment(name=attachment_name, content=attachment_content)
 
 
     def send(self, to:list, cc:list=None, send_as:str=None):
@@ -129,21 +138,25 @@ class Email:
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
         if send_as is None:
-            config = Config(config_key=self.config_key).get_service(service="email")
+            config = Config().get_service(config_key=self.config_key, service="email")
             send_as = config["send_as"]
 
         if send_as == "":
             send_as = self.email_address
 
-        print("from ", send_as, "to ", to)
-
         email_address = self.email_address
         email_password = self.email_password
 
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
         credentials = Credentials(email_address, email_password)
         config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
-        account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
+        try:
+            account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
+        except:
+            if self.logger:
+                self.logger.exception("Email account could not be accessed.")
 
         m = Message(
             account=account,
@@ -154,8 +167,9 @@ class Email:
             author=send_as
         )
 
-        if self.attachment:
-            m.attach(self.attachment)
+        if self.attachments:
+            for attachment in self.attachments:
+                m.attach(attachment)
 
         try:
             m.send()
