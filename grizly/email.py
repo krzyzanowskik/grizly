@@ -41,8 +41,8 @@ class Email:
         self.config_key = config_key or "standard"
         if None in [email_address, email_password]:
             config = Config().get_service(config_key=self.config_key, service="email")
-        self.email_address = email_address or config["email_address"]
-        self.email_password = email_password or config["email_password"]
+        self.email_address = email_address or config.get("email_address") or os.getenv("EMAIL_ADDRESS")
+        self.email_password = email_password or config.get("email_password") or os.getenv("EMAIL_PASSWORD")
         self.attachment_paths = self.to_list(attachment_paths)
         self.attachments = self.get_attachments(self.attachment_paths)
         try:
