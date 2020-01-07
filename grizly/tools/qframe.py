@@ -35,6 +35,8 @@ from ..utils import(
     get_path
 )
 
+from .tool import Tool
+
 
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
@@ -51,7 +53,7 @@ def prepend_table(data, expression):
     return expression
 
 
-class QFrame:
+class QFrame(Tool):
     """Class which genearates a SQL statement.
 
     Parameters
@@ -69,6 +71,7 @@ class QFrame:
     """
     # KM: can we delete sql argument?
     def __init__(self, data={}, engine='', sql='', getfields=[]):
+        self.tool_name = "QFrame"
         self.engine =  engine if engine!='' else "mssql+pyodbc://DenodoODBC"
         self.data = data
         self.sql = sql
@@ -76,6 +79,7 @@ class QFrame:
         self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
+        super().__init__()
 
 
     def create_sql_blocks(self):
@@ -777,7 +781,7 @@ class QFrame:
         self.sql = get_sql(self.data)
         return self.sql
 
-
+    # Remove and move to Tool()
     def create_table(self, table, schema='', char_size=500):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
@@ -797,34 +801,7 @@ class QFrame:
         create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
         return self
 
-    ## Non SQL Processing
-
-    def to_csv(self, csv_path, chunksize=None, debug=False, cursor=None):
-        """Writes QFrame table to csv file.
-
-        Parameters
-        ----------
-        csv_path : str
-            Path to csv file.
-        chunksize : int, default None
-            If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-        cursor : Cursor, optional
-            The cursor to be used to execute the SQL, by default None
-
-        Returns
-        -------
-        QFrame
-        """
-        self.create_sql_blocks()
-        self.sql = get_sql(self.data)
-        if "denodo" in self.engine.lower():
-            self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
-        row_count = to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
-        if debug:
-            return row_count
-        return self
-
-
+    ## Non SQL Processing qf.to_csv(), S3(csv).from_file().to_rds()
     def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None, redshift_str=None, bucket=None):
         """Writes QFrame table to Redshift database.
 
@@ -931,6 +908,7 @@ class QFrame:
 
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
         df = read_sql(sql=self.sql, con=con)
+        self.df = df
         return df
 
 
@@ -980,35 +958,6 @@ class QFrame:
         df.to_sql(name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
-
-    def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
-        """Saves data to Excel file.
-
-        Parameters
-        ----------
-        input_excel_path : str
-            Path to template Excel file
-        output_excel_path : str
-            Path to Excel file in which we want to save data
-        sheet_name : str, optional
-            Sheet name, by default ''
-        startrow : int, optional
-            Upper left cell row to dump data, by default 0
-        startcol : int, optional
-            Upper left cell column to dump data, by default 0
-        index : bool, optional
-            Write row index, by default False
-        header : bool, optional
-            Write header, by default False
-
-        Returns
-        -------
-        QFrame
-        """
-        df = self.to_df()
-        copy_df_to_excel(df=df, input_excel_path=input_excel_path, output_excel_path=output_excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol,index=index, header=header)
-
-        return df
 
     #AC: this probably needs to be removed
     def csv_to_s3(self, csv_path, keep_csv=True, bucket=None):
