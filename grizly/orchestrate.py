@@ -25,7 +25,7 @@ from sqlalchemy.pool import NullPool
 from .email import Email
 from .etl import df_to_s3, s3_to_rds
 from .tools.qframe import QFrame
-from .utils import get_path, read_config
+from .utils import get_path, read_config, get_last_working_day
 
 
 def cast_to_date(maybe_date: Any) -> dt.date:
@@ -204,6 +204,8 @@ class Listener:
     def get_last_refresh(self):
         with open("etc/listener_store.json") as f:
             listener_store = json.load(f)
+            if not listener_store.get(self.name):
+                return None
             last_data_refresh = listener_store[self.name].get("last_data_refresh") # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
@@ -215,6 +217,8 @@ class Listener:
     def get_last_trigger_run(self):
         with open("etc/listener_store.json") as f:
             listener_store = json.load(f)
+            if not listener_store.get(self.name):
+                return None
             last_trigger_run = listener_store[self.name].get("last_trigger_run")
             try:
                 # attempt to convert the serialized datetime to a date object
@@ -492,8 +496,9 @@ class Workflow:
             email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
         elif self.is_triggered:
             if self.listener.trigger:
+                last_wd = get_last_working_day()
                 email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_trigger_run}"""
+                    \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
             else:
                 email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
                 \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
