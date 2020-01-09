@@ -164,7 +164,8 @@ class Email:
             body=self.body,
             to_recipients=to,
             cc_recipients=cc,
-            author=send_as
+            author=send_as,
+            folder=account.sent
         )
 
         if self.attachments:
@@ -172,7 +173,7 @@ class Email:
                 m.attach(attachment)
 
         try:
-            m.send()
+            m.send_and_save()
         except Exception as e:
             self.logger.exception(f"Email not sent.")
             raise
