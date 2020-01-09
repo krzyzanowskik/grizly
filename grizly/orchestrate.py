@@ -534,7 +534,7 @@ class Workflow:
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value)[:250]
+            self.error_value = str(exc_value).replace("'", r"\'").replace('"', r'\"')[:250] # escape unintended delimiters
             self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
