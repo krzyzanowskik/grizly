@@ -444,8 +444,12 @@ def file_extension(file_path:str):
     return os.path.splitext(file_path)[1]
 
 
-def get_last_working_day():
-    t = datetime.today()
+def get_last_working_day(utc=True):
+    """Get last working day in UTC time"""
+    if utc:
+        t = datetime.utcnow()
+    else:
+        t = datetime.today()
     if t.weekday() == 0: # Monday
         t += timedelta(days=-3)
     else:
