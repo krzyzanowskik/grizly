@@ -31,39 +31,24 @@ class SFDC:
     """
 
     def __init__(self, username: str=None, password: str=None, organization_id: str=None,
-                instance_url: str=None, env="prod", logger: Logger=None, proxies: dict=None,
+                instance_url: str=None, env: str="prod", logger: Logger=None, proxies: dict=None,
                 config_key: str="standard"):
-
-        self.global_config = self.get_config(config_key)
-        self.config = self.get_config(config_key, service="sfdc")
+        self.env = env
+        try:
+            config = Config().get_service(config_key=config_key, service="sfdc", env=env)
+        except:
+            config = None
         # first lookup in parameters, then config, then env variables
-        self.proxies = proxies or self.get_config_proxies() or {
+        self.proxies = proxies or Config().get_service(config_key=config_key, service="proxies") or {
             "http": os.getenv("HTTP_PROXY"),
             "https": os.getenv("HTTPS_PROXY"),
         }
-        self.username = username or self.config[env]["username"]
-        self.password = password or self.config[env]["password"]
-        self.organization_id = organization_id or self.config[env]["organizationId"]
+        self.username = username or config.get("username")
+        self.password = password or config.get("password")
+        self.organization_id = organization_id or config.get("organizationId")
         self.instance_url = instance_url
-        self.env = env
         self.logger = logger if logger else logging.getLogger(__name__)
 
-    def get_config_proxies(self):
-        try:
-            proxies = self.global_config["proxies"]
-        except KeyError:
-            return None
-        if not (proxies["http"] and proxies["https"]):
-            return None
-        return proxies
-
-    def get_config(self, config_key, service=None):
-        config_path = get_path('.grizly', 'config.json')
-        if service:
-            config = Config().from_json(config_path).data[config_key][service]
-        else:
-            config = Config().from_json(config_path).data[config_key]
-        return config
 
     def _connect(self):
 
@@ -97,7 +82,7 @@ class SFDC:
 
     def get_next_batch(self, sf, raw_response):
 
-        next_batch_url = raw_response[-1].get("nextRecordsUrl")
+        next_batch_url = raw_response.pop("nextRecordsUrl", None)
 
         if not next_batch_url:
             return None
@@ -110,11 +95,11 @@ class SFDC:
     def get_response_in_batches(self, sf, table, query):
 
         raw_response = eval(f"sf.bulk.{table}.query(query)")
+        return raw_response
         next_batch = self.get_next_batch(sf, raw_response)
-        # raw_response.extend(next_part)
+        
         while next_batch:
             self.logger.info(f"Batch of size {len(next_batch)} added. Loading next batch...")
-            # next_part = self.get_next_batch(sf, raw_response)
             raw_response.extend(next_batch)
             next_batch = self.get_next_batch(sf, next_batch)
         
@@ -143,9 +128,10 @@ class SFDC:
 
         try:
             if bulk:
-                raw_response = self.get_response_in_batches(sf, table, query)
-                return raw_response
-                # response = SFDCResponseBulk(raw_response, logger=self.logger)
+                # raw_response = self.get_response_in_batches(sf, table, query)
+                raw_response = eval(f"sf.bulk.{table}.query(query)")
+                # return raw_response
+                response = SFDCResponseBulk(raw_response, logger=self.logger)
             else:
                 raw_response = sf.query_all(query)
                 response = SFDCResponse(raw_response, logger=self.logger)

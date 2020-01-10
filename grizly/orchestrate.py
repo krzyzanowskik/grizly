@@ -10,6 +10,7 @@ from json.decoder import JSONDecodeError
 from logging import Logger
 from time import sleep, time
 from typing import Any, Dict, Iterable, List
+from grizly.config import Config
 
 import dask
 import graphviz
@@ -24,7 +25,7 @@ from sqlalchemy.pool import NullPool
 from .email import Email
 from .etl import df_to_s3, s3_to_rds
 from .tools.qframe import QFrame
-from .utils import get_path, read_config
+from .utils import get_path, read_config, get_last_working_day
 
 
 def cast_to_date(maybe_date: Any) -> dt.date:
@@ -53,7 +54,7 @@ def cast_to_date(maybe_date: Any) -> dt.date:
         return True
 
     if isinstance(maybe_date, str):
-        _date = datetime.strptime(maybe_date, "%Y-%m-%d")
+        _date = datetime.strptime(maybe_date, "%Y-%m-%d").date()
     elif isinstance(maybe_date, datetime):
         _date = datetime.date(maybe_date)
     else:
@@ -121,8 +122,11 @@ class Trigger:
     def __init__(self, func, params=None):
         self.check = func
         self.kwargs = params or {}
-        self.should_run = self.check(**self.kwargs)
         self.table = params.get("table")
+
+    @property
+    def should_run(self):
+        return self.check(**self.kwargs)
 
 
 class Listener:
@@ -203,6 +207,8 @@ class Listener:
     def get_last_refresh(self):
         with open("etc/listener_store.json") as f:
             listener_store = json.load(f)
+            if not listener_store.get(self.name):
+                return None
             last_data_refresh = listener_store[self.name].get("last_data_refresh") # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
@@ -214,6 +220,8 @@ class Listener:
     def get_last_trigger_run(self):
         with open("etc/listener_store.json") as f:
             listener_store = json.load(f)
+            if not listener_store.get(self.name):
+                return None
             last_trigger_run = listener_store[self.name].get("last_trigger_run")
             try:
                 # attempt to convert the serialized datetime to a date object
@@ -298,13 +306,6 @@ class Listener:
         #     # date_json_fiscal_week = to_fiscal(self.last_refresh_date, "week")
         #     # if (date_fiscal_day == date_json_fiscal_day) and (date_fiscal_day != date_json_fiscal_week): # means a week has passed
         #     #     return True
-        #     pass
-        # elif self.trigger == "fiscal week":
-        #     # date_fiscal_week = to_fiscal(table_last_refresh, "week")
-        #     pass
-        # elif self.trigger == "fiscal year":
-        #     # date_fiscal_year = to_fiscal(table_last_refresh, "week")
-        #     pass
 
     def detect_change(self) -> bool:
         """Determine whether the listener should trigger a worfklow run.
@@ -490,23 +491,40 @@ class Workflow:
 
         return None
 
+    def generate_notification(self):
+        # prepare email body; to be refactored into a function
+        subject = f"Workflow {self.status}"
+        run_time_str = str(timedelta(seconds=self.run_time))
+        if self.is_scheduled:
+            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        elif self.is_triggered:
+            if self.listener.trigger:
+                last_wd = get_last_working_day()
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                    \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
+            else:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+        else:
+            email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        if self.status == "fail": # add stack trace
+            email_body += f"\n\nError message: \n\n{self.error_message}"
+
+        notification = Email(subject=subject, body=email_body, logger=self.logger)
+        
+        return notification
+
+    def persist_start_time(self, time: float) -> None:
+        if not os.path.exists("etc"):
+            os.makedirs(f"etc")
+        with open("etc/cur_wf_start_time.txt", "w+") as f:
+            f.write(str(time))
+        return None
 
     def run(self, env="local"):
-
         self.env = env
-
-        if self.check_if_manual():
-            pass
-
         start = time()
-
-        try:
-            with open("etc/cur_wf_start_time.txt", "w+") as f:
-                f.write(str(start))
-        except FileNotFoundError:
-            with open("cur_wf_start_time.txt", "w+") as f:
-                f.write(str(start))
-
+        self.persist_start_time(start)
         try:
             graph = dask.delayed()(self.tasks)
             if self.execution_options:
@@ -519,37 +537,20 @@ class Workflow:
             self.status = "success"
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value)[:250]
+            self.error_value = str(exc_value).replace("'", r"\'").replace('"', r'\"')[:250] # escape unintended delimiters
             self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
-
         end = time()
         self.run_time = int(end-start)
 
-        # prepare email body; to be refactored into a function
-        run_time_str = str(timedelta(seconds=self.run_time))
-        if self.is_scheduled:
-            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        elif self.is_triggered:
-            if self.trigger:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_trigger_run}"""
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
-        else:
-            email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        if self.status == "fail":
-            email_body += f"\n\nError message: \n\n{self.error_message}"
-
+        notification = self.generate_notification()
         cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
         to = self.owner_email if isinstance(self.owner_email, list) else [self.owner_email]
-        subject = f"Workflow {self.status}"
+        send_as = ""
 
-        notification = Email(subject=subject, body=email_body, logger=self.logger)
-        notification.send(to=to, cc=cc, send_as="")
+        notification.send(to=to, cc=cc, send_as=send_as)
         # when ran on server, the status is handled by Runner
         if env == "local":
             self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time,
@@ -569,8 +570,6 @@ class Workflow:
 
 class Runner:
     """Workflow runner"""
-    
-    
 
     def __init__(self, workflows: List[Workflow], logger: Logger=None, env: str="prod") -> None:
         self.workflows = workflows
@@ -613,7 +612,6 @@ class Runner:
                 return True
 
         elif workflow.is_manual:
-            # implement manual run logic here
             return True
 
         return False
