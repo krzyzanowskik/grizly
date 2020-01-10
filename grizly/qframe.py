@@ -408,7 +408,7 @@ class QFrame:
         operator : {'and', 'or'}, optional
             How to add another condition to existing one, by default 'and'
 
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -455,7 +455,7 @@ class QFrame:
 
             * dim: VARCHAR(500)
             * num: FLOAT(53)
-        group_by : {group, sum, count, min, max, avg, ""}, optional
+        group_by : {group, sum, count, min, max, avg, stddev ""}, optional
             Aggregation type, by default ""
         order_by : {'ASC','DESC'}, optional
             Sort ascending or descending, by default ''
@@ -489,8 +489,8 @@ class QFrame:
         """
         if type not in ["dim", "num"] and custom_type=='':
             raise ValueError("Custom type is not provided and invalid value in type. Valid values: 'dim', 'num'.")
-        if group_by.lower() not in ["group", "sum", "count", "min", "max", "avg", ""]:
-            raise ValueError("Invalid value in group_by. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg', ''.")
+        if group_by.lower() not in ["group", "sum", "count", "min", "max", "avg", "stddev", ""]:
+            raise ValueError("Invalid value in group_by. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg', 'stddev', ''.")
         if order_by.lower() not in ["asc", "desc", ""]:
             raise ValueError("Invalid value in order_by. Valid values: 'ASC', 'DESC', ''.")
         if "union" in self.data["select"]:
@@ -547,9 +547,9 @@ class QFrame:
 
         Parameters
         ----------
-        aggtype : {'sum', 'count', 'min', 'max', 'avg'}
+        aggtype : {'sum', 'count', 'min', 'max', 'avg', 'stddev'}
             Aggregation type.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -564,8 +564,8 @@ class QFrame:
         -------
         QFrame
         """
-        if aggtype.lower() not in ["group", "sum", "count", "min", "max", "avg"]:
-            raise ValueError("Invalid value in aggtype. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg'.")
+        if aggtype.lower() not in ["group", "sum", "count", "min", "max", "avg", "stddev"]:
+            raise ValueError("Invalid value in aggtype. Valid values: 'group', 'sum', 'count', 'min', 'max', 'avg','stddev'.")
 
         if "union" in self.data["select"]:
             print("You can't aggregate inside union. Use select() method first.")
@@ -591,7 +591,7 @@ class QFrame:
             Fields in list or field as a string.
         ascending : bool or list, optional
             Sort ascending vs. descending. Specify list for multiple sort orders, by default True
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -639,7 +639,7 @@ class QFrame:
         ----------
         limit : int or str
             Number of rows to select.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -666,7 +666,7 @@ class QFrame:
         ----------
         fields : list or str
             Fields in list or field as a string.
-        
+
         Examples
         --------
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
@@ -844,22 +844,22 @@ class QFrame:
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
         csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
 
-        s3_to_rds_qf(self, 
-                    table, 
-                    s3_name=os.path.basename(csv_path), 
-                    schema=schema, 
-                    if_exists=if_exists, 
-                    sep=sep, 
-                    use_col_names=use_col_names, 
+        s3_to_rds_qf(self,
+                    table,
+                    s3_name=os.path.basename(csv_path),
+                    schema=schema,
+                    if_exists=if_exists,
+                    sep=sep,
+                    use_col_names=use_col_names,
                     redshift_str=redshift_str,
                     bucket=bucket)
 
         return self
 
-    
+
     def to_table(self, table, schema='', if_exists='fail'):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
-        
+
         Parameters
         ----------
         table: str
@@ -898,7 +898,7 @@ class QFrame:
         df = pandas.read_sql(sql=self.sql, con=con)
         return df
 
-      
+
     def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
@@ -1030,13 +1030,13 @@ class QFrame:
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        s3_to_rds_qf(self, 
-                    table, 
-                    s3_name=s3_name, 
-                    schema=schema , 
-                    if_exists=if_exists, 
-                    sep=sep, 
-                    use_col_names=use_col_names, 
+        s3_to_rds_qf(self,
+                    table,
+                    s3_name=s3_name,
+                    schema=schema ,
+                    if_exists=if_exists,
+                    sep=sep,
+                    use_col_names=use_col_names,
                     redshift_str=redshift_str,
                     bucket=bucket)
         return self
@@ -1203,7 +1203,7 @@ def union(qframes=[], union_type=None, union_by='position'):
 
         * position: union by position of the field
         * name: union by the field aliases
-    
+
     Examples
     --------
     >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
@@ -1226,7 +1226,7 @@ def union(qframes=[], union_type=None, union_by='position'):
     assert set(item.upper() for item in union_type) <= {"UNION", "UNION ALL"}, "Incorrect union type. Valid types: 'UNION', 'UNION ALL'."
     if union_by not in {'position', 'name'}:
         raise ValueError("Invalid value for union_by. Valid values: 'position', 'name'.")
-    
+
     data = {'select': {'fields': {}}}
 
     main_qf = qframes[0]
@@ -1243,7 +1243,7 @@ def union(qframes=[], union_type=None, union_by='position'):
         qf.create_sql_blocks()
         qf_aliases = qf.data["select"]["sql_blocks"]["select_aliases"]
         assert len(new_fields) == len(qf_aliases), f"Amount of fields in {iterator}. QFrame doesn't match amount of fields in 1. QFrame."
-        
+
         if union_by == 'name':
             field_diff_1 = set(new_fields) - set(qf_aliases)
             field_diff_2 = set(qf_aliases) - set(new_fields)
@@ -1330,9 +1330,9 @@ def _validate_data(data):
 
         if "group_by" in fields[field] and fields[field]["group_by"] != "":
             group_by = fields[field]["group_by"]
-            if group_by.upper() not in ["GROUP", "SUM", "COUNT", "MAX", "MIN", "AVG"]:
-                raise ValueError(f"""Field '{field}' has invalid value in  group_by: '{group_by}'. Valid values: '', 'group', 'sum', 'count', 'max', 'min', 'avg'""")
-            elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"] and field_type != 'num':
+            if group_by.upper() not in ["GROUP", "SUM", "COUNT", "MAX", "MIN", "AVG", "STDDEV"]:
+                raise ValueError(f"""Field '{field}' has invalid value in  group_by: '{group_by}'. Valid values: '', 'group', 'sum', 'count', 'max', 'min', 'avg','stddev' """)
+            elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG", "STDDEV"] and field_type != 'num':
                 raise ValueError(f"Field '{field}' has value '{field_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")
 
         if "order_by" in fields[field] and fields[field]["order_by"] != "":

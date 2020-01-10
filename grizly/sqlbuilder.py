@@ -26,7 +26,7 @@ def build_column_strings(data):
         return {}
 
     duplicates = get_duplicated_columns(data)
-    assert duplicates == {}, f"""Some of your fields have the same aliases {duplicates}. Use your_qframe.remove() to remove or your_qframe.rename() to rename columns."""  
+    assert duplicates == {}, f"""Some of your fields have the same aliases {duplicates}. Use your_qframe.remove() to remove or your_qframe.rename() to rename columns."""
     select_names = []
     select_aliases = []
     group_dimensions = []
@@ -39,7 +39,7 @@ def build_column_strings(data):
     for field in fields:
         expr = field if "expression" not in fields[field] or fields[field]["expression"] == "" else fields[field]["expression"]
         alias = field if "as" not in fields[field] or fields[field]["as"] == "" else fields[field]["as"]
-            
+
         if "group_by" in fields[field]:
             if fields[field]["group_by"].upper() == "GROUP":
                 group_dimensions.append(alias)
@@ -47,11 +47,11 @@ def build_column_strings(data):
             elif fields[field]["group_by"] == "":
                 pass
 
-            elif fields[field]["group_by"].upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"]:
+            elif fields[field]["group_by"].upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG", "STDDEV"]:
                 agg = fields[field]["group_by"]
                 expr = f"{agg}({expr})"
                 group_values.append(alias)
-                
+
         if "select" not in fields[field] or "select" in fields[field] and fields[field]["select"] == "":
             select_name = field if expr == alias else f"{expr} as {alias}"
 
@@ -66,7 +66,7 @@ def build_column_strings(data):
                 if fields[field]["order_by"].upper() == "DESC":
                     order = fields[field]["order_by"]
                 elif fields[field]["order_by"].upper() == "ASC":
-                    order = "" 
+                    order = ""
                 order_by.append(f"{alias} {order}")
 
             select_names.append(select_name)
