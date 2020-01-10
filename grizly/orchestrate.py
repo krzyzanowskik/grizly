@@ -1,16 +1,15 @@
+import datetime as dt
 import json
 import logging
 import os
 import sys
 import traceback
-import datetime as dt
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from json.decoder import JSONDecodeError
 from logging import Logger
 from time import sleep, time
 from typing import Any, Dict, Iterable, List
-from grizly.config import Config
 
 import dask
 import graphviz
@@ -22,26 +21,27 @@ from dask.optimization import key_split
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
+from grizly.config import Config
+
 from .email import Email
 from .etl import df_to_s3, s3_to_rds
-from .tools.qframe import QFrame
-from .utils import get_path, read_config, get_last_working_day
+from .utils import get_last_working_day, read_config
 
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
     Casts a date/datetime-like value to a Date object.
-    
+
     Parameters
     ----------
     maybe_date : Any
         The date/datetime-like value to be conveted to a Date object.
-    
+
     Returns
     -------
     _date
         The date-like object converted to an actual Date object.
-    
+
     Raises
     ------
     TypeError
@@ -77,7 +77,6 @@ class Schedule:
         - ValueError: if the cron string is invalid
     """
 
-
     def __init__(self, cron, start_date=None, end_date=None):
         if not croniter.is_valid(cron):
             raise ValueError("Invalid cron string: {}".format(cron))
@@ -85,8 +84,7 @@ class Schedule:
         self.start_date = start_date
         self.end_date = end_date
 
-
-    def emit_dates(self, start_date: datetime=None) -> Iterable[datetime]:
+    def emit_dates(self, start_date: datetime = None) -> Iterable[datetime]:
         """
         Generator that emits workflow run dates
         Args:
@@ -100,11 +98,10 @@ class Schedule:
         cron = croniter(self.cron, start_date)
 
         while True:
-            next_date = cron.get_next(datetime)
+            next_date = cron.get_next(datetime).replace(tzinfo=timezone.utc)
             if self.end_date and next_date > self.end_date:
                 break
             yield next_date
-
 
     def next(self, n):
 
@@ -118,7 +115,6 @@ class Schedule:
 
 
 class Trigger:
-    
     def __init__(self, func, params=None):
         self.check = func
         self.kwargs = params or {}
@@ -136,8 +132,18 @@ class Listener:
     Checks and stores table's last refresh/trigger date.
     """
 
-
-    def __init__(self, workflow, schema=None, table=None, field=None, query=None, db="denodo", trigger=None, trigger_type="default", delay=300):
+    def __init__(
+        self,
+        workflow,
+        schema=None,
+        table=None,
+        field=None,
+        query=None,
+        db="denodo",
+        trigger=None,
+        trigger_type="default",
+        delay=300,
+    ):
 
         self.workflow = workflow
         self.name = workflow.name
@@ -172,7 +178,6 @@ class Listener:
             logger = logging.getLogger(__name__)
 
         def deco_retry(f):
-
             @wraps(f)
             def f_retry(*args, **kwargs):
 
@@ -184,7 +189,7 @@ class Listener:
                         return f(*args, **kwargs)
 
                     except exceptions as e:
-                        msg = f'{e}, \nRetrying in {mdelay} seconds...'
+                        msg = f"{e}, \nRetrying in {mdelay} seconds..."
                         logger.warning(msg)
                         sleep(mdelay)
                         mtries -= 1
@@ -200,7 +205,7 @@ class Listener:
 
         config = read_config()
         engine_str = config[self.db]
-        engine = create_engine(engine_str, encoding='utf8', poolclass=NullPool)
+        engine = create_engine(engine_str, encoding="utf8", poolclass=NullPool)
 
         return engine
 
@@ -209,7 +214,7 @@ class Listener:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None
-            last_data_refresh = listener_store[self.name].get("last_data_refresh") # int or serialized date
+            last_data_refresh = listener_store[self.name].get("last_data_refresh")  # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
                 last_data_refresh = datetime.date(datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
@@ -274,13 +279,12 @@ class Listener:
 
         return last_data_refresh
 
-
     def should_trigger(self, table_refresh_date=None):
 
         if self.trigger:
             today = datetime.today().date()
             if today == self.last_trigger_run:
-                return False # workflow was already ran today
+                return False  # workflow was already ran today
             return self.trigger.should_run
 
         else:
@@ -299,23 +303,16 @@ class Listener:
         #     next_check_on = datetime.date(self.trigger_type.next_run)
         #     if next_check_on == table_refresh_date:
         #         return True
-        # if self.trigger_type == "fiscal day":
-        #     # date_fiscal_day = to_fiscal(table_last_refresh, "day")
-        #     # date_fiscal_week = to_fiscal(table_last_refresh, "week")
-        #     # date_json_fiscal_day = to_fiscal(self.last_refresh_date, "day")
-        #     # date_json_fiscal_week = to_fiscal(self.last_refresh_date, "week")
-        #     # if (date_fiscal_day == date_json_fiscal_day) and (date_fiscal_day != date_json_fiscal_week): # means a week has passed
-        #     #     return True
 
     def detect_change(self) -> bool:
         """Determine whether the listener should trigger a worfklow run.
-        
+
         Returns
         -------
         bool
             Whether the field (specified by a Trigger function or the field parameter) has changed since it was last checked,
             as determined by Listener.should_trigger().
-        
+
         Raises
         ------
         ValueError
@@ -356,8 +353,7 @@ class Workflow:
     A class for running Dask tasks.
     """
 
-    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None,
-                execution_options: dict=None):
+    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None, execution_options: dict = None):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
@@ -379,7 +375,6 @@ class Workflow:
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
 
-
     # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
     #     tasks = [load_qf(qf, depends_on=None)]
     #     fnretry = retry(fn)
@@ -396,23 +391,19 @@ class Workflow:
     def visualize(self):
         return self.graph.visualize()
 
-
     def add_schedule(self, schedule):
         self.schedule = schedule
         self.next_run = self.schedule.next(1)[0]
         self.is_scheduled = True
 
-
     def add_listener(self, listener):
         self.listener = listener
         self.is_triggered = True
-
 
     def check_if_manual(self):
         if not (self.is_scheduled or self.is_triggered):
             self.is_manual = True
             return True
-
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -432,7 +423,6 @@ class Workflow:
             logger = logging.getLogger(__name__)
 
         def deco_retry(f):
-
             @wraps(f)
             def f_retry(*args, **kwargs):
 
@@ -444,7 +434,7 @@ class Workflow:
                         return f(*args, **kwargs)
 
                     except exceptions as e:
-                        msg = f'{e}, \nRetrying in {mdelay} seconds...'
+                        msg = f"{e}, \nRetrying in {mdelay} seconds..."
                         logger.warning(msg)
                         sleep(mdelay)
                         mtries -= 1
@@ -455,7 +445,6 @@ class Workflow:
             return f_retry  # true decorator
 
         return deco_retry
-
 
     @retry_task(Exception, tries=3, delay=300)
     def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
@@ -474,18 +463,33 @@ class Workflow:
             "run_time": [run_time],
             "env": [env],
             "error_value": [error_value],
-            "error_type": [error_type]
+            "error_type": [error_type],
         }
 
         status_data = pd.DataFrame(status_data)
 
         try:
-            df_to_s3(status_data, table, schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', s3_key="bulk", bucket="acoe-s3")
-        except Exception as e:
+            df_to_s3(
+                status_data,
+                table,
+                schema,
+                if_exists="append",
+                redshift_str="mssql+pyodbc://redshift_acoe",
+                s3_key="bulk",
+                bucket="acoe-s3",
+            )
+        except:
             self.logger.exception(f"{self.name} status could not be uploaded to S3")
             return None
 
-        s3_to_rds(file_name=table+".csv", schema=schema, if_exists="append", redshift_str='mssql+pyodbc://redshift_acoe', s3_key="bulk", bucket="acoe-s3")
+        s3_to_rds(
+            file_name=table + ".csv",
+            schema=schema,
+            if_exists="append",
+            redshift_str="mssql+pyodbc://redshift_acoe",
+            s3_key="bulk",
+            bucket="acoe-s3",
+        )
 
         self.logger.info(f"{self.name} status successfully uploaded to Redshift")
 
@@ -504,14 +508,15 @@ class Workflow:
                     \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
             else:
                 email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {self.listener.last_data_refresh}"""
+                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to
+                 {self.listener.last_data_refresh}"""
         else:
             email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        if self.status == "fail": # add stack trace
+        if self.status == "fail":  # add stack trace
             email_body += f"\n\nError message: \n\n{self.error_message}"
 
         notification = Email(subject=subject, body=email_body, logger=self.logger)
-        
+
         return notification
 
     def persist_start_time(self, time: float) -> None:
@@ -535,15 +540,15 @@ class Workflow:
                 num_workers = self.num_workers
             graph.compute(scheduler=scheduler, num_workers=num_workers)
             self.status = "success"
-        except Exception as e:
+        except:
             exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value).replace("'", r"\'").replace('"', r'\"')[:250] # escape unintended delimiters
-            self.error_type = str(exc_type).split("'")[1] # <class 'ZeroDivisionError'> -> ZeroDivisionError
+            self.error_value = str(exc_value).replace("'", r"\'").replace('"', r"\"")[:250]  # escape unintended delimiters
+            self.error_type = str(exc_type).split("'")[1]  # <class 'ZeroDivisionError'> -> ZeroDivisionError
             self.error_message = traceback.format_exc()
             self.logger.exception(f"{self.name} failed")
             self.status = "fail"
         end = time()
-        self.run_time = int(end-start)
+        self.run_time = int(end - start)
 
         notification = self.generate_notification()
         cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
@@ -553,17 +558,32 @@ class Workflow:
         notification.send(to=to, cc=cc, send_as=send_as)
         # when ran on server, the status is handled by Runner
         if env == "local":
-            self.write_status_to_rds(self.name, self.owner_email, self.backup_email, self.status, self.run_time,
-                                    env=self.env, error_value=self.error_value, error_type=self.error_type)
+            self.write_status_to_rds(
+                self.name,
+                self.owner_email,
+                self.backup_email,
+                self.status,
+                self.run_time,
+                env=self.env,
+                error_value=self.error_value,
+                error_type=self.error_type,
+            )
 
         if self.trigger_on_success:
             triggered_wf = self.trigger_on_success
             self.logger.info(f"Running {triggered_wf.name}...")
             triggered_wf.run()
             self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
-            triggered_wf.write_status_to_rds(triggered_wf.name, triggered_wf.owner_email, triggered_wf.backup_email,
-                                            triggered_wf.status, triggered_wf.run_time, env=self.env,
-                                            error_value=triggered_wf.error_value, error_type=triggered_wf.error_type)
+            triggered_wf.write_status_to_rds(
+                triggered_wf.name,
+                triggered_wf.owner_email,
+                triggered_wf.backup_email,
+                triggered_wf.status,
+                triggered_wf.run_time,
+                env=self.env,
+                error_value=triggered_wf.error_value,
+                error_type=triggered_wf.error_type,
+            )
 
         return self.status
 
@@ -571,7 +591,7 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-    def __init__(self, workflows: List[Workflow], logger: Logger=None, env: str="prod") -> None:
+    def __init__(self, workflows: List[Workflow], logger: Logger = None, env: str = "prod") -> None:
         self.workflows = workflows
         self.env = env
         self.logger = logging.getLogger(__name__)
@@ -584,7 +604,8 @@ class Runner:
         ----------
         workflow : Workflow
             A workflow instance. This function assumes the instance is generated on scheduler tick.
-            Currently, this is accomplished by calling wf.generate_workflow() on each workflow every time Runner.get_pending_workflows() is called,
+            Currently, this is accomplished by calling wf.generate_workflow() on each workflow every time
+            Runner.get_pending_workflows() is called,
             which means wf.next_run recalculated every time should_run() is called
 
         Returns
@@ -595,11 +616,16 @@ class Runner:
 
         if workflow.is_scheduled:
 
-            self.logger.info(f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})")
+            self.logger.info(
+                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})"
+            )
 
             now = datetime.now(timezone.utc)
             next_run = workflow.next_run
-            if (next_run.day == now.day) and (next_run.hour == now.hour): #and (next_run.minute == now.minute): # minutes for precise scheduling
+
+            if (next_run.day == now.day) and (
+                next_run.hour == now.hour
+            ):  # and (next_run.minute == now.minute): # minutes for precise scheduling
                 workflow.next_run = workflow.schedule.next(1)[0]
                 return True
 
@@ -627,7 +653,7 @@ class Runner:
 
     def overwrite_params(self, workflow: Workflow, params: Dict) -> None:
         """Overwrites specified workflow's parameters
-        
+
         Parameters
         ----------
         workflow : Workflow
@@ -637,43 +663,43 @@ class Runner:
         """
         # params: dict fof the form {"listener": {"delay": 0}, "backup_email": "test@example.com"}
         for param in params:
-    
+
             # modify parameters of classes stored in Workflow, e.g. Listener of Schedule
             if type(params[param]) == dict:
                 _class = param
-                
+
                 # only apply listener params to triggered workflows
                 if _class == "listener":
                     if not workflow.is_triggered:
                         continue
-                        
+
                 # only apply schedule params to scheduled workflows
                 elif _class == "schedule":
                     if not workflow.is_scheduled:
                         continue
-                
+
                 # retrieve object and names of attributes to set
-                obj = eval(f"workflow.{_class}") 
+                obj = eval(f"workflow.{_class}")
                 obj_params = params[param]
-                
+
                 for obj_param in obj_params:
                     new_param_value = obj_params[obj_param]
                     setattr(obj, obj_param, new_param_value)
-                    
+
             # modify Workflow object's parameters
             else:
                 setattr(workflow, param, params[param])
 
-    def run(self, workflows: List[Workflow], overwrite_params: Dict=None) -> Dict:
+    def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> Dict:
         """[summary]
-        
+
         Parameters
         ----------
         workflows : List[Workflow]
             Workflows to run.
         overwrite_params : Dict, optional
             Workflow parameters to overwrite (applies to all passed workflows), by default None
-        
+
         Returns
         -------
         Dict
@@ -692,8 +718,16 @@ class Runner:
                 self.logger.info(f"Running {workflow.name}...")
                 workflow.run(env=self.env)
                 self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
-                workflow.write_status_to_rds(workflow.name, workflow.owner_email, workflow.backup_email, workflow.status,
-                                            workflow.run_time, env=self.env, error_value=workflow.error_value, error_type=workflow.error_type)
+                workflow.write_status_to_rds(
+                    workflow.name,
+                    workflow.owner_email,
+                    workflow.backup_email,
+                    workflow.status,
+                    workflow.run_time,
+                    env=self.env,
+                    error_value=workflow.error_value,
+                    error_type=workflow.error_type,
+                )
         else:
             self.logger.info(f"No pending workflows found")
 
@@ -702,7 +736,6 @@ class Runner:
 
 class SimpleGraph:
     """Produces a simplified Dask graph"""
-
 
     def __init__(self, format="png", filename=None):
         self.format = format
@@ -714,31 +747,28 @@ class SimpleGraph:
             return s[0]
         return str(s)
 
-    def visualize(self,
-                     x,
-                     filename='simple_computation_graph',
-                     format=None):
+    def visualize(self, x, filename="simple_computation_graph", format=None):
 
-        if hasattr(x, 'dask'):
+        if hasattr(x, "dask"):
             dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
         else:
             dsk = x
 
         deps = {k: get_dependencies(dsk, k) for k in dsk}
 
-        g = graphviz.Digraph(graph_attr={'rankdir': 'LR'})
+        g = graphviz.Digraph(graph_attr={"rankdir": "LR"})
 
         nodes = set()
         edges = set()
         for k in dsk:
             key = self._node_key(k)
             if key not in nodes:
-                g.node(key, label=key_split(k), shape='rectangle')
+                g.node(key, label=key_split(k), shape="rectangle")
                 nodes.add(key)
             for dep in deps[k]:
                 dep_key = self._node_key(dep)
                 if dep_key not in nodes:
-                    g.node(dep_key, label=key_split(dep), shape='rectangle')
+                    g.node(dep_key, label=key_split(dep), shape="rectangle")
                     nodes.add(dep_key)
                 # Avoid circular references
                 if dep_key != key and (dep_key, key) not in edges:
@@ -751,8 +781,8 @@ class SimpleGraph:
         if self.filename is None:
             return display_cls(data=data)
 
-        full_filename = '.'.join([filename, self.format])
-        with open(full_filename, 'wb') as f:
+        full_filename = ".".join([filename, self.format])
+        with open(full_filename, "wb") as f:
             f.write(data)
 
         return display_cls(filename=full_filename)
@@ -778,7 +808,6 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
         logger = logging.getLogger(__name__)
 
     def deco_retry(f):
-
         @wraps(f)
         def f_retry(*args, **kwargs):
 
@@ -790,7 +819,7 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
                     return f(*args, **kwargs)
 
                 except exceptions as e:
-                    msg = f'{e}, \nRetrying in {mdelay} seconds...'
+                    msg = f"{e}, \nRetrying in {mdelay} seconds..."
                     logger.warning(msg)
                     sleep(mdelay)
                     mtries -= 1
