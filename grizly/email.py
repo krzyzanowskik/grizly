@@ -33,8 +33,8 @@ class Email:
     config_key : str, optional
         Config key, by default 'standard'"""
 
-    def __init__(self, subject:str, body:str, attachment_paths:Union[list, str]=None, logger=None, is_html:bool=False
-                    , email_address:str=None, email_password:str=None, config_key:str=None):
+    def __init__(self, subject:str, body:str, attachment_path:str=None, logger=None, is_html:bool=False
+                    , email_address:str=None, email_password:str=None, config_key:str=None, proxy: str=None):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger or logging.getLogger(__name__)
@@ -137,11 +137,11 @@ class Email:
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
-        if send_as is None:
-            config = Config().get_service(config_key=self.config_key, service="email")
-            send_as = config["send_as"]
-
-        if send_as == "":
+        if not send_as:
+            try:
+                send_as = Config().get_service(config_key=self.config_key, service="email").get('send_as')
+            except KeyError:
+                pass
             send_as = self.email_address
 
         email_address = self.email_address
@@ -151,12 +151,12 @@ class Email:
             os.environ["HTTPS_PROXY"] = self.proxy
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
         credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=60*5))
+        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2*60))
         try:
             account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
         except:
             self.logger.exception("Email account could not be accessed.")
-            raise
+            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
 
         m = Message(
             account=account,

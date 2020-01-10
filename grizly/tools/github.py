@@ -1,9 +1,11 @@
 import pandas
 import requests
 from ..config import Config, _validate_config
+from .tool import Tool
+from .s3 import S3
 
 
-class GitHub:
+class GitHub(Tool):
 
     def __init__(self, username:str=None, username_password:str=None, pages:int=100
                     , proxies:dict=None, config_key="standard"):
@@ -18,6 +20,8 @@ class GitHub:
         pages : int, optional
             [description], by default 100
         """
+        super().__init__()
+        
         if username_password is None:
             _validate_config(config=Config.data[config_key],
                             services='github')
@@ -45,7 +49,7 @@ class GitHub:
         
         Returns
         -------
-        self, do self.df for the dataframe
+        self, do self.data for the dataframe
         """
         proxies = {
             "http": "http://restrictedproxy.tycoelectronics.com:80",

@@ -44,6 +44,10 @@ class Config():
         ...                "password": "my_password",
         ...                "organizationId": "OrgId"
         ...                }
+        ...            },
+        ...            "proxies": {
+        ...                "http": "first_proxy",
+        ...                "https": "second_proxy"
         ...            }
         ...            }
         ...        }
@@ -196,7 +200,7 @@ class Config():
         env = env if env else 'prod'
 
         if config_key not in Config.data.keys():
-            raise KeyError(f"Key {config_key} no found in config. Please check Config class documentation.")
+            raise KeyError(f"Key {config_key} not found in config. Please check Config class documentation.")
 
         _validate_config(self.data[config_key], services=service, env=env)
         if service == 'sfdc':
@@ -272,7 +276,7 @@ def _validate_config(config:dict, services:list=None, env:str=None):
             raise KeyError(f"Invalid keys {invalid_keys} in config['{service}']. Valid keys: {valid_keys}")
 
         not_found_keys = valid_keys - set(config[service].keys())
-        if not_found_keys != set():
+        if not_found_keys != set() and service != 'sfdc' or service == 'sfdc' and env in not_found_keys:
             raise KeyError(f"Keys {not_found_keys} not found in config['{service}']")
 
         if service == 'sfdc':
