@@ -54,7 +54,7 @@ def cast_to_date(maybe_date: Any) -> dt.date:
         return True
 
     if isinstance(maybe_date, str):
-        _date = datetime.strptime(maybe_date, "%Y-%m-%d")
+        _date = datetime.strptime(maybe_date, "%Y-%m-%d").date()
     elif isinstance(maybe_date, datetime):
         _date = datetime.date(maybe_date)
     else:
@@ -567,8 +567,6 @@ class Workflow:
 
 class Runner:
     """Workflow runner"""
-    
-    
 
     def __init__(self, workflows: List[Workflow], logger: Logger=None, env: str="prod") -> None:
         self.workflows = workflows
