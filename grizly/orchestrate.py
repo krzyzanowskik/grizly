@@ -122,8 +122,11 @@ class Trigger:
     def __init__(self, func, params=None):
         self.check = func
         self.kwargs = params or {}
-        self.should_run = self.check(**self.kwargs)
         self.table = params.get("table")
+
+    @property
+    def should_run(self):
+        return self.check(**self.kwargs)
 
 
 class Listener:
