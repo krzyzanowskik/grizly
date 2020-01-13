@@ -1,10 +1,7 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
 from .utils import read_config, get_path
-from .config import (
-    Config,
-    _validate_config
-)
+from .config import Config, _validate_config
 from os.path import basename
 import os
 import logging
@@ -33,8 +30,18 @@ class Email:
     config_key : str, optional
         Config key, by default 'standard'"""
 
-    def __init__(self, subject:str, body:str, attachment_path:str=None, logger=None, is_html:bool=False
-                    , email_address:str=None, email_password:str=None, config_key:str=None, proxy: str=None):
+    def __init__(
+        self,
+        subject: str,
+        body: str,
+        attachment_paths: str = None,
+        logger=None,
+        is_html: bool = False,
+        email_address: str = None,
+        email_password: str = None,
+        config_key: str = None,
+        proxy: str = None,
+    ):
         self.subject = subject
         self.body = body if not is_html else HTMLBody(body)
         self.logger = logger or logging.getLogger(__name__)
@@ -46,11 +53,15 @@ class Email:
         self.attachment_paths = self.to_list(attachment_paths)
         self.attachments = self.get_attachments(self.attachment_paths)
         try:
-            self.proxy = proxy or os.getenv("HTTPS_PROXY") or Config().get_service(config_key=self.config_key, service="proxies").get("https")
+            self.proxy = (
+                proxy
+                or os.getenv("HTTPS_PROXY")
+                or Config().get_service(config_key=self.config_key, service="proxies").get("https")
+            )
         except:
             self.proxy = None
 
-    def to_list(self, maybe_list:Union[List[str], str]):
+    def to_list(self, maybe_list: Union[List[str], str]):
         if isinstance(maybe_list, str):
             maybe_list = [maybe_list]
         return maybe_list
@@ -66,7 +77,7 @@ class Email:
 
         return attachments
 
-    def get_attachment_name(self, attachment_path:str):
+    def get_attachment_name(self, attachment_path: str):
         """Return attachment name"""
         return basename(attachment_path)
 
@@ -89,8 +100,10 @@ class Email:
                 text_content = f.read()
                 binary_content = text_content.encode("utf-8")
         else:
-            raise NotImplementedError(f"Attaching files with {attachment_format} type is not yet supported.\n"
-                                      f"Try putting the file inside an archive.")
+            raise NotImplementedError(
+                f"Attaching files with {attachment_format} type is not yet supported.\n"
+                f"Try putting the file inside an archive."
+            )
 
         return binary_content
 
@@ -98,7 +111,7 @@ class Email:
         """ Returns FileAttachment object """
         return FileAttachment(name=attachment_name, content=attachment_content)
 
-    def send(self, to:list, cc:list=None, send_as:str=None):
+    def send(self, to: list, cc: list = None, send_as: str = None):
         """Sends an email
 
         Parameters
@@ -139,7 +152,7 @@ class Email:
 
         if not send_as:
             try:
-                send_as = Config().get_service(config_key=self.config_key, service="email").get('send_as')
+                send_as = Config().get_service(config_key=self.config_key, service="email").get("send_as")
             except KeyError:
                 pass
             send_as = self.email_address
@@ -149,11 +162,13 @@ class Email:
 
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter # change this in the future to avoid warnings
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
         credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2*60))
+        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2 * 60))
         try:
-            account = Account(primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE)
+            account = Account(
+                primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE
+            )
         except:
             self.logger.exception("Email account could not be accessed.")
             raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
@@ -165,7 +180,7 @@ class Email:
             to_recipients=to,
             cc_recipients=cc,
             author=send_as,
-            folder=account.sent
+            folder=account.sent,
         )
 
         if self.attachments:
