@@ -6,6 +6,7 @@ from ..utils import (
     get_path,
     check_if_exists
 )
+from ..etl import clean
 from pandas import (
     DataFrame,
     read_csv,
@@ -49,7 +50,7 @@ class S3:
             raise ValueError("s3_key not specified")
 
         if not self.s3_key.endswith('/'):
-            raise ValueError("s3_key should end with /")
+            self.s3_key += "/"
 
 
     def _check_if_s3_exists(f):
@@ -199,6 +200,8 @@ class S3:
             os.remove(file_path)
             print(f"'{file_path}' has been removed")
 
+        return self
+
 
     @_check_if_s3_exists
     def to_file(self):
@@ -239,7 +242,7 @@ class S3:
         return df
 
 
-    def from_df(self, df:DataFrame, sep:str='\t', keep_file=True):
+    def from_df(self, df:DataFrame, sep:str='\t', clean_df=False, keep_file=True):
         """Saves DataFrame in S3.
 
         Examples
@@ -266,10 +269,13 @@ class S3:
         if not file_path.endswith('.csv'):
             raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
 
+        if clean_df:
+            df = clean(df)
+
         df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
-        self.from_file(keep_file=keep_file)
+        return self.from_file(keep_file=keep_file)
 
 
     @_check_if_s3_exists
@@ -400,4 +406,3 @@ class S3:
         engine.execute(sql)
 
         print("Table {} has been created successfully.".format(table_name))
-
