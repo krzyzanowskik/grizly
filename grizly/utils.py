@@ -7,7 +7,9 @@ from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from datetime import datetime, timedelta
 import dask
-
+import time
+import logging
+from logging import config
 
 
 def read_config():
@@ -456,3 +458,14 @@ def get_last_working_day(utc=True):
     else:
         t += timedelta(days=-1)
     return str(t.date())
+
+
+def initialize_logging(config_path):
+
+    class UTCFormatter(logging.Formatter):
+        converter = time.gmtime
+    with open(config_path) as f:
+        conf = load(f)
+    for formatter in conf["formatters"]:
+        conf["formatters"][formatter]["()"] = UTCFormatter
+    logging.config.dictConfig(conf)
