@@ -10,6 +10,7 @@ import dask
 import time
 import logging
 from logging import config
+from json import load
 
 
 def read_config():
