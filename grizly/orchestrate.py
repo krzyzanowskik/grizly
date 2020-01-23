@@ -422,6 +422,32 @@ class Workflow:
     def __str__(self):
         return self.tasks
 
+    def log(self, begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
+        """
+        A decorator that wraps the passed in function and logs
+        exceptions should one occur
+        """
+
+        def deco_wrapper(function):
+            @wraps(function)
+            def wrapper(*args, **kwargs):
+                logger = logging.getLogger(__name__)
+                if begin_msg:
+                    logger.warning(begin_msg)
+                try:
+                    result = function(*args, **kwargs)
+                    if end_msg:
+                        logger.warning(end_msg)
+                    return result
+                except exception:
+                    if error_msg:
+                        logger.exception(error_msg)
+                    raise
+
+            return wrapper
+
+        return deco_wrapper
+
     # def log_task(self, task):
     #     def deco():
     #         pass
@@ -873,3 +899,57 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
 def get_con(engine):
     con = engine.connect().connection
     return con
+
+
+def execute_query(engine, query):
+    conn = engine.connect().connection
+    cursor = conn.cursor()
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return None
+
+
+def update_queue(client, engine, schema=None, table=None):
+    tasks = client.cluster.scheduler.tasks
+    for task_name in tasks:
+        if task_name.endswith("_graph"):
+            task = tasks[task_name]
+            workflow_name = task_name[: -len("_graph")]
+            workflow_status = task.state
+            if workflow_status == "memory":  # = finished
+                query = f"""
+                DELETE FROM {schema}.{table}
+                WHERE workflow_name = '{workflow_name}';
+                """
+                print(query)
+                execute_query(engine=engine, query=query)
+    return None
+
+
+# def log(begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
+#     """
+#     A decorator that wraps the passed in function and logs
+#     exceptions should one occur
+#     """
+
+#     def deco_wrapper(function):
+#         @wraps(function)
+#         def wrapper(*args, **kwargs):
+#             logger = logging.getLogger(__name__)
+#             if begin_msg:
+#                 logger.warning(begin_msg)
+#             try:
+#                 result = function(*args, **kwargs)
+#                 if end_msg:
+#                     logger.warning(end_msg)
+#                 return result
+#             except exception:
+#                 if error_msg:
+#                     logger.exception(error_msg)
+#                 raise
+
+#         return wrapper
+
+#     return deco_wrapper
