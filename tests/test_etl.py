@@ -4,10 +4,12 @@ from ..grizly.utils import get_path
 
 def test_build_copy_statement():
 
-    config = ConfigParser()
-    config.read(get_path('.aws','credentials'))
-    akey = config['default']['aws_access_key_id']
-    skey = config['default']['aws_secret_access_key']
+    # config = ConfigParser()
+    # config.read(get_path('.aws','credentials'))
+    # akey = config['default']['aws_access_key_id']
+    # skey = config['default']['aws_secret_access_key']
+    akey = os.getenv("AWS_ACCESS_KEY_ID")
+    skey = os.getenv("AWS_SECRET_ACCESS_KEY")
     
     def test_time_format():
         params = {

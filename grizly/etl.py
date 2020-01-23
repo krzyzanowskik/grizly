@@ -183,10 +183,15 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
     config = ConfigParser()
+    with open("tst.txt", "w") as f:
+        f.write(get_path(".aws", "credentials"))
     config.read(get_path('.aws','credentials'))
-    aws_access_key_id = config['default']['aws_access_key_id']
-    aws_secret_access_key = config['default']['aws_secret_access_key']
-
+    if config['default']:
+         aws_access_key_id = config['default']['aws_access_key_id']
+         aws_secret_access_key = config['default']['aws_secret_access_key']
+    #aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+    #aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+ 
     print("Loading {} data into {} ...".format(s3_name,table_name))
 
     sql = f"""
@@ -498,8 +503,13 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
 
     config = ConfigParser()
     config.read(get_path('.aws','credentials'))
-    aws_access_key_id = config['default']['aws_access_key_id']
-    aws_secret_access_key = config['default']['aws_secret_access_key']
+    
+    if config["default"]:
+        aws_access_key_id = config['default']['aws_access_key_id']
+        aws_secret_access_key = config['default']['aws_secret_access_key']
+
+    # aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+    # aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 
     sql = f"""
         COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_key}'

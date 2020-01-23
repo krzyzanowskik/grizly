@@ -27,6 +27,7 @@ from .email import Email
 from .etl import df_to_s3, s3_to_rds
 from .utils import get_last_working_day, read_config
 
+workflows_dir = "/home/acoe_workflows"
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
@@ -210,7 +211,7 @@ class Listener:
         return engine
 
     def get_last_refresh(self):
-        with open("etc/listener_store.json") as f:
+        with open(f"{workflows_dir}/workflows/etc/listener_store.json") as f:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None
@@ -223,7 +224,7 @@ class Listener:
             return last_data_refresh
 
     def get_last_trigger_run(self):
-        with open("etc/listener_store.json") as f:
+        with open(f"{workflows_dir}/workflows/etc/listener_store.json") as f:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None

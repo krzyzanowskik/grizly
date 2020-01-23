@@ -6,12 +6,16 @@ from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from datetime import datetime, timedelta
+from sys import platform
 
+if platform.startswith("linux"):
+    default_config_dir = "/root/.grizly"
+else:
+    default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
 
-
-def read_config():
+def read_config():    
     try:
-        json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
+        json_path = os.path.join(default_config_dir, 'etl_config.json')
         with open(json_path, 'r') as f:
             config = json.load(f)
     except KeyError:
@@ -414,18 +418,26 @@ def get_path(*args, from_where='python'):
     -------
     str
         path in string format
-    """
-    if from_where == 'python':
-        try:
-            cwd = os.environ['USERPROFILE']
-        except KeyError:
-            cwd = "Error with UserProfile"
-        cwd = os.path.join(cwd, *args)
-        return cwd
-    elif from_where == 'here':
+    """ 
+   
+    if from_where == 'here':
         cwd = os.path.abspath('')
-        cwd = os.path.join(cwd, *args)
         return cwd
+
+    if platform.startswith("linux"):
+        home_env = "HOME"
+        # temporary hack
+        return os.path.join("/root", *args)
+    elif platform.startswith("win"):
+        home_env = "USERPROFILE"
+    else:
+        raise NotImplementedError(f"Unable to retrieve home env variable for {platform}")
+
+    home_path = os.getenv("HOME")
+    if not home_path:
+        raise ValueError(f"{home_path}, {os.environ}, \nEnvironment variable {home_env} on platform {platform} is not set")
+    cwd = os.path.join(home_path, *args)
+    return cwd
 
 
 def file_extension(file_path:str):
