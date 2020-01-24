@@ -10,6 +10,8 @@ from json.decoder import JSONDecodeError
 from logging import Logger
 from time import sleep, time
 from typing import Any, Dict, Iterable, List
+from distributed import Client
+from grizly.tools.s3 import S3
 
 import dask
 import graphviz
@@ -300,13 +302,8 @@ class Listener:
             if table_refresh_date != self.last_data_refresh:
                 return True
 
-        # elif isinstance(self.trigger_type, Schedule):
-        #     next_check_on = datetime.date(self.trigger_type.next_run)
-        #     if next_check_on == table_refresh_date:
-        #         return True
-
     def detect_change(self) -> bool:
-        """Determine whether the listener should trigger a worfklow run.
+        """Determine whether the listener should trigger a workflow run.
 
         Returns
         -------
@@ -354,16 +351,16 @@ class Workflow:
     A class for running Dask tasks.
     """
 
-    def __init__(self, name, owner_email, backup_email, tasks, trigger_on_success=None, execution_options: dict = None):
+    def __init__(self, name, tasks, owner_email=None, backup_email=None, trigger_on_success=None, execution_options: dict = None):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
         self.tasks = tasks
         self.trigger_on_success = trigger_on_success
         self.execution_options = execution_options
-        self.graph = dask.delayed()(self.tasks)
+        self.graph = dask.delayed()(self.tasks, name=self.name + "_graph")
         self.run_time = 0
-        self.status = "idle"
+        self.status = "pending"
         self.is_scheduled = False
         self.is_triggered = False
         self.is_manual = False
@@ -375,36 +372,6 @@ class Workflow:
         self.num_workers = 8
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
-
-    # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
-    #     tasks = [load_qf(qf, depends_on=None)]
-    #     fnretry = retry(fn)
-    #     self.tasks
-    #     return fn_decorated
-
-    def __str__(self):
-        return self.tasks
-
-    def log_task(self, task):
-        def deco():
-            pass
-
-    def visualize(self):
-        return self.graph.visualize()
-
-    def add_schedule(self, schedule):
-        self.schedule = schedule
-        self.next_run = self.schedule.next(1)[0]
-        self.is_scheduled = True
-
-    def add_listener(self, listener):
-        self.listener = listener
-        self.is_triggered = True
-
-    def check_if_manual(self):
-        if not (self.is_scheduled or self.is_triggered):
-            self.is_manual = True
-            return True
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -447,144 +414,238 @@ class Workflow:
 
         return deco_retry
 
-    @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
+    # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
+    #     tasks = [load_qf(qf, depends_on=None)]
+    #     fnretry = retry(fn)
+    #     self.tasks
+    #     return fn_decorated
 
-        schema = "administration"
-        table = "status"
+    def __str__(self):
+        return self.tasks
 
-        last_run_date = pd.datetime.utcnow()
+    def log(self, begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
+        """
+        A decorator that wraps the passed in function and logs
+        exceptions should one occur
+        """
 
-        status_data = {
-            "workflow_name": [name],
-            "owner_email": [owner_email],
-            "backup_email": [backup_email],
-            "run_date": [last_run_date],
-            "workflow_status": [status],
-            "run_time": [run_time],
-            "env": [env],
-            "error_value": [error_value],
-            "error_type": [error_type],
+        def deco_wrapper(function):
+            @wraps(function)
+            def wrapper(*args, **kwargs):
+                logger = logging.getLogger(__name__)
+                if begin_msg:
+                    logger.warning(begin_msg)
+                try:
+                    result = function(*args, **kwargs)
+                    if end_msg:
+                        logger.warning(end_msg)
+                    return result
+                except exception:
+                    if error_msg:
+                        logger.exception(error_msg)
+                    raise
+
+            return wrapper
+
+        return deco_wrapper
+
+    # def log_task(self, task):
+    #     def deco():
+    #         pass
+
+    def visualize(self):
+        return self.graph.visualize()
+
+    def add_schedule(self, schedule):
+        self.schedule = schedule
+        self.next_run = self.schedule.next(1)[0]
+        self.is_scheduled = True
+
+    def add_listener(self, listener):
+        self.listener = listener
+        self.is_triggered = True
+
+    def check_if_manual(self):
+        if not (self.is_scheduled or self.is_triggered):
+            self.is_manual = True
+            return True
+
+    def submit(self, client):
+        computation = client.compute(self.graph)
+        self.status = computation.status
+        self.submit_to_queue()
+        return computation
+
+    @retry_task(Exception, tries=3, delay=10)
+    def submit_to_queue(self):
+
+        schema = "sandbox"
+        table = "workflow_queue"
+        submission_time = datetime.now(timezone.utc).replace(microsecond=0)
+
+        workflow_metadata = {
+            "workflow_name": [self.name],
+            "owner_email": [self.owner_email],
+            "backup_email": [self.backup_email],
+            "submitted": [submission_time],
+            "workflow_status": [self.status],
         }
+        workflow_metadata = pd.DataFrame(workflow_metadata)
 
-        status_data = pd.DataFrame(status_data)
-
+        s3 = S3(file_name="workflow_queue.csv", s3_key="bulk")
         try:
-            df_to_s3(
-                status_data,
-                table,
-                schema,
-                if_exists="append",
-                redshift_str="mssql+pyodbc://redshift_acoe",
-                s3_key="bulk",
-                bucket="acoe-s3",
-            )
+            s3.from_df(workflow_metadata)
         except:
-            self.logger.exception(f"{self.name} status could not be uploaded to S3")
-            return None
+            self.logger.exception("Upload to S3 failed")
+            raise
+        try:
+            s3.to_rds(schema=schema, table=table, if_exists="append", types={"submitted": "TIMESTAMPTZ"})
+        except:
+            self.logger.exception("Upload to Redshift failed")
+            raise
 
-        s3_to_rds(
-            file_name=table + ".csv",
-            schema=schema,
-            if_exists="append",
-            redshift_str="mssql+pyodbc://redshift_acoe",
-            s3_key="bulk",
-            bucket="acoe-s3",
-        )
-
-        self.logger.info(f"{self.name} status successfully uploaded to Redshift")
+        self.logger.info(f"{self.name} has been added to queue")
 
         return None
 
-    def generate_notification(self):
-        # prepare email body; to be refactored into a function
-        subject = f"Workflow {self.status}"
-        run_time_str = str(timedelta(seconds=self.run_time))
-        if self.is_scheduled:
-            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        elif self.is_triggered:
-            if self.listener.trigger:
-                last_wd = get_last_working_day()
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                    \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to
-                 {self.listener.last_data_refresh}"""
-        else:
-            email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        if self.status == "fail":  # add stack trace
-            email_body += f"\n\nError message: \n\n{self.error_message}"
+        # @retry_task(Exception, tries=3, delay=300)
+        # def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
 
-        notification = Email(subject=subject, body=email_body, logger=self.logger)
+        #     schema = "administration"
+        #     table = "status"
 
-        return notification
+        #     last_run_date = pd.datetime.utcnow()
 
-    def persist_start_time(self, time: float) -> None:
-        if not os.path.exists("etc"):
-            os.makedirs(f"etc")
-        with open("etc/cur_wf_start_time.txt", "w+") as f:
-            f.write(str(time))
-        return None
+        #     status_data = {
+        #         "workflow_name": [name],
+        #         "owner_email": [owner_email],
+        #         "backup_email": [backup_email],
+        #         "run_date": [last_run_date],
+        #         "workflow_status": [status],
+        #         "run_time": [run_time],
+        #         "env": [env],
+        #         "error_value": [error_value],
+        #         "error_type": [error_type],
+        #     }
 
-    def run(self, env="local"):
-        self.env = env
-        start = time()
-        self.persist_start_time(start)
-        try:
-            graph = dask.delayed()(self.tasks)
-            if self.execution_options:
-                scheduler = self.execution_options.get("scheduler") or self.scheduler
-                num_workers = self.execution_options.get("num_workers") or self.num_workers
-            else:
-                scheduler = "threads"
-                num_workers = self.num_workers
-            graph.compute(scheduler=scheduler, num_workers=num_workers)
-            self.status = "success"
-        except:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = str(exc_value).replace("'", r"\'").replace('"', r"\"")[:250]  # escape unintended delimiters
-            self.error_type = str(exc_type).split("'")[1]  # <class 'ZeroDivisionError'> -> ZeroDivisionError
-            self.error_message = traceback.format_exc()
-            self.logger.exception(f"{self.name} failed")
-            self.status = "fail"
-        end = time()
-        self.run_time = int(end - start)
+        #     status_data = pd.DataFrame(status_data)
 
-        notification = self.generate_notification()
-        cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
-        to = self.owner_email if isinstance(self.owner_email, list) else [self.owner_email]
-        send_as = ""
+        #     try:
+        #         df_to_s3(
+        #             status_data,
+        #             table,
+        #             schema,
+        #             if_exists="append",
+        #             redshift_str="mssql+pyodbc://redshift_acoe",
+        #             s3_key="bulk",
+        #             bucket="acoe-s3",
+        #         )
+        #     except:
+        #         self.logger.exception(f"{self.name} status could not be uploaded to S3")
+        #         return None
 
-        notification.send(to=to, cc=cc, send_as=send_as)
-        # when ran on server, the status is handled by Runner
-        if env == "local":
-            self.write_status_to_rds(
-                self.name,
-                self.owner_email,
-                self.backup_email,
-                self.status,
-                self.run_time,
-                env=self.env,
-                error_value=self.error_value,
-                error_type=self.error_type,
-            )
+        #     s3_to_rds(
+        #         file_name=table + ".csv",
+        #         schema=schema,
+        #         if_exists="append",
+        #         redshift_str="mssql+pyodbc://redshift_acoe",
+        #         s3_key="bulk",
+        #         bucket="acoe-s3",
+        #     )
 
-        if self.trigger_on_success:
-            triggered_wf = self.trigger_on_success
-            self.logger.info(f"Running {triggered_wf.name}...")
-            triggered_wf.run()
-            self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
-            triggered_wf.write_status_to_rds(
-                triggered_wf.name,
-                triggered_wf.owner_email,
-                triggered_wf.backup_email,
-                triggered_wf.status,
-                triggered_wf.run_time,
-                env=self.env,
-                error_value=triggered_wf.error_value,
-                error_type=triggered_wf.error_type,
-            )
+        #     self.logger.info(f"{self.name} status successfully uploaded to Redshift")
+
+        #     return None
+
+        # def generate_notification(self):
+        #     # prepare email body; to be refactored into a function
+        #     subject = f"Workflow {self.status}"
+        #     run_time_str = str(timedelta(seconds=self.run_time))
+        #     if self.is_scheduled:
+        #         email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        #     elif self.is_triggered:
+        #         if self.listener.trigger:
+        #             last_wd = get_last_working_day()
+        #             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+        #                 \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
+        #         else:
+        #             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+        #             \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to
+        #              {self.listener.last_data_refresh}"""
+        #     else:
+        #         email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        #     if self.status == "fail":  # add stack trace
+        #         email_body += f"\n\nError message: \n\n{self.error_message}"
+
+        #     notification = Email(subject=subject, body=email_body, logger=self.logger)
+
+        #     return notification
+
+        # def persist_start_time(self, time: float) -> None:
+        #     if not os.path.exists("etc"):
+        #         os.makedirs(f"etc")
+        #     with open("etc/cur_wf_start_time.txt", "w+") as f:
+        #         f.write(str(time))
+        #     return None
+
+        # def run(self, env="local"):
+        #     self.env = env
+        #     start = time()
+        #     self.persist_start_time(start)
+        #     try:
+        #         graph = dask.delayed()(self.tasks)
+        #         if self.execution_options:
+        #             scheduler = self.execution_options.get("scheduler") or self.scheduler
+        #             num_workers = self.execution_options.get("num_workers") or self.num_workers
+        #         else:
+        #             scheduler = "threads"
+        #             num_workers = self.num_workers
+        #         graph.compute(scheduler=scheduler, num_workers=num_workers)
+        #         self.status = "success"
+        #     except:
+        #         exc_type, exc_value, exc_tb = sys.exc_info()
+        #         self.error_value = str(exc_value).replace("'", r"\'").replace('"', r"\"")[:250]  # escape unintended delimiters
+        #         self.error_type = str(exc_type).split("'")[1]  # <class 'ZeroDivisionError'> -> ZeroDivisionError
+        #         self.error_message = traceback.format_exc()
+        #         self.logger.exception(f"{self.name} failed")
+        #         self.status = "fail"
+        #     end = time()
+        #     self.run_time = int(end - start)
+
+        #     notification = self.generate_notification()
+        #     cc = self.backup_email if isinstance(self.backup_email, list) else [self.backup_email]
+        #     to = self.owner_email if isinstance(self.owner_email, list) else [self.owner_email]
+        #     send_as = ""
+
+        #     notification.send(to=to, cc=cc, send_as=send_as)
+        #     # when ran on server, the status is handled by Runner
+        #     if env == "local":
+        #         self.write_status_to_rds(
+        #             self.name,
+        #             self.owner_email,
+        #             self.backup_email,
+        #             self.status,
+        #             self.run_time,
+        #             env=self.env,
+        #             error_value=self.error_value,
+        #             error_type=self.error_type,
+        #         )
+
+        #     if self.trigger_on_success:
+        #         triggered_wf = self.trigger_on_success
+        #         self.logger.info(f"Running {triggered_wf.name}...")
+        #         triggered_wf.run()
+        #         self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
+        #         triggered_wf.write_status_to_rds(
+        #             triggered_wf.name,
+        #             triggered_wf.owner_email,
+        #             triggered_wf.backup_email,
+        #             triggered_wf.status,
+        #             triggered_wf.run_time,
+        #             env=self.env,
+        #             error_value=triggered_wf.error_value,
+        #             error_type=triggered_wf.error_type,
+        #         )
 
         return self.status
 
@@ -714,21 +775,23 @@ class Runner:
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
 
+        client = Client("10.125.68.52")
+
         for workflow in workflows:
             if self.should_run(workflow):
-                self.logger.info(f"Running {workflow.name}...")
-                workflow.run(env=self.env)
-                self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
-                workflow.write_status_to_rds(
-                    workflow.name,
-                    workflow.owner_email,
-                    workflow.backup_email,
-                    workflow.status,
-                    workflow.run_time,
-                    env=self.env,
-                    error_value=workflow.error_value,
-                    error_type=workflow.error_type,
-                )
+                self.logger.info(f"Worfklow {workflow.name} has been enqueued...")
+                future = workflow.submit(client)
+                # self.logger.info(f"Finished running {workflow.name} with the status <{workflow.status}>")
+                # workflow.write_status_to_rds(
+                #     workflow.name,
+                #     workflow.owner_email,
+                #     workflow.backup_email,
+                #     workflow.status,
+                #     workflow.run_time,
+                #     env=self.env,
+                #     error_value=workflow.error_value,
+                #     error_type=workflow.error_type,
+                # )
         else:
             self.logger.info(f"No pending workflows found")
 
@@ -837,3 +900,57 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
 def get_con(engine):
     con = engine.connect().connection
     return con
+
+
+def execute_query(engine, query):
+    conn = engine.connect().connection
+    cursor = conn.cursor()
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return None
+
+
+def update_queue(client, engine, schema=None, table=None):
+    tasks = client.cluster.scheduler.tasks
+    for task_name in tasks:
+        if task_name.endswith("_graph"):
+            task = tasks[task_name]
+            workflow_name = task_name[: -len("_graph")]
+            workflow_status = task.state
+            if workflow_status == "memory":  # = finished
+                query = f"""
+                DELETE FROM {schema}.{table}
+                WHERE workflow_name = '{workflow_name}';
+                """
+                print(query)
+                execute_query(engine=engine, query=query)
+    return None
+
+
+# def log(begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
+#     """
+#     A decorator that wraps the passed in function and logs
+#     exceptions should one occur
+#     """
+
+#     def deco_wrapper(function):
+#         @wraps(function)
+#         def wrapper(*args, **kwargs):
+#             logger = logging.getLogger(__name__)
+#             if begin_msg:
+#                 logger.warning(begin_msg)
+#             try:
+#                 result = function(*args, **kwargs)
+#                 if end_msg:
+#                     logger.warning(end_msg)
+#                 return result
+#             except exception:
+#                 if error_msg:
+#                     logger.exception(error_msg)
+#                 raise
+
+#         return wrapper
+
+#     return deco_wrapper
