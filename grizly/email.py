@@ -1,11 +1,38 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
-from .utils import read_config, get_path
-from .config import Config, _validate_config
+from exchangelib import Credentials, Account, Message, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
+from .config import Config
 from os.path import basename
 import os
 import logging
 from typing import Union, List
+
+
+class EmailAccount:
+    def __init__(self, email_address, email_password, alias=None, config_key=None):
+        if config_key:
+            config = Config().get_service(config_key=config_key, service="email")
+        self.logger = logging.getLogger(__name__)
+        self.email_address = email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
+        self.email_password = email_password or os.getenv("EMAIL_PASSWORD") or config.get("email_password")
+        self.alias = alias
+        self.credentials = Credentials(self.email_address, self.email_password)
+        self.config = Configuration(
+            server="smtp.office365.com", credentials=self.credentials, retry_policy=FaultTolerance(max_wait=2 * 60)
+        )
+        try:
+            smtp_address = self.email_address
+            if self.alias:
+                smtp_address = self.alias
+            self.account = Account(
+                primary_smtp_address=smtp_address,
+                credentials=self.credentials,
+                config=self.config,
+                autodiscover=False,
+                access_type=DELEGATE,
+            )
+        except:
+            self.logger.exception("Email account could not be accessed.")
+            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
 
 
 class Email:
@@ -26,7 +53,7 @@ class Email:
     email_address : str, optional
         Email address used to send an email, by default None
     email_password : str, optional
-        Password to the email sepcified in email_address, by default None
+        Password to the email specified in email_address, by default None
     config_key : str, optional
         Config key, by default 'standard'"""
 
@@ -117,9 +144,9 @@ class Email:
         Parameters
         ----------
         to : str or list
-            Email recepients
+            Email recipients
         cc : str or list, optional
-            Cc recepients, by default None
+            Cc recipients, by default None
         send_as : str, optional
             Author of the email, by default None
 
@@ -147,6 +174,11 @@ class Email:
         -------
         None
         """
+
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
+
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
@@ -159,19 +191,7 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-
-        if self.proxy:
-            os.environ["HTTPS_PROXY"] = self.proxy
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
-        credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2 * 60))
-        try:
-            account = Account(
-                primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE
-            )
-        except:
-            self.logger.exception("Email account could not be accessed.")
-            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
+        account = EmailAccount(email_address, email_password).account
 
         m = Message(
             account=account,

@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from functools import wraps
 from json.decoder import JSONDecodeError
 from logging import Logger
@@ -20,10 +20,11 @@ from dask.dot import _get_display_cls
 from dask.optimization import key_split
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from exchangelib.errors import ErrorFolderNotFound
 
-from grizly.config import Config
+from .config import Config
 
-from .email import Email
+from .email import EmailAccount, Email
 from .etl import df_to_s3, s3_to_rds
 from .utils import get_last_working_day, read_config
 
@@ -159,6 +160,7 @@ class Listener:
         self.engine = self.get_engine()
         self.last_trigger_run = self.get_last_trigger_run()
         self.delay = delay
+        self.config_key = "standard"
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -346,6 +348,71 @@ class Listener:
                 return True
 
         return False
+
+
+class TriggerListener(Listener):
+    pass
+
+
+class FieldListener(Listener):
+    pass
+
+
+class QueryListener(Listener):
+    pass
+
+
+class EmailListener(Listener):
+    def __init__(self, email_folder=None, search_email_address=None, email_address=None, email_password=None):
+        self.email_folder = email_folder
+        self.search_email_address = search_email_address
+        self.last_data_refresh = self.get_last_email_date(
+            self.name, self.email_folder, self.search_email_address, self.config_key
+        )
+        super().__init__(self, self.last_data_refresh)
+
+    def _validate_folder(self, account, folder_name):
+        if not folder_name:
+            return True
+        try:
+            folder = account.inbox / folder_name
+        except ErrorFolderNotFound:
+            raise
+
+    def get_last_email_date(
+        self,
+        workflow_name,
+        email_folder=None,
+        search_email_address=None,
+        email_address=None,
+        email_password=None,
+        config_key="standard",
+    ):
+
+        account = EmailAccount(email_address, email_password, alias="acoe_team@te.com").account
+        self._validate_folder(account, email_folder)
+
+        if email_folder:
+            last_message = (
+                account.inbox.glob("**/" + email_folder)
+                .filter(subject__contains=workflow_name)
+                .order_by("-datetime_received")
+                .only("datetime_received")[0]
+            )
+        else:
+            last_message = (
+                account.inbox.filter(subject__contains=workflow_name)
+                .filter(subject__contains=workflow_name)
+                .order_by("-datetime_received")
+                .only("datetime_received")[0]
+            )
+        if not last_message:
+            return None
+
+        d = last_message.datetime_received.date()
+        last_received_date = date(d.year, d.month, d.day)
+
+        return last_received_date
 
 
 class Workflow:
