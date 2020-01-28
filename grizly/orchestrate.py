@@ -31,6 +31,8 @@ from .utils import get_last_working_day, read_config
 
 workflows_dir = "/home/acoe_workflows"
 
+logger = logging.getLogger(__name__)
+
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
     Casts a date/datetime-like value to a Date object.
@@ -358,7 +360,7 @@ class Workflow:
         self.tasks = tasks
         self.trigger_on_success = trigger_on_success
         self.execution_options = execution_options
-        self.graph = dask.delayed()(self.tasks, name=self.name + "_graph")
+        self.graph = dask.delayed()(self.tasks, name=self.name)
         self.run_time = 0
         self.status = "pending"
         self.is_scheduled = False
@@ -775,7 +777,7 @@ class Runner:
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
 
-        client = Client("10.125.68.52")
+        client = Client("10.125.68.52:8786")
 
         for workflow in workflows:
             if self.should_run(workflow):
