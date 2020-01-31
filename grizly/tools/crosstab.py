@@ -1,82 +1,118 @@
-def get_row(row_span):
-    html = ''
-    for value, span in row_span:
-        rowspan = f" rowspan={span}" if span != 1 else ""
-        html += f"    <td{rowspan}> {value} </td>\n"
-    return html
+class Crosstab():
+    def __init__(self, df, columns, values):
+        self.df = df
+        self.columns = columns
+        self.values = values
+        self.subtotals = {}
+        self.subtotal_columns = []
+
+    def add_subtotals(self, columns):
+        self.subtotal_columns = columns
+        subtotals = {}
+        groups = []
+
+        def get_groups(df, columns, group):
+            if len(columns) != 0:
+                rows = []
+                for item in df[columns[0]]:
+                    if item not in rows:
+                        rows.append(item)
+                for item in rows:
+                    group.append(item)
+                    group = get_groups(df, columns[1:], group)
+                    groups.append([i for i in group])
+                    group.pop(-1)
+            return group
+
+        get_groups(self.df, columns, [])
+
+        for group in groups:
+            colspan = len(self.df.columns) - len(self.values) - len(group) + 1
+            filters = [f"{column}=='{row}'" for column, row in zip(columns[:len(group)], group)]
+            query = " and ".join(filters)
+            group_values = {value: self.df.query(query)[value].sum() for value in self.values}
+            group = tuple(group)
+            subtotals[group] = {"colspan": colspan,
+                                "values": group_values}
+
+        self.subtotals = subtotals
+        return self
 
 
-def get_header(row_span):
-    html = ''
-    for value, span in row_span:
-        rowspan = f" rowspan={span}" if span != 1 else ""
-        html += f"    <th{rowspan}> {value} </th>\n"
-    return html
+    def to_html(self):
+        def get_header(row_span):
+            html = ''
+            for value, span in row_span:
+                rowspan = f" rowspan={span}" if span != 1 else ""
+                html += f"    <th{rowspan}> {value} </th>\n"
+            return html
 
+        def get_row(row_span):
+            html = ''
+            for value, span in row_span:
+                rowspan = f" rowspan={span}" if span != 1 else ""
+                html += f"    <td{rowspan}> {value} </td>\n"
+            return html
 
-def get_rowspan(df, subtotal):
-    """Returns a nested dictionary with 'content' and 'lines' in each key.
-    For now we only use 'lines' number so in fact it could return only this number."""
-    rows = set(df[df.columns[0]])
-    data = {}
-    if df.columns[0] in subtotal:
-        lines = len(rows)
-    else:
-        lines = 0
-    if len(df.columns) != 1:
-        for row in rows:
-            df_new = df.query(f"{df.columns[0]}=='{row}'")[df.columns[1:]]
-            content, lines_new = get_rowspan(df_new, subtotal)
-            lines += lines_new
-            data[row] = {'content': content, 'lines': lines_new}
-    else:
-        for row in rows:
-            data[row] = {}
-            data[row]['lines'] = len(df.query(f"{df.columns[0]}=='{row}'"))
-            lines += len(df.query(f"{df.columns[0]}=='{row}'"))
-    return data, lines
+        def get_body(d, row_span, html, group, subtotals):
+            if 'content' in d.keys():
+                for key in d['content'].keys():
+                    group.append(key)
+                    row_span.append((key, d['content'][key]['rowspan']))
+                    html = get_body(d['content'][key], row_span, html, group, subtotals)
+                    row_span = []
+                    if tuple(group) in subtotals:
+                        colspan = subtotals[tuple(group)]['colspan']
+                        values = subtotals[tuple(group)]['values']
+                        for value in values.keys():
+                            row_span.append((values[value], 1))
+                        html += f"  <tr>\n  <td colspan={colspan}>Total</td>\n" + get_row(row_span) + "  </tr>\n"
+                        row_span = []
+                    group.pop(-1)
+            elif 'values' in d.keys():
+                for value in d['values'].keys():
+                    row_span.append((d['values'][value], 1))
+                html += "  <tr>\n" + get_row(row_span) + "  </tr>\n"
+            return html
 
-
-def html_body(df, columns, values, subtotals, row_span, html):
-#     df = df[columns+values].groupby(columns).sum().reset_index()
-    if len(columns) != 1:
-        for row in set(df[columns[0]]):
-            df_new = df.copy().query(f"{columns[0]}=='{row}'")
-            row_span.append((row, get_rowspan(df[columns], subtotals)[0][row]['lines']))
-            html = html_body(df_new, columns[1:], values, subtotals, row_span, html)
+        def get_content(df, columns, values, subtotals):
+            rows = []
+            for item in df[columns[0]]:
+                    if item not in rows:
+                        rows.append(item)
+            data = {}
             if columns[0] in subtotals:
-                colspan = len(columns)
-                row_span = []
-                for value in df_new[values].sum():
-                    row_span.append((value, 1))
-                html += f"  <tr>\n  <td colspan={colspan}>Total</td>\n" + get_row(row_span) + "  </tr>\n"
-            row_span = []
-    else:
-        rem_items = list(df[columns[0]])
-        row_span.append((rem_items[0], 1))
-        for value in df.query(f"{columns[0]}=='{rem_items[0]}'")[values].sum():
-            row_span.append((value, 1))
-        html += "  <tr>\n" + get_row(row_span) + "  </tr>\n"
-        for item in rem_items[1:]:
-            row_span = [(item, 1)]
-            for value in df.query(f"{columns[0]}=='{item}'")[values].sum():
-                row_span.append((value, 1))
-            html += "  <tr>\n" + get_row(row_span) + "  </tr>\n"
-    return html
+                lines = len(rows)
+            else:
+                lines = 0
+            if len(columns) != 1:
+                for row in rows:
+                    df_new = df.query(f"{columns[0]}=='{row}'")[df.columns[1:]]
+                    data[row] = get_content(df_new, columns[1:], values, subtotals)
+                    lines += data[row]['rowspan']
+            else:
+                for row in rows:
+                    data[row] = {}
+                    data[row]['rowspan'] = len(df.query(f"{columns[0]}=='{row}'"))
+                    data[row]['values'] = {}
+                    for value in values:
+                        data[row]['values'][value] = df.query(f"{columns[0]}=='{row}'")[value].values[0]
+                    lines += data[row]['rowspan']
+            return {'content': data, 'rowspan': lines}
 
 
-def get_crosstab(df, columns, values, subtotals=[]):
-    thead = "<thead>\n  <tr>\n" + get_header([(column, 1) for column in columns+values]) + "  </tr>\n</thead>\n"
-    if columns[-1] in subtotals:
-        subtotals.remove(columns[-1])
-        print("You can't do subtotals on the last non value column.")
-    tbody = html_body(df=df,
-                     columns=columns,
-                     values=values,
-                     subtotals=subtotals,
-                     row_span=[],
-                     html=''
-                    )
-    tbody = "<tbody>\n" + tbody + "</tbody>\n"
-    table = "<table>\n" + thead + tbody + "</table>"
-    return table
+        thead = "<thead>\n" + get_header([(column, 1) for column in self.columns+self.values]) + "</thead>\n"
+
+        content = get_content(df=self.df,
+                              columns=self.columns,
+                              values=self.values,
+                              subtotals=self.subtotal_columns)
+
+        tbody = "<tbody>\n" + get_body(d=content, row_span=[], html='', group=[], subtotals=self.subtotals) + "</tbody>\n"
+        table = "<table>\n" + thead + tbody + "</table>"
+
+        return table
+
+
+    def _repr_html_(self):
+        return self.to_html()

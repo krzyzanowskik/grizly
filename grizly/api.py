@@ -6,7 +6,7 @@ from .tools.qframe import (
 )
 
 from .tools.crosstab import (
-    get_crosstab
+    Crosstab
 )
 
 from .ui.start import UI
