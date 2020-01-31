@@ -18,6 +18,7 @@ import graphviz
 import pandas as pd
 from croniter import croniter
 from dask.core import get_dependencies
+from dask.distributed import fire_and_forget
 from dask.dot import _get_display_cls
 from dask.optimization import key_split
 from sqlalchemy import create_engine
@@ -360,7 +361,7 @@ class Workflow:
         self.tasks = tasks
         self.trigger_on_success = trigger_on_success
         self.execution_options = execution_options
-        self.graph = dask.delayed()(self.tasks, name=self.name)
+        self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
         self.run_time = 0
         self.status = "pending"
         self.is_scheduled = False
@@ -475,6 +476,7 @@ class Workflow:
     def submit(self, client):
         computation = client.compute(self.graph)
         self.status = computation.status
+        fire_and_forget(computation)
         self.submit_to_queue()
         return computation
 
@@ -506,7 +508,7 @@ class Workflow:
             self.logger.exception("Upload to Redshift failed")
             raise
 
-        self.logger.info(f"{self.name} has been added to queue")
+        self.logger.info(f"{self.name} status has been uploaded to workflow_queue table")
 
         return None
 
@@ -655,8 +657,7 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-    def __init__(self, workflows: List[Workflow], logger: Logger = None, env: str = "prod") -> None:
-        self.workflows = workflows
+    def __init__(self, logger: Logger = None, env: str = "prod") -> None:
         self.env = env
         self.logger = logging.getLogger(__name__)
         self.run_params = None
@@ -753,6 +754,21 @@ class Runner:
             # modify Workflow object's parameters
             else:
                 setattr(workflow, param, params[param])
+    
+
+
+    async def run_async(self, workflows: List[Workflow], overwrite_params: Dict = None) -> Dict:
+        async def create_client():
+            client = await Client("10.125.68.52:8786", asynchronous=True)
+            return client
+
+        client = create_client()
+
+        for workflow in workflows:
+            if self.should_run(workflow):
+                self.logger.info(f"Worfklow {workflow.name} has been enqueued...")
+                future = await workflow.submit(client)
+                
 
     def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> Dict:
         """[summary]
@@ -776,7 +792,7 @@ class Runner:
             self.logger.debug(f"Overwriting workflow parameters: {overwrite_params}")
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
-
+        
         client = Client("10.125.68.52:8786")
 
         for workflow in workflows:

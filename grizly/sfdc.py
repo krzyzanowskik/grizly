@@ -8,7 +8,7 @@ import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from .config import Config
-from .utils import get_path
+from .utils import get_path, read_config
 from logging import Logger
 from .tools.s3 import S3
 from typing import Dict
@@ -34,18 +34,15 @@ class SFDC:
                 instance_url: str=None, env: str="prod", logger: Logger=None, proxies: dict=None,
                 config_key: str="standard"):
         self.env = env
-        try:
-            config = Config().get_service(config_key=config_key, service="sfdc", env=env)
-        except:
-            config = None
-        # first lookup in parameters, then config, then env variables
-        self.proxies = proxies or Config().get_service(config_key=config_key, service="proxies") or {
+        # first lookup in parameters, then config, then env variables 
+        self.config = read_config()
+        self.proxies = proxies or self.config.get("proxies") or {
             "http": os.getenv("HTTP_PROXY"),
             "https": os.getenv("HTTPS_PROXY"),
         }
-        self.username = username or config.get("username")
-        self.password = password or config.get("password")
-        self.organization_id = organization_id or config.get("organizationId")
+        self.username = username or self.config.get("sfdc_username")
+        self.password = password or self.config.get("sfdc_password")
+        self.organization_id = organization_id or self.config.get("organization_id")
         self.instance_url = instance_url
         self.logger = logger if logger else logging.getLogger(__name__)
 
