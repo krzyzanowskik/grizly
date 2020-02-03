@@ -12,11 +12,10 @@ import logging
 from logging import config
 from json import load
 
-
 def read_config():
     try:
-        json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
-        with open(json_path, 'r') as f:
+        json_path = os.path.join(os.environ["USERPROFILE"], ".grizly", "etl_config.json")
+        with open(json_path, "r") as f:
             config = json.load(f)
     except KeyError:
         config = "Error with UserProfile"
@@ -49,31 +48,30 @@ def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
         The string representing a SQLAlchemy data type.
     """
 
-
     sqlalchemy_dtypes = {
         "address": "NVARCHAR",
-        'anytype': "NVARCHAR",
-        'base64': "NVARCHAR",
-        'boolean': "BOOLEAN",
-        'combobox': "NVARCHAR",
-        'currency': "NUMERIC(precision=14)",
-        'datacategorygroupreference': "NVARCHAR",
-        'date': "DATE",
-        'datetime': "DATETIME",
-        'double': "NUMERIC",
-        'email': "NVARCHAR",
-        'encryptedstring': "NVARCHAR",
-        'id': "NVARCHAR",
-        'int': "INT",
-        'multipicklist': "NVARCHAR",
-        'percent': "NUMERIC(precision=6)",
-        'phone': "NVARCHAR",
-        'picklist': "NVARCHAR",
-        'reference': "NVARCHAR",
-        'string': "NVARCHAR",
-        'textarea': "NVARCHAR",
-        'time': "DATETIME",
-        'url': "NVARCHAR"
+        "anytype": "NVARCHAR",
+        "base64": "NVARCHAR",
+        "boolean": "BOOLEAN",
+        "combobox": "NVARCHAR",
+        "currency": "NUMERIC(precision=14)",
+        "datacategorygroupreference": "NVARCHAR",
+        "date": "DATE",
+        "datetime": "DATETIME",
+        "double": "NUMERIC",
+        "email": "NVARCHAR",
+        "encryptedstring": "NVARCHAR",
+        "id": "NVARCHAR",
+        "int": "INT",
+        "multipicklist": "NVARCHAR",
+        "percent": "NUMERIC(precision=6)",
+        "phone": "NVARCHAR",
+        "picklist": "NVARCHAR",
+        "reference": "NVARCHAR",
+        "string": "NVARCHAR",
+        "textarea": "NVARCHAR",
+        "time": "DATETIME",
+        "url": "NVARCHAR",
     }
     sqlalchemy_dtype = sqlalchemy_dtypes[sfdc_dtype]
     return sqlalchemy_dtype
@@ -102,11 +100,11 @@ def get_sfdc_columns(table, columns=None, column_types=True):
     sfdc_pw = config["sfdc_password"]
 
     try:
-        sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId='00DE0000000Hkve')
+        sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId="00DE0000000Hkve")
     except SalesforceAuthenticationFailed:
         print("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
         raise SalesforceAuthenticationFailed
-    field_descriptions = eval(f'sf.{table}.describe()["fields"]') # change to variable table
+    field_descriptions = eval(f'sf.{table}.describe()["fields"]')  # change to variable table
     types = {field["name"]: (field["type"], field["length"]) for field in field_descriptions}
 
     if columns:
@@ -145,8 +143,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
         Denodo date format differs from those from other databases. User can choose which format is desired.
     """
 
-
-    if column_types==False:
+    if not column_types:
         sql = f"""
             SELECT column_name
             FROM get_view_columns()
@@ -161,7 +158,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
             AND database_name = '{schema}'
     """
     config = read_config()
-    engine = create_engine(config["denodo"], encoding='utf8', poolclass=NullPool)
+    engine = create_engine(config["denodo"], encoding="utf8", poolclass=NullPool)
 
     try:
         con = engine.connect().connection
@@ -174,7 +171,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
 
     col_names = []
 
-    if column_types==False:
+    if not column_types:
         while True:
             column = cursor.fetchone()
             if not column:
@@ -190,9 +187,9 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
             if not column:
                 break
             col_names.append(column[0])
-            if column[1] in ( 'VARCHAR', 'NVARCHAR'):
-                col_types.append(column[1]+'('+str(min(column[2],1000))+')')
-            elif column[1] == 'DATE' :
+            if column[1] in ("VARCHAR", "NVARCHAR"):
+                col_types.append(column[1] + "(" + str(min(column[2], 1000)) + ")")
+            elif column[1] == "DATE":
                 col_types.append(date_format)
             else:
                 col_types.append(column[1])
@@ -273,7 +270,7 @@ def get_columns(table, schema=None, column_types=False, date_format="DATE", db="
         raise NotImplementedError("This db is not yet supported")
 
 
-def check_if_exists(table, schema='', redshift_str=None):
+def check_if_exists(table, schema="", redshift_str=None):
     """
     Checks if a table exists in Redshift.
 
@@ -282,18 +279,20 @@ def check_if_exists(table, schema='', redshift_str=None):
     redshift_str : str, optional
         Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
 
-    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
-    if schema == '':
-        sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
+    engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
+    if schema == "":
+        sql_exists = "select * from information_schema.tables where table_name = '{}' ".format(table)
     else:
-        sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
+        sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ".format(
+            schema, table
+        )
 
-    return not pd.read_sql_query(sql = sql_exists, con=engine).empty
+    return not pd.read_sql_query(sql=sql_exists, con=engine).empty
 
 
-def check_if_valid_type(type:str):
+def check_if_valid_type(type: str):
     """Checks if given type is valid in Redshift.
 
     Parameters
@@ -307,36 +306,36 @@ def check_if_valid_type(type:str):
         True if type is valid, False if not
     """
     valid_types = [
-        'SMALLINT',
-        'INT2',
-        'INTEGER',
-        'INT',
-        'INT4',
-        'BIGINT',
-        'INT8',
-        'DECIMAL',
-        'NUMERIC',
-        'REAL',
-        'FLOAT4',
-        'DOUBLE PRECISION',
-        'FLOAT8',
-        'FLOAT',
-        'BOOLEAN',
-        'BOOL',
-        'CHAR',
-        'CHARACTER',
-        'NCHAR',
-        'BPCHAR',
-        'VARCHAR',
-        'CHARACTER VARYING',
-        'NVARCHAR',
-        'TEXT',
-        'DATE',
-        'TIMESTAMP',
-        'TIMESTAMP WITHOUT TIME ZONE',
-        'TIMESTAMPTZ',
-        'TIMESTAMP WITH TIME ZONE'
-        ]
+        "SMALLINT",
+        "INT2",
+        "INTEGER",
+        "INT",
+        "INT4",
+        "BIGINT",
+        "INT8",
+        "DECIMAL",
+        "NUMERIC",
+        "REAL",
+        "FLOAT4",
+        "DOUBLE PRECISION",
+        "FLOAT8",
+        "FLOAT",
+        "BOOLEAN",
+        "BOOL",
+        "CHAR",
+        "CHARACTER",
+        "NCHAR",
+        "BPCHAR",
+        "VARCHAR",
+        "CHARACTER VARYING",
+        "NVARCHAR",
+        "TEXT",
+        "DATE",
+        "TIMESTAMP",
+        "TIMESTAMP WITHOUT TIME ZONE",
+        "TIMESTAMPTZ",
+        "TIMESTAMP WITH TIME ZONE",
+    ]
 
     for valid_type in valid_types:
         if type.upper().startswith(valid_type):
@@ -344,7 +343,7 @@ def check_if_valid_type(type:str):
     return False
 
 
-def delete_where(table, schema='', redshift_str=None, *argv):
+def delete_where(table, schema="", redshift_str=None, *argv):
     """
     Removes records from Redshift table which satisfy *argv.
 
@@ -357,17 +356,17 @@ def delete_where(table, schema='', redshift_str=None, *argv):
     redshift_str : str, optional
         Redshift engine string, if None then 'mssql+pyodbc://Redshift'
     """
-    table_name = f'{schema}.{table}' if schema else f'{table}'
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    table_name = f"{schema}.{table}" if schema else f"{table}"
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
 
     if check_if_exists(table, schema):
-        engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
+        engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
         if argv is not None:
             for arg in argv:
                 sql = f"DELETE FROM {table_name} WHERE {arg} "
                 engine.execute(sql)
-                print(f'Records from table {table_name} where {arg} has been removed successfully.')
+                print(f"Records from table {table_name} where {arg} has been removed successfully.")
     else:
         print(f"Table {table_name} doesn't exist.")
 
@@ -383,7 +382,7 @@ def copy_table(schema, copy_from, to, redshift_str=None):
     print("Executing...")
     print(sql)
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
 
     engine = create_engine(redshift_str)
     engine.execute(sql)
@@ -393,14 +392,14 @@ def copy_table(schema, copy_from, to, redshift_str=None):
 
 def set_cwd(*args):
     try:
-        cwd = os.environ['USERPROFILE']
+        cwd = os.environ["USERPROFILE"]
     except KeyError:
         cwd = "Error with UserProfile"
     cwd = os.path.join(cwd, *args)
     return cwd
 
 
-def get_path(*args, from_where='python'):
+def get_path(*args, from_where="python"):
     """Quick utility function to get the full path from either
     the python execution root folder or from your python
     notebook or python module folder
@@ -419,20 +418,20 @@ def get_path(*args, from_where='python'):
     str
         path in string format
     """
-    if from_where == 'python':
+    if from_where == "python":
         try:
-            cwd = os.environ['USERPROFILE']
+            cwd = os.environ["USERPROFILE"]
         except KeyError:
             cwd = "Error with UserProfile"
         cwd = os.path.join(cwd, *args)
         return cwd
-    elif from_where == 'here':
-        cwd = os.path.abspath('')
+    elif from_where == "here":
+        cwd = os.path.abspath("")
         cwd = os.path.join(cwd, *args)
         return cwd
 
 
-def file_extension(file_path:str):
+def file_extension(file_path: str):
     """Gets extension of file.
 
     Parameters
@@ -454,7 +453,7 @@ def get_last_working_day(utc=True):
         t = datetime.utcnow()
     else:
         t = datetime.today()
-    if t.weekday() == 0: # Monday
+    if t.weekday() == 0:  # Monday
         t += timedelta(days=-3)
     else:
         t += timedelta(days=-1)

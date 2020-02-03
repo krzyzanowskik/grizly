@@ -123,8 +123,12 @@ class Trigger:
         self.table = params.get("table")
 
     @property
-    def should_run(self):
+    def last_data_refresh(self):
         return self.check(**self.kwargs)
+
+    @property
+    def should_run(self):
+        return bool(self.last_data_refresh)
 
 
 class Listener:
@@ -601,25 +605,43 @@ class Workflow:
 
         return None
 
+    def gen_scheduled_wf_email_body(self):
+        run_time_str = str(timedelta(seconds=self.run_time))
+        email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        return email_body
+
+    def gen_triggered_wf_email_body(self):
+        run_time_str = str(timedelta(seconds=self.run_time))
+        l = self.listener
+        if l.trigger:
+            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {l.table} {l.field}'s latest value has changed to {l.trigger.last_data_refresh}"""
+        else:
+            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+            \nTrigger: {l.table} {l.field}'s latest value has changed to
+                {l.last_data_refresh}"""
+        return email_body
+
+    def gen_manual_wf_email_body(self):
+        run_time_str = str(timedelta(seconds=self.run_time))
+        email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+        return email_body
+
+    def add_stacktrace(self, email_body):
+        email_body += f"\n\nError message: \n\n{self.error_message}"
+        return email_body
+
     def generate_notification(self):
         # prepare email body; to be refactored into a function
         subject = f"Workflow {self.status}"
-        run_time_str = str(timedelta(seconds=self.run_time))
         if self.is_scheduled:
-            email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
+            email_body = self.gen_scheduled_wf_email_body()
         elif self.is_triggered:
-            if self.listener.trigger:
-                last_wd = get_last_working_day()
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                    \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to {last_wd}"""
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {self.listener.table} {self.listener.field}'s latest value has changed to
-                 {self.listener.last_data_refresh}"""
+            email_body = self.gen_triggered_wf_email_body()
         else:
-            email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        if self.status == "fail":  # add stack trace
-            email_body += f"\n\nError message: \n\n{self.error_message}"
+            email_body = self.gen_manual_wf_email_body()
+        if self.status == "fail":
+            email_body += self.add_stacktrace(email_body)
 
         notification = Email(subject=subject, body=email_body, logger=self.logger)
 

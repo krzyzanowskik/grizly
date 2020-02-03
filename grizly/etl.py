@@ -14,12 +14,12 @@ from .utils import check_if_exists, get_path, read_config
 # config_path = get_path('.grizly', 'config.json')
 # config = Config().from_json(config_path)
 try:
-    os.environ["HTTPS_PROXY"] = read_config()["https"] # remove the second option once whole team has moved to Config
+    os.environ["HTTPS_PROXY"] = read_config()["https"]  # remove the second option once whole team has moved to Config
 except:
     pass
 
 
-def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
+def to_csv(qf, csv_path, sql, engine=None, sep="\t", chunksize=None, debug=False, cursor=None):
     """
     Writes table to csv file.
     Parameters
@@ -42,7 +42,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
         close_cursor = False
 
     else:
-        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+        engine = create_engine(engine, encoding="utf8", poolclass=NullPool)
 
         try:
             con = engine.connect().connection
@@ -58,7 +58,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
 
         close_cursor = True
 
-    with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+    with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
         writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
         cursor_row_count = 0
@@ -87,7 +87,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
     return cursor_row_count
 
 
-def create_table(qf, table, engine, schema='', char_size=500):
+def create_table(qf, table, engine, schema="", char_size=500):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -102,9 +102,9 @@ def create_table(qf, table, engine, schema='', char_size=500):
         Specify the schema.
     char_size : int, size of the VARCHAR field in the database column
     """
-    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+    engine = create_engine(engine, encoding="utf8", poolclass=NullPool)
 
-    table_name = f'{schema}.{table}' if schema else f'{table}'
+    table_name = f"{schema}.{table}" if schema else f"{table}"
 
     if check_if_exists(table, schema):
         print("Table {} already exists...".format(table_name))
@@ -114,9 +114,9 @@ def create_table(qf, table, engine, schema='', char_size=500):
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
             if sql_blocks["types"][item] == "VARCHAR(500)":
-                column = sql_blocks["select_aliases"][item] + ' ' + 'VARCHAR({})'.format(char_size)
+                column = sql_blocks["select_aliases"][item] + " " + "VARCHAR({})".format(char_size)
             else:
-                column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
+                column = sql_blocks["select_aliases"][item] + " " + sql_blocks["types"][item]
             columns.append(column)
 
         columns_str = ", ".join(columns)
@@ -129,7 +129,7 @@ def create_table(qf, table, engine, schema='', char_size=500):
         print("Table {} has been created successfully.".format(sql))
 
 
-def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True, redshift_str=None, bucket=None):
+def s3_to_rds_qf(qf, table, s3_name, schema="", if_exists="fail", sep="\t", use_col_names=True, redshift_str=None, bucket=None):
     """
     Writes s3 to Redshift database.
 
@@ -160,34 +160,35 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError("'{}' is not valid for if_exists".format(if_exists))
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
-    bucket_name = bucket if bucket else 'teis-data'
-    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
+    bucket_name = bucket if bucket else "teis-data"
+    engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
-    table_name = f'{schema}.{table}' if schema else f'{table}'
+    table_name = f"{schema}.{table}" if schema else f"{table}"
 
     if check_if_exists(table, schema, redshift_str=redshift_str):
-        if if_exists == 'fail':
+        if if_exists == "fail":
             raise ValueError("Table {} already exists".format(table_name))
-        elif if_exists == 'replace':
+        elif if_exists == "replace":
             sql = f"DELETE FROM {table_name}"
             engine.execute(sql)
-            print('SQL table has been cleaned up successfully.')
+            print("SQL table has been cleaned up successfully.")
         else:
             pass
     else:
         create_table(qf, table, engine=redshift_str, schema=schema)
 
-    if s3_name[-4:] != '.csv': s3_name += '.csv'
+    if s3_name[-4:] != ".csv":
+        s3_name += ".csv"
 
-    col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
+    col_names = "(" + ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"]) + ")" if use_col_names else ""
 
     config = ConfigParser()
-    config.read(get_path('.aws','credentials'))
-    aws_access_key_id = config['default']['aws_access_key_id']
-    aws_secret_access_key = config['default']['aws_secret_access_key']
+    config.read(get_path(".aws", "credentials"))
+    aws_access_key_id = config["default"]["aws_access_key_id"]
+    aws_secret_access_key = config["default"]["aws_secret_access_key"]
 
-    print("Loading {} data into {} ...".format(s3_name,table_name))
+    print("Loading {} data into {} ...".format(s3_name, table_name))
 
     sql = f"""
         COPY {table_name} {col_names} FROM 's3://{bucket_name}/{s3_name}'
@@ -202,10 +203,10 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
     result = engine.execute(sql)
     result.close()
-    print('Data has been copied to {}'.format(table_name))
+    print("Data has been copied to {}".format(table_name))
 
 
-def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
+def csv_to_s3(csv_path, keep_csv=True, bucket: str = None):
     """
     Writes csv file to s3.
 
@@ -218,8 +219,8 @@ def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
+    bucket_name = bucket if bucket else "teis-data"
+    s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -227,7 +228,7 @@ def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
     s3_name = os.path.basename(csv_path)
 
     bucket.upload_file(csv_path, s3_name)
-    print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
+    print("{} uploaded to s3 as {}".format(os.path.basename(csv_path), s3_name))
 
     if not keep_csv:
         os.remove(csv_path)
@@ -244,8 +245,8 @@ def write_to(qf, table, schema, if_exists):
     schema: string
     """
     sql = qf.get_sql().sql
-    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
-    if schema!='':
+    columns = ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"])
+    if schema != "":
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
         sql_del_statement = f"DELETE FROM {schema}.{table}"
     else:
@@ -254,22 +255,22 @@ def write_to(qf, table, schema, if_exists):
     engine = create_engine(qf.engine)
 
     if check_if_exists(table=table, schema=schema, redshift_str=qf.engine):
-        if if_exists=='replace':
+        if if_exists == "replace":
             engine.execute(sql_del_statement)
             engine.execute(sql_statement)
-            print(f'Data has been owerwritten into {schema}.{table}')
-        elif if_exists=='fail':
+            print(f"Data has been owerwritten into {schema}.{table}")
+        elif if_exists == "fail":
             raise ValueError("Table already exists")
-        elif if_exists=='append':
+        elif if_exists == "append":
             engine.execute(sql_statement)
-            print(f'Data has been appended to {table}')
+            print(f"Data has been appended to {table}")
     else:
         create_table(qf=qf, table=table, engine=engine, schema=schema)
         engine.execute(sql_statement)
 
 
 # KM: To be removed
-def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
+def to_s3(file_path: str, s3_name: str, bucket: str = None, keep_csv=True):
     """Writes local file to s3.
 
     Parameters
@@ -281,19 +282,19 @@ def to_s3(file_path: str, s3_name: str, bucket: str=None, keep_csv=True):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
+    bucket_name = bucket if bucket else "teis-data"
+    s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
 
     bucket.upload_file(file_path, s3_name)
-    print('{} uploaded to s3 as {}'.format(os.path.basename(file_path), s3_name))
+    print("{} uploaded to s3 as {}".format(os.path.basename(file_path), s3_name))
 
     if not keep_csv:
         os.remove(file_path)
 
 
 # KM: To be removed
-def read_s3(file_path: str, s3_name: str, bucket: str=None):
+def read_s3(file_path: str, s3_name: str, bucket: str = None):
     """Downloads s3 file with prefix to local file.
 
     Parameters
@@ -305,17 +306,17 @@ def read_s3(file_path: str, s3_name: str, bucket: str=None):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
+    bucket_name = bucket if bucket else "teis-data"
+    s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
 
-    with open(file_path, 'wb') as data:
+    with open(file_path, "wb") as data:
         bucket.download_fileobj(s3_name, data)
-    print('{} uploaded to {}'.format(s3_name, os.path.basename(file_path)))
+    print("{} uploaded to {}".format(s3_name, os.path.basename(file_path)))
 
 
 # KM: To be removed
-def s3_to_csv(csv_path, bucket: str=None):
+def s3_to_csv(csv_path, bucket: str = None):
     """
     Writes s3 to csv file .
 
@@ -326,20 +327,32 @@ def s3_to_csv(csv_path, bucket: str=None):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    bucket_name = bucket if bucket else 'teis-data'
-    s3 = boto3.resource('s3')
+    bucket_name = bucket if bucket else "teis-data"
+    s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
     s3_name = os.path.basename(csv_path)
 
-    with open(csv_path, 'wb') as data:
+    with open(csv_path, "wb") as data:
         bucket.download_fileobj(s3_name, data)
-    print('{} uploaded to {}'.format(s3_name, csv_path))
+    print("{} uploaded to {}".format(s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
-            if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
+def df_to_s3(
+    df,
+    table_name,
+    schema,
+    dtype=None,
+    sep="\t",
+    clean_df=False,
+    keep_csv=True,
+    chunksize=10000,
+    if_exists="fail",
+    redshift_str=None,
+    s3_key=None,
+    bucket=None,
+):
 
     """Copies a dataframe inside a Redshift schema.table
         using the upload via this process:
@@ -362,40 +375,40 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_
         Bucket name, if None then 'teis-data'
     """
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
-    bucket_name = bucket if bucket else 'teis-data'
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
+    bucket_name = bucket if bucket else "teis-data"
 
-    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
+    engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
-    s3 = boto3.resource('s3')
+    s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
 
-    filename = table_name + '.csv'
+    filename = table_name + ".csv"
     filepath = os.path.join(os.getcwd(), filename)
 
     if clean_df:
         df = clean(df)
 
     df = clean_colnames(df)
-    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+    df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
 
     df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
-    print(f'{filename} created in {filepath}')
+    print(f"{filename} created in {filepath}")
 
     if s3_key:
         if s3_key.endswith("/"):
             s3_key = s3_key[:-1]
 
     bucket.upload_file(filepath, f"{s3_key}/{filename}")
-    print(f'{filename} successfully uploaded to {bucket_name}/{s3_key}/{filename}')
+    print(f"{filename} successfully uploaded to {bucket_name}/{s3_key}/{filename}")
 
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
-        if if_exists == 'fail':
+        if if_exists == "fail":
             raise ValueError(f"Table {table_name} already exists")
-        elif if_exists == 'replace':
+        elif if_exists == "replace":
             sql = f"DELETE FROM {schema}.{table_name}"
             engine.execute(sql)
-            print('SQL table has been cleaned up successfully.')
+            print("SQL table has been cleaned up successfully.")
         else:
             pass
     else:
@@ -409,14 +422,13 @@ def clean_colnames(df):
 
     reserved_words = ["user"]
 
-    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+    df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
     df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
 
     return df
 
 
 def clean(df):
-
     def remove_inside_quotes(string):
         """ removes double single quotes ('') inside a string,
         e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
@@ -429,12 +441,15 @@ def clean(df):
             if isinstance(string, str):
                 if string.find("'") != -1:
                     first_quote_loc = string.find("'")
-                    if string.find("'", first_quote_loc+1) != -1:
-                        second_quote_loc = string.find("'", first_quote_loc+1)
-                        string_cleaned = string[:first_quote_loc] + string[first_quote_loc+1:second_quote_loc] + string[second_quote_loc+1:]
+                    if string.find("'", first_quote_loc + 1) != -1:
+                        second_quote_loc = string.find("'", first_quote_loc + 1)
+                        string_cleaned = (
+                            string[:first_quote_loc]
+                            + string[first_quote_loc + 1 : second_quote_loc]
+                            + string[second_quote_loc + 1 :]
+                        )
                         return string_cleaned
         return string
-
 
     def remove_inside_single_quote(string):
         """ removes a single single quote ('') from the beginning of a string,
@@ -448,14 +463,12 @@ def clean(df):
                     return string[1:]
         return string
 
-
     df_string_cols = df.select_dtypes(object)
     df_string_cols = (
-        df_string_cols
-        .applymap(remove_inside_quotes)
+        df_string_cols.applymap(remove_inside_quotes)
         .applymap(remove_inside_single_quote)
         .replace(to_replace="\\", value="")
-        .replace(to_replace="\n", value="", regex=True) # regex=True means "find anywhere within the string"
+        .replace(to_replace="\n", value="", regex=True)  # regex=True means "find anywhere within the string"
     )
     df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
 
@@ -489,17 +502,17 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         [description], by default False
     """
 
-    bucket_name = bucket if bucket else 'teis-data'
+    bucket_name = bucket if bucket else "teis-data"
 
     if not s3_dir:
         s3_key = file_name
     else:
-        s3_key = s3_dir + file_name if s3_dir.endswith('/') else s3_dir + '/' + file_name
+        s3_key = s3_dir + file_name if s3_dir.endswith("/") else s3_dir + "/" + file_name
 
     config = ConfigParser()
-    config.read(get_path('.aws','credentials'))
-    aws_access_key_id = config['default']['aws_access_key_id']
-    aws_secret_access_key = config['default']['aws_secret_access_key']
+    config.read(get_path(".aws", "credentials"))
+    aws_access_key_id = config["default"]["aws_access_key_id"]
+    aws_secret_access_key = config["default"]["aws_secret_access_key"]
 
     sql = f"""
         COPY {schema}.{table_name} FROM 's3://{bucket_name}/{s3_key}'
@@ -515,7 +528,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     if time_format:
         indent = 9
         last_line_pos = len(sql) - len(";commit;") - indent
-        spaces = indent * " " # print formatting
+        spaces = indent * " "  # print formatting
         time_format_argument = f"timeformat '{time_format}'"
         sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
 
@@ -525,8 +538,18 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
     return sql
 
 
-def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists='fail', sep='\t',
-            redshift_str=None, bucket=None, s3_key=None, remove_inside_quotes=False):
+def s3_to_rds(
+    file_name,
+    table_name=None,
+    schema="",
+    time_format=None,
+    if_exists="fail",
+    sep="\t",
+    redshift_str=None,
+    bucket=None,
+    s3_key=None,
+    remove_inside_quotes=False,
+):
     """
     Writes s3 to Redshift database.
 
@@ -554,26 +577,34 @@ def s3_to_rds(file_name, table_name=None, schema='', time_format=None, if_exists
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
-    bucket_name = bucket if bucket else 'teis-data'
-    engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
+    redshift_str = redshift_str if redshift_str else "mssql+pyodbc://Redshift"
+    bucket_name = bucket if bucket else "teis-data"
+    engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
     if not table_name:
         table_name = file_name.replace(".csv", "")
 
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
-        if if_exists == 'fail':
+        if if_exists == "fail":
             raise ValueError(f"Table {table_name} already exists")
-        elif if_exists == 'replace':
+        elif if_exists == "replace":
             sql = f"DELETE FROM {schema}.{table_name}"
             engine.execute(sql)
-            print(f'Table {table_name} has been cleaned up successfully.')
+            print(f"Table {table_name} has been cleaned up successfully.")
         else:
             pass
 
-    sql = build_copy_statement(file_name=file_name, schema=schema, table_name=table_name, sep=sep, time_format=time_format,
-                                    bucket=bucket_name, s3_dir=s3_key, remove_inside_quotes=remove_inside_quotes)
+    sql = build_copy_statement(
+        file_name=file_name,
+        schema=schema,
+        table_name=table_name,
+        sep=sep,
+        time_format=time_format,
+        bucket=bucket_name,
+        s3_dir=s3_key,
+        remove_inside_quotes=remove_inside_quotes,
+    )
 
-    print(f"Loading data into {table_name}...")
+    print(f"Loading data into {schema}.{table_name}...")
     engine.execute(sql)
-    print(f'Data has been copied to {table_name}')
+    print(f"Data has been copied to {schema}.{table_name}")
