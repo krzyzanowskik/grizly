@@ -8,7 +8,7 @@ from typing import Union, List
 
 
 class EmailAccount:
-    def __init__(self, email_address, email_password, alias=None, config_key=None):
+    def __init__(self, email_address, email_password, alias=None, config_key=None, proxy=None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="email")
         self.logger = logging.getLogger(__name__)
@@ -19,6 +19,9 @@ class EmailAccount:
         self.config = Configuration(
             server="smtp.office365.com", credentials=self.credentials, retry_policy=FaultTolerance(max_wait=2 * 60)
         )
+        self.proxy = proxy or os.getenv("HTTPS_PROXY")
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
         try:
             smtp_address = self.email_address
             if self.alias:
