@@ -387,7 +387,7 @@ def df_to_s3(
     filepath = os.path.join(os.getcwd(), filename)
 
     if clean_df:
-        df = df_clean(df)
+        df = clean(df)
 
     df = clean_colnames(df)
     df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
@@ -428,7 +428,7 @@ def clean_colnames(df):
     return df
 
 
-def df_clean(df):
+def clean(df):
     def remove_inside_quotes(string):
         """ removes double single quotes ('') inside a string,
         e.g. Sam 'Sammy' Johnson -> Sam Sammy Johnson """
@@ -478,9 +478,8 @@ def df_clean(df):
     return df
 
 
-def build_copy_statement(
-    file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None, remove_inside_quotes=False
-):
+def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
+                        remove_inside_quotes=False):
     """[summary]
 
     Parameters
