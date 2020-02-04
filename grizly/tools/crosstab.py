@@ -1,7 +1,9 @@
 from numpy import isnan
 
+
 class Crosstab():
-    def __init__(self, formatter={}, mapping={}, na_rep=0):
+    def __init__(self, caption = "", formatter={}, mapping={}, na_rep=0):
+        self.caption = caption
         self.formatter = formatter
         self.mapping = mapping
         self.na_rep = na_rep
@@ -102,6 +104,43 @@ class Crosstab():
         return self
 
 
+    def append_header(self, values, pos=0):
+        if len(values) != len(self.columns):
+            raise ValueError("Length of row does not match length of table")
+        new_dimensions = []
+        for dim, new_dim in zip(self.dimensions, values[:len(self.dimensions)]):
+            dim = dim if isinstance(dim, tuple) else (dim,)
+            new_dim = dim[:pos] + (new_dim,) + dim[pos:]
+            new_dimensions.append(new_dim)
+        self.dimensions = new_dimensions
+
+        new_measures = []
+        for measure, new_measure in zip(self.measures, values[len(self.dimensions):]):
+            measure_t = measure if isinstance(measure, tuple) else (measure,)
+            new_measure = measure_t[:pos] + (new_measure,) + measure_t[pos:]
+            new_measures.append(new_measure)
+            for item in self.content:
+                self.content[item][new_measure] = self.content[item][measure]
+                self.content[item].pop(measure)
+
+            for item in self.subtotals:
+                self.subtotals[item][new_measure] = self.subtotals[item][measure]
+                self.subtotals[item].pop(measure)
+
+            if measure in self.formatter:
+                self.formatter[new_measure] = self.formatter[measure]
+                self.formatter.pop(measure)
+
+            for level in self.mapping:
+                if measure in self.mapping[level]:
+                    self.mapping[level][new_measure] = self.mapping[level][measure]
+                    self.mapping[level].pop(measure)
+        self.measures = new_measures
+        self.columns = self.dimensions + self.measures
+
+        return self
+
+
     def add_subtotals(self, columns, aggregation={}, names={}):
         self.subtotals_names = names
         subtotals = {}
@@ -135,9 +174,11 @@ class Crosstab():
     def to_html(self):
         def get_row(row_def):
             html = ''
-            for t, rowspan, style, value in row_def:
+            for t, rowspan, colspan, style, value in row_def:
                 rowspan = f" rowspan={rowspan}" if rowspan != 1 else ""
-                html += f"    <t{t}{rowspan} {style}> {value} </t{t}>\n"
+                colspan = f" colspan={colspan}" if colspan != 1 else ""
+                style = style if style == "" else f" {style}"
+                html += f"    <t{t}{rowspan}{colspan}{style}> {value} </t{t}>\n"
             return html
 
         def get_rowspan(group):
@@ -146,7 +187,7 @@ class Crosstab():
                 if group == i[:len(group)]:
                     counter += 1
             for i in self.subtotals:
-                if group == i[:len(group)] and group != i:
+                if group == i[:len(group)]:
                     counter += 1
             return counter
 
@@ -173,34 +214,64 @@ class Crosstab():
                         items.append(row[len(group)])
                 for item in items:
                     group.append(item)
-                    row_def.append(('h', get_rowspan(tuple(group)), "", item))
+                    row_def.append(('h', get_rowspan(tuple(group)), 1, "", item))
                     html = get_body(columns[1:], group, row_def, html)
-                    row_def = []
                     if tuple(group) in self.subtotals:
-                        colspan = len(self.dimensions) - len(group) +1
+                        name = self.subtotals_names.get(tuple(group)) or "Total"
+                        colspan = len(self.dimensions) - len(group)
+                        row_def = [('h', 1, colspan, "", name)]
                         values = self.subtotals[tuple(group)]
                         for measure in values:
                             style, value = get_cell_def(tuple(group), measure, "subtotals")
-                            row_def.append(('d', 1, style, value))
-                        name = self.subtotals_names.get(tuple(group)) or "Total"
-                        html += f"  <tr>\n  <th colspan={colspan}>{name}</th>\n" + get_row(row_def) + "  </tr>\n"
-                        row_def = []
+                            row_def.append(('d', 1, 1, style, value))
+                        html += f"  <tr>\n" + get_row(row_def) + "  </tr>\n"
+                    row_def = []
                     group.pop(-1)
             else:
                 values = self.content[tuple(group)]
                 for measure in values:
                     style, value = get_cell_def(tuple(group), measure, "content")
-                    row_def.append(('d', 1, style, value))
+                    row_def.append(('d', 1, 1, style, value))
                 html += "  <tr>\n" + get_row(row_def) + "  </tr>\n"
             return html
 
-        thead = "<thead>\n" + get_row([('h', 1, "", column) for column in self.columns]) + "</thead>\n"
+        def get_header():
+            columns = []
+            for column in self.columns:
+                columns.append(column if isinstance(column, tuple) else (column,))
 
-        html = get_body(self.dimensions, [], [], "")
-        tbody = "<tbody>\n" + html + "</tbody>\n"
-        table = "<table>\n" + thead + tbody + "</table>"
+            def get_colspan(row, col):
+                counter = 1
+                for item in columns[col+1:]:
+                    if item[row] == columns[col][row]:
+                        counter += 1
+                    else:
+                        break
+                return counter
+
+            html = ""
+            for row in range(len(columns[0])):
+                row_def = []
+                for col in range(len(columns)):
+                    if (row, col) == (0, 0) or columns[col][row] != columns[col-1][row]:
+                        row_def.append(('h', 1, get_colspan(row, col), "", columns[col][row]))
+                html += "  <tr>\n" + get_row(row_def) + "  </tr>\n"
+
+            return html
+
+        caption = "<caption>" + self.caption + "</caption>\n" if self.caption != "" else ""
+        thead = "<thead>\n" + get_header() + "</thead>\n"
+        tbody = "<tbody>\n" + get_body(self.dimensions, [], [], "") + "</tbody>\n"
+
+        table = "<table>\n" + caption + thead + tbody + "</table>\n"
 
         return table
+
+
+    def save_html(self, html_path):
+        html = self.to_html()
+        with open(html_path, 'w') as file:
+            file.write(html)
 
 
     def _repr_html_(self):
