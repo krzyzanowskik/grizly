@@ -2,10 +2,10 @@ from numpy import isnan
 
 
 class Crosstab():
-    def __init__(self, caption = "", formatter={}, mapping={}, na_rep=0):
+    def __init__(self, caption = "", formatter={}, mapping={}, na_rep=0, css_class=""):
         self.caption = caption
         self.formatter = formatter
-        self.mapping = mapping
+        self.styling = mapping
         self.na_rep = na_rep
         self.dimensions = []
         self.measures = []
@@ -22,7 +22,7 @@ class Crosstab():
 
         content = {}
         for group in df[dimensions].values:
-            filters = [f"{column}=='{item}'" for column, item in zip(dimensions, group)]
+            filters = [f"`{column}`=='{item}'""" for column, item in zip(dimensions, group)]
             query = " and ".join(filters)
             group = tuple(group)
             content[group] = {}
@@ -82,9 +82,9 @@ class Crosstab():
         return self
 
 
-    def map(self, mapping, level=["content", "subtotals"]):
+    def apply_style(self, mapping, level=["content", "subtotals"]):
         for item in level:
-            self.mapping[item] = mapping
+            self.styling[item] = mapping
         return self
 
 
@@ -131,13 +131,65 @@ class Crosstab():
                 self.formatter[new_measure] = self.formatter[measure]
                 self.formatter.pop(measure)
 
-            for level in self.mapping:
-                if measure in self.mapping[level]:
-                    self.mapping[level][new_measure] = self.mapping[level][measure]
-                    self.mapping[level].pop(measure)
+            for level in self.styling:
+                if measure in self.styling[level]:
+                    self.styling[level][new_measure] = self.styling[level][measure]
+                    self.styling[level].pop(measure)
         self.measures = new_measures
         self.columns = self.dimensions + self.measures
 
+        return self
+
+
+    def remove(self, group, axis=0):
+        if axis == 0:
+            if group in self.content:
+                self.content.pop(group)
+            elif group in self.subtotals:
+                self.subtotals.pop(group)
+        elif axis == 1:
+            self.columns.remove(group)
+            if group in self.measures:
+                self.measures.remove(group)
+                for item in self.content:
+                    self.content[item].pop(group)
+                for item in self.subtotals:
+                    self.subtotals[item].pop(group)
+                if group in self.formatter:
+                    self.formatter.pop(group)
+                for level in self.styling:
+                    if group in self.styling[level]:
+                        self.styling[level].pop(group)
+            elif group in self.dimensions:
+                self.dimensions.remove(group)
+        return self
+
+
+    def rearrange(self, groups:list, axis=0):
+        if axis == 0:
+            pass
+        elif axis == 1:
+            if set(groups) != set(self.columns):
+                raise ValueError("List of groups does not match list of crosstab columns")
+            self.columns = groups
+            measures = []
+            dimensions = []
+            for group in groups:
+                if group in self.measures:
+                    measures.append(group)
+                    for item in self.content:
+                        self.content[item][group] = self.content[item].pop(group)
+                    for item in self.subtotals:
+                        self.subtotals[item][group] = self.subtotals[item].pop(group)
+                    if group in self.formatter:
+                        self.formatter[group] = self.formatter.pop(group)
+                    for level in self.styling:
+                        if group in self.styling[level]:
+                            self.styling[level][group] = self.styling[level].pop(group)
+                elif group in self.dimensions:
+                    dimensions.append(group)
+            self.measures = measures
+            self.dimensions = dimensions
         return self
 
 
@@ -174,11 +226,12 @@ class Crosstab():
     def to_html(self):
         def get_row(row_def):
             html = ''
-            for t, rowspan, colspan, style, value in row_def:
+            for t, rowspan, colspan, cssclass, style, value in row_def:
                 rowspan = f" rowspan={rowspan}" if rowspan != 1 else ""
                 colspan = f" colspan={colspan}" if colspan != 1 else ""
+                cssclass = f" class={cssclass}" if cssclass != "" else ""
                 style = style if style == "" else f" {style}"
-                html += f"    <t{t}{rowspan}{colspan}{style}> {value} </t{t}>\n"
+                html += f"    <t{t}{rowspan}{colspan}{cssclass}{style}> {value} </t{t}>\n"
             return html
 
         def get_rowspan(group):
@@ -198,8 +251,8 @@ class Crosstab():
                 value = self.subtotals[group][measure]
 
             style = ""
-            if level in self.mapping and measure in self.mapping[level]:
-                style = self.mapping[level][measure](value)
+            if level in self.styling and measure in self.styling[level]:
+                style = self.styling[level][measure](value)
 
             if measure in self.formatter:
                 value = self.formatter[measure].format(value)
@@ -214,16 +267,17 @@ class Crosstab():
                         items.append(row[len(group)])
                 for item in items:
                     group.append(item)
-                    row_def.append(('h', get_rowspan(tuple(group)), 1, "", item))
+                    row_def.append(('h', get_rowspan(tuple(group)), 1, "", "", item))
                     html = get_body(columns[1:], group, row_def, html)
                     if tuple(group) in self.subtotals:
                         name = self.subtotals_names.get(tuple(group)) or "Total"
                         colspan = len(self.dimensions) - len(group)
-                        row_def = [('h', 1, colspan, "", name)]
+                        cssclass = "total" if len(group) == 1 else "subtotal"
+                        row_def = [('h', 1, colspan, cssclass, "", name)]
                         values = self.subtotals[tuple(group)]
                         for measure in values:
                             style, value = get_cell_def(tuple(group), measure, "subtotals")
-                            row_def.append(('d', 1, 1, style, value))
+                            row_def.append(('d', 1, 1, cssclass, style, value))
                         html += f"  <tr>\n" + get_row(row_def) + "  </tr>\n"
                     row_def = []
                     group.pop(-1)
@@ -231,7 +285,7 @@ class Crosstab():
                 values = self.content[tuple(group)]
                 for measure in values:
                     style, value = get_cell_def(tuple(group), measure, "content")
-                    row_def.append(('d', 1, 1, style, value))
+                    row_def.append(('d', 1, 1, "", style, value))
                 html += "  <tr>\n" + get_row(row_def) + "  </tr>\n"
             return html
 
@@ -254,18 +308,18 @@ class Crosstab():
                 row_def = []
                 for col in range(len(columns)):
                     if (row, col) == (0, 0) or columns[col][row] != columns[col-1][row]:
-                        row_def.append(('h', 1, get_colspan(row, col), "", columns[col][row]))
+                        row_def.append(('h', 1, get_colspan(row, col), "", "", columns[col][row]))
                 html += "  <tr>\n" + get_row(row_def) + "  </tr>\n"
 
             return html
 
-        caption = "<caption>" + self.caption + "</caption>\n" if self.caption != "" else ""
+        caption = "<caption>\n" + self.caption + "</caption>\n" if self.caption != "" else ""
         thead = "<thead>\n" + get_header() + "</thead>\n"
         tbody = "<tbody>\n" + get_body(self.dimensions, [], [], "") + "</tbody>\n"
 
-        table = "<table>\n" + caption + thead + tbody + "</table>\n"
+        table = f"<table>\n" + caption + thead + tbody + "</table>\n"
 
-        return table
+        return  table
 
 
     def save_html(self, html_path):
