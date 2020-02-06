@@ -5,7 +5,8 @@ with open("README.md", "r") as fh:
 
 
 with open('requirements.txt', 'r') as f:
-    requires = [line.strip() for line in f] 
+    # requires = [line.strip() for line in f]
+    requires = None
 
 setuptools.setup(
     name="grizly",

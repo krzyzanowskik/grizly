@@ -1,8 +1,12 @@
 from .tools.qframe import (
-    QFrame, 
-    union, 
+    QFrame,
+    union,
     join,
     initiate
+)
+
+from .tools.crosstab import (
+    Crosstab
 )
 
 from .ui.start import UI

@@ -1,7 +1,6 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, HTMLBody, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
-from .utils import read_config, get_path
-from .config import Config, _validate_config
+from exchangelib import Credentials, Account, Message, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
+from .config import Config
 from os.path import basename
 import os
 import logging
@@ -57,7 +56,7 @@ class Email:
     email_address : str, optional
         Email address used to send an email, by default None
     email_password : str, optional
-        Password to the email sepcified in email_address, by default None
+        Password to the email specified in email_address, by default None
     config_key : str, optional
         Config key, by default 'standard'"""
 
@@ -148,9 +147,9 @@ class Email:
         Parameters
         ----------
         to : str or list
-            Email recepients
+            Email recipients
         cc : str or list, optional
-            Cc recepients, by default None
+            Cc recipients, by default None
         send_as : str, optional
             Author of the email, by default None
 
@@ -178,6 +177,11 @@ class Email:
         -------
         None
         """
+
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
+
         to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
@@ -190,19 +194,7 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-
-        if self.proxy:
-            os.environ["HTTPS_PROXY"] = self.proxy
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
-        credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2 * 60))
-        try:
-            account = Account(
-                primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE
-            )
-        except:
-            self.logger.exception("Email account could not be accessed.")
-            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
+        account = EmailAccount(email_address, email_password).account
 
         m = Message(
             account=account,
