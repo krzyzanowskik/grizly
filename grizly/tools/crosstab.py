@@ -2,10 +2,10 @@ from numpy import isnan
 
 
 class Crosstab():
-    def __init__(self, caption = "", formatter={}, mapping={}, na_rep=0, css_class=""):
+    def __init__(self, caption = "", formatter={}, styling={}, na_rep=0, css_class=""):
         self.caption = caption
         self.formatter = formatter
-        self.styling = mapping
+        self.styling = styling
         self.na_rep = na_rep
         self.dimensions = []
         self.measures = []
@@ -192,6 +192,43 @@ class Crosstab():
             self.dimensions = dimensions
         return self
 
+    def rename(self, groups, axis=0):
+        if axis == 0:
+            pass
+        elif axis == 1:
+            unknown_keys = set(groups.keys()) - set(self.columns)
+            if unknown_keys != set():
+                raise ValueError(f"Keys {unknown_keys} not found in columns")
+            columns = []
+            dimensions = []
+            for group in self.dimensions:
+                new_group = group if group not in groups else groups[group]
+                dimensions.append(new_group)
+                columns.append(new_group)
+            measures = []
+            content = {item: {} for item in self.content}
+            subtotals = {item: {} for item in self.subtotals}
+            formatter = {}
+            styling = {level: {} for level in self.styling}
+            for group in self.measures:
+                new_group = group if group not in groups else groups[group]
+                measures.append(new_group)
+                columns.append(new_group)
+                for item in self.content:
+                    content[item][new_group] = self.content[item][group]
+                for item in self.subtotals:
+                    subtotals[item][new_group] = self.subtotals[item][group]
+                if group in self.formatter:
+                    formatter[new_group] = self.formatter[group]
+                for level in self.styling:
+                    if group in self.styling[level]:
+                        styling[level][new_group] = self.styling[level][group]
+            self.columns = columns
+            self.measures = measures
+            self.dimensions = dimensions
+            self.content = content
+            self.subtotals = subtotals
+        return self
 
     def add_subtotals(self, columns, aggregation={}, names={}):
         self.subtotals_names = names
