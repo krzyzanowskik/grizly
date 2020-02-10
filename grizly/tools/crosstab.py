@@ -82,9 +82,10 @@ class Crosstab():
         return self
 
 
-    def apply_style(self, mapping, level=["content", "subtotals"]):
+    def apply_style(self, styling, level=["content", "subtotals"]):
         for item in level:
-            self.styling[item] = mapping
+            self.styling[item] = {} if item not in self.styling else self.styling[item]
+            self.styling[item].update(styling)
         return self
 
 
