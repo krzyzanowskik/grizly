@@ -352,6 +352,7 @@ def df_to_s3(
     redshift_str=None,
     s3_key=None,
     bucket=None,
+    filepath=None,
 ):
 
     """Copies a dataframe inside a Redshift schema.table
@@ -384,7 +385,8 @@ def df_to_s3(
     bucket = s3.Bucket(bucket_name)
 
     filename = table_name + ".csv"
-    filepath = os.path.join(os.getcwd(), filename)
+    if not filepath:
+        filepath = os.path.join(os.getcwd(), filename)
 
     if clean_df:
         df = clean(df)
@@ -478,8 +480,9 @@ def clean(df):
     return df
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
-                        remove_inside_quotes=False):
+def build_copy_statement(
+    file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None, remove_inside_quotes=False
+):
     """[summary]
 
     Parameters
