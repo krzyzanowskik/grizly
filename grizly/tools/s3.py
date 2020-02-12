@@ -79,8 +79,8 @@ class S3:
         return wrapped
 
 
-    def _can_upload(self, min_time_window, force=False):
-        if force or not self.s3_obj:
+    def _can_upload(self, min_time_window):
+        if not self.s3_obj or min_time_window == 0:
             return True
         now_utc = datetime.now(timezone.utc)
         diff = now_utc - self.last_modified
@@ -197,7 +197,7 @@ class S3:
         return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
-    def from_file(self, force: bool=False, keep_file=True):
+    def from_file(self, keep_file=True):
         """Writes local file to S3.
 
         Parameters
@@ -222,8 +222,9 @@ class S3:
 
         s3_key = self.s3_key + self.file_name
         s3_file = self.s3_resource.Object(self.bucket, s3_key)
-        if not self._can_upload(s3_file, min_time_window=self.min_time_window, force=force):
-            logger.warning(f"File {self.file_name} was not uploaded because a recent version exists. Use force=True to override.")
+        if not self._can_upload(s3_file, min_time_window=self.min_time_window):
+            logger.warning(f"""File {self.file_name} was not uploaded because a recent version exists.
+            Set S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window}).""")
             return self
         s3_file.upload_file(file_path)
 
@@ -275,7 +276,7 @@ class S3:
         return df
 
 
-    def from_df(self, df:DataFrame, sep:str='\t', force: bool=False, clean_df=False, keep_file=True):
+    def from_df(self, df:DataFrame, sep:str='\t', clean_df=False, keep_file=True):
         """Saves DataFrame in S3.
 
         Examples
@@ -308,7 +309,7 @@ class S3:
         df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
-        return self.from_file(force=force, keep_file=keep_file)
+        return self.from_file(keep_file=keep_file)
 
 
     @_check_if_s3_exists
