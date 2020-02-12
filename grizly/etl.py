@@ -343,7 +343,7 @@ def s3_to_csv(csv_path, bucket: str=None):
     print('{} uploaded to {}'.format(s3_name, csv_path))
 
 
-def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
+def df_to_s3(df, table_name, schema, filepath=None, dtype=None, sep='\t', clean_df=False, keep_csv=True, chunksize=10000,
             if_exists="fail", redshift_str=None, s3_key=None, bucket=None):
 
     """Copies a dataframe inside a Redshift schema.table
@@ -376,13 +376,13 @@ def df_to_s3(df, table_name, schema, dtype=None, sep='\t', clean_df=False, keep_
     bucket = s3.Bucket(bucket_name)
 
     filename = table_name + '.csv'
-    filepath = os.path.join(os.getcwd(), filename)
+    if not filepath:
+        filepath = filename
 
     if clean_df:
         df = clean(df)
-
-    df = clean_colnames(df)
-    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+        df = clean_colnames(df)
+        df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
 
     df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
     print(f'{filename} created in {filepath}')
