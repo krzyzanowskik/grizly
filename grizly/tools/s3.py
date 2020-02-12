@@ -2,6 +2,7 @@ from boto3 import resource
 from botocore.exceptions import ClientError
 import os
 import openpyxl
+from datetime import datetime, timezone
 from ..utils import (
     get_path,
     check_if_exists
@@ -19,6 +20,7 @@ from csv import reader
 from configparser import ConfigParser
 from copy import deepcopy
 from functools import wraps
+import logging
 
 
 class S3:
@@ -37,13 +39,23 @@ class S3:
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
         """
-    def __init__(self, file_name:str, s3_key:str, bucket:str=None, file_dir:str=None, redshift_str:str=None):
+    def __init__(self, file_name:str, s3_key:str, bucket:str=None, file_dir:str=None, redshift_str:str=None, min_time_window: int=0):
         self.file_name = file_name
         self.s3_key = s3_key
         self.bucket = bucket if bucket else 'acoe-s3'
         self.file_dir = file_dir if file_dir else get_path('s3_loads')
         self.redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
         self.s3_resource = resource('s3')
+        folders = s3_key.split("/")
+        self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
+        try:
+            self.s3_obj = self.s3_resource.Object(self.bucket, self.full_s3_key)
+            self.last_modified = self.s3_obj.last_modified
+        except:
+            self.s3_obj = None
+            self.last_modified = None
+        #self.last_modified = self.s3_obj.last_modified
+        self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
 
         if self.s3_key == '':
@@ -67,6 +79,17 @@ class S3:
         return wrapped
 
 
+    def _can_upload(self, min_time_window, force=False):
+        if force or not self.s3_obj:
+            return True
+        now_utc = datetime.now(timezone.utc)
+        diff = now_utc - self.last_modified
+        diff_seconds = diff.seconds
+        if diff_seconds < min_time_window:
+            return False
+        return True
+
+
     def info(self):
         """Print a concise summary of a S3.
 
@@ -83,6 +106,10 @@ class S3:
         print(f"s3_key: \t'{self.s3_key}'")
         print(f"bucket: \t'{self.bucket}'")
         print(f"file_dir: \t'{self.file_dir}'")
+        try:
+            print(f"last_modified: \t {self.last_modified}")
+        except:
+            pass
         print(f"redshift_str: \t'{self.redshift_str}'")
 
 
@@ -170,11 +197,14 @@ class S3:
         return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
 
 
-    def from_file(self, keep_file=True):
+    def from_file(self, force: bool=False, keep_file=True):
         """Writes local file to S3.
 
         Parameters
         ----------
+        min_time_window:
+            The minimum time required to pass between the last and current upload for the file to be uploaded.
+            This allows the uploads to be robust to retrying (retries will not re-upload the same file, making the upload almost-idempotent)
         keep_file:
             Whether to keep the local file copy after uploading it to Amazon S3, by default True
 
@@ -192,6 +222,9 @@ class S3:
 
         s3_key = self.s3_key + self.file_name
         s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        if not self._can_upload(s3_file, min_time_window=self.min_time_window, force=force):
+            logger.warning(f"File {self.file_name} was not uploaded because a recent version exists. Use force=True to override.")
+            return self
         s3_file.upload_file(file_path)
 
         print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
@@ -242,7 +275,7 @@ class S3:
         return df
 
 
-    def from_df(self, df:DataFrame, sep:str='\t', clean_df=False, keep_file=True):
+    def from_df(self, df:DataFrame, sep:str='\t', force: bool=False, clean_df=False, keep_file=True):
         """Saves DataFrame in S3.
 
         Examples
@@ -275,7 +308,7 @@ class S3:
         df.to_csv(file_path, index=False, sep=sep)
         print(f"DataFrame saved in '{file_path}'")
 
-        return self.from_file(keep_file=keep_file)
+        return self.from_file(force=force, keep_file=keep_file)
 
 
     @_check_if_s3_exists
