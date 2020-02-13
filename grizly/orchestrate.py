@@ -28,9 +28,10 @@ from .email import Email, EmailAccount
 from exchangelib.errors import ErrorFolderNotFound
 
 from .etl import df_to_s3, s3_to_rds
-from .utils import get_last_working_day, read_config, get_path
+from .utils import read_config, get_path
 
 LISTENER_STORE = get_path("acoe_projects", "workflows_dev", "etc", "listener_store.json")
+
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
@@ -126,12 +127,12 @@ class Trigger:
         self.schema = params.get("schema")
 
     @property
-    def last_data_refresh(self):
+    def last_table_refresh(self):
         return self.check(**self.kwargs)
 
     @property
     def should_run(self):
-        return bool(self.last_data_refresh)
+        return bool(self.last_table_refresh)
 
 
 class Listener:
@@ -164,9 +165,9 @@ class Listener:
         self.logger = logging.getLogger(__name__)
         self.trigger_type = trigger_type
         self.trigger = trigger
-        self.last_data_refresh = self.get_last_refresh()
+        self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
         self.engine = self.get_engine()
-        self.last_trigger_run = self.get_last_trigger_run()
+        self.last_trigger_run = self.get_last_json_refresh(key="last_trigger_run")
         self.delay = delay
         self.config_key = "standard"
 
@@ -219,31 +220,18 @@ class Listener:
 
         return engine
 
-    def get_last_refresh(self):
+    def get_last_json_refresh(self, key):
         with open(LISTENER_STORE) as f:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None
-            last_data_refresh = listener_store[self.name].get("last_data_refresh")  # int or serialized date
+            last_json_refresh = listener_store[self.name].get(key)  # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
-                last_data_refresh = datetime.date(datetime.strptime(last_data_refresh, r"%Y-%m-%d"))
+                last_json_refresh = datetime.date(datetime.strptime(last_json_refresh, r"%Y-%m-%d"))
             except:
                 pass
-            return last_data_refresh
-
-    def get_last_trigger_run(self):
-        with open(LISTENER_STORE) as f:
-            listener_store = json.load(f)
-            if not listener_store.get(self.name):
-                return None
-            last_trigger_run = listener_store[self.name].get("last_trigger_run")
-            try:
-                # attempt to convert the serialized datetime to a date object
-                last_trigger_run = datetime.date(datetime.strptime(last_trigger_run, r"%Y-%m-%d"))
-            except:
-                pass
-            return last_trigger_run
+            return last_json_refresh
 
     def update_json(self):
         with open(LISTENER_STORE) as json_file:
@@ -265,7 +253,6 @@ class Listener:
 
     @retry_task(TypeError, tries=3, delay=10)
     def get_table_refresh_date(self):
-
         if self.query:
             sql = self.query
         else:
@@ -276,7 +263,7 @@ class Listener:
         cursor.execute(sql)
 
         try:
-            last_data_refresh = cursor.fetchone()[0]
+            table_refresh_date = cursor.fetchone()[0]
         except TypeError:
             self.logger.exception(f"{self.name}'s trigger field is empty")
             raise
@@ -285,9 +272,9 @@ class Listener:
         con.close()
 
         # try casting to date
-        last_data_refresh = cast_to_date(last_data_refresh)
+        table_refresh_date = cast_to_date(table_refresh_date)
 
-        return last_data_refresh
+        return table_refresh_date
 
     def should_trigger(self, table_refresh_date=None):
 
@@ -298,17 +285,17 @@ class Listener:
                     return False  # workflow was already ran today
                 return self.trigger.should_run
 
-        else:
-            # first run
-            if not self.last_data_refresh:
-                return True
-            # the table ran previously, but now the refresh date is None
-            # this mean the table is being cleared in preparation for update
-            if not table_refresh_date:
-                return False
-            # trigger on day change
-            if table_refresh_date != self.last_data_refresh:
-                return True
+        self.logger.info(f"{self.name}: last data refresh: {self.last_data_refresh}, table_refresh_date: {table_refresh_date}")
+        # first run
+        if not self.last_data_refresh:
+            return True
+        # the table ran previously, but now the refresh date is None
+        # this means the table is being cleared in preparation for update
+        if not table_refresh_date:
+            return False
+        # trigger on day change
+        if table_refresh_date != self.last_data_refresh:
+            return True
 
         # elif isinstance(self.trigger_type, Schedule):
         #     next_check_on = datetime.date(self.trigger_type.next_run)
@@ -344,7 +331,7 @@ class Listener:
                     sleep(self.delay)
                     return True
         try:
-            last_data_refresh = self.get_table_refresh_date()
+            table_refresh_date = self.get_table_refresh_date()
         except:
             if isinstance(self, EmailListener):
                 self.logger.exception(
@@ -352,10 +339,10 @@ class Listener:
                 )
             else:
                 self.logger.exception(f"Connection or query error when connecting to {self.db}")
-            last_data_refresh = None
+            table_refresh_date = None
 
-        if self.should_trigger(last_data_refresh):
-            self.last_data_refresh = last_data_refresh
+        if self.should_trigger(table_refresh_date):
+            self.last_data_refresh = table_refresh_date
             self.update_json()
             self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
             sleep(self.delay)
@@ -376,7 +363,7 @@ class EmailListener(Listener):
         trigger=None,
         trigger_type="default",
         delay=300,
-        workflow_report_name=None,
+        notification_title=None,
         email_folder=None,
         search_email_address=None,
         email_address=None,
@@ -384,11 +371,11 @@ class EmailListener(Listener):
         proxy=None,
     ):
         self.name = workflow.name
-        self.workflow_report_name = workflow_report_name or workflow.name.lower().replace(" ", "_")
+        self.notification_title = notification_title or workflow.name.lower().replace(" ", "_")
         self.db = db
         self.logger = logging.getLogger(__name__)
         self.engine = None
-        self.last_trigger_run = self.get_last_trigger_run()
+        self.last_trigger_run = self.get_last_json_refresh(key="last_trigger_run")
         self.delay = delay
         self.config_key = "standard"
         self.email_folder = email_folder
@@ -396,7 +383,7 @@ class EmailListener(Listener):
         self.email_address = email_address
         self.email_password = email_password
         self.proxy = proxy
-        self.last_data_refresh = self.get_last_refresh()
+        self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
         # self.last_data_refresh = self.get_last_email_date(
         #     self.workflow_report_name,
         #     self.email_folder,
@@ -417,7 +404,7 @@ class EmailListener(Listener):
 
     def get_table_refresh_date(self):
         return self.get_last_email_date(
-            self.workflow_report_name,
+            self.notification_title,
             self.email_folder,
             self.search_email_address,
             self.email_address,
@@ -427,7 +414,7 @@ class EmailListener(Listener):
 
     def get_last_email_date(
         self,
-        workflow_report_name,
+        notification_title,
         email_folder=None,
         search_email_address=None,
         email_address=None,
@@ -442,7 +429,7 @@ class EmailListener(Listener):
             try:
                 last_message = (
                     account.inbox.glob("**/" + email_folder)
-                    .filter(subject__contains=workflow_report_name)
+                    .filter(subject=notification_title)
                     .order_by("-datetime_received")
                     .only("datetime_received")[0]
                 )
@@ -453,8 +440,8 @@ class EmailListener(Listener):
         else:
             try:
                 last_message = (
-                    account.inbox.filter(subject__contains=workflow_name)
-                    .filter(subject__contains=workflow_name)
+                    account.inbox.filter(subject=notification_title)
+                    .filter(subject=notification_title)
                     .order_by("-datetime_received")
                     .only("datetime_received")[0]
                 )
@@ -480,97 +467,6 @@ class FieldListener(Listener):
 
 class QueryListener(Listener):
     pass
-
-
-class EmailListener(Listener):
-    def __init__(
-        self,
-        workflow,
-        schema=None,
-        table=None,
-        field=None,
-        query=None,
-        db="denodo",
-        trigger=None,
-        trigger_type="default",
-        delay=300,
-        email_folder=None,
-        search_email_address=None,
-        email_address=None,
-        email_password=None,
-        proxy=None
-        ):
-        self.name = workflow.name
-        self.db = db
-        self.logger = logging.getLogger(__name__)
-        self.engine = self.get_engine()
-        self.last_trigger_run = self.get_last_trigger_run()
-        self.delay = delay
-        self.config_key = "standard"
-        self.email_folder = email_folder
-        self.search_email_address = search_email_address
-        self.email_address = email_address
-        self.email_password = email_password
-        self.proxy = proxy
-        self.last_data_refresh = self.get_last_email_date(
-            self.name,
-            self.email_folder,
-            self.search_email_address,
-            email_address = self.email_address,
-            email_password = self.email_password,
-            config_key=self.config_key
-        )
-        # super().__init__(self, self.last_data_refresh)
-
-    def _validate_folder(self, account, folder_name):
-        if not folder_name:
-            return True
-        try:
-            folder = account.inbox / folder_name
-        except ErrorFolderNotFound:
-            raise
-
-    def get_last_email_date(
-        self,
-        workflow_name,
-        email_folder=None,
-        search_email_address=None,
-        email_address=None,
-        email_password=None,
-        config_key="standard",
-    ):
-        account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
-        self._validate_folder(account, email_folder)
-        last_message = None
-        
-        if email_folder:
-            try:
-                last_message = (
-                    account.inbox.glob("**/" + email_folder)
-                    .filter(subject__contains=workflow_name)
-                    .order_by("-datetime_received")
-                    .only("datetime_received")[0]
-                )
-            except IndexError:
-                self.logger.warning(f"No notifications for {self.name} were found in {email_folder}")
-        else:
-            try:
-                last_message = (
-                    account.inbox.filter(subject__contains=workflow_name)
-                    .filter(subject__contains=workflow_name)
-                    .order_by("-datetime_received")
-                    .only("datetime_received")[0]
-                )
-            except IndexError:
-                self.logger.warning(f"No notifications for {self.name} were found in {email_folder}")
-
-        if not last_message:
-            return None
-
-        d = last_message.datetime_received.date()
-        last_received_date = date(d.year, d.month, d.day)
-
-        return last_received_date
 
 
 class Workflow:
@@ -731,7 +627,7 @@ class Workflow:
         if not isinstance(self.listener, EmailListener):
             if l.trigger:
                 email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                    \nTrigger: {l.trigger.table} {l.field}'s latest value has changed to {l.trigger.last_data_refresh}"""
+                    \nTrigger: {l.trigger.table} {l.field}'s latest value has changed to {l.trigger.last_table_refresh}"""
             else:
                 email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
                 \nTrigger: {l.table} {l.field}'s latest value has changed to
@@ -739,7 +635,8 @@ class Workflow:
         else:
             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
             \nTrigger:
-            Received notification in {l.search_email_address}' {l.email_folder} folder for {l.workflow_report_name}'s update on {l.last_data_refresh}"""
+            Received notification in {l.search_email_address}'s {l.email_folder} folder for
+            {l.notification_title}'s update on {l.last_data_refresh}"""
         return email_body
 
     def gen_manual_wf_email_body(self):
