@@ -195,9 +195,9 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", if_exists="fail", sep="\t", use_
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
+        FORMAT AS CSV
         NULL ''
         IGNOREHEADER 1
-        REMOVEQUOTES
         ;commit;
         """
 
