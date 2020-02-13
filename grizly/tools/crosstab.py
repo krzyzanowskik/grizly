@@ -293,7 +293,8 @@ class Crosstab():
                 style = self.styling[level][measure](value)
 
             if measure in self.formatter:
-                value = self.formatter[measure].format(value)
+                # value = self.formatter[measure].format(value)
+                value = self.formatter[measure](value)
 
             return style, value
 
