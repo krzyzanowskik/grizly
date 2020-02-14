@@ -8,6 +8,37 @@ import logging
 from typing import Union, List
 
 
+class EmailAccount:
+    def __init__(self, email_address, email_password, alias=None, config_key=None, proxy=None):
+        if config_key:
+            config = Config().get_service(config_key=config_key, service="email")
+        self.logger = logging.getLogger(__name__)
+        self.email_address = email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
+        self.email_password = email_password or os.getenv("EMAIL_PASSWORD") or config.get("email_password")
+        self.alias = alias
+        self.credentials = Credentials(self.email_address, self.email_password)
+        self.config = Configuration(
+            server="smtp.office365.com", credentials=self.credentials, retry_policy=FaultTolerance(max_wait=2 * 60)
+        )
+        self.proxy = proxy or os.getenv("HTTPS_PROXY")
+        if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
+        try:
+            smtp_address = self.email_address
+            if self.alias:
+                smtp_address = self.alias
+            self.account = Account(
+                primary_smtp_address=smtp_address,
+                credentials=self.credentials,
+                config=self.config,
+                autodiscover=False,
+                access_type=DELEGATE,
+            )
+        except:
+            self.logger.exception("Email account could not be accessed.")
+            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
+
+
 class Email:
     """Class used to build and send email using Exchange Web Services (EWS) API.
 
@@ -147,7 +178,12 @@ class Email:
         -------
         None
         """
-        to = to if isinstance(to, list) else [to]
+        
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+	if self.proxy:
+            os.environ["HTTPS_PROXY"] = self.proxy
+        
+	to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
         if not send_as:
@@ -159,21 +195,9 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-
-        if self.proxy:
-            os.environ["HTTPS_PROXY"] = self.proxy
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
-        credentials = Credentials(email_address, email_password)
-        config = Configuration(server="smtp.office365.com", credentials=credentials, retry_policy=FaultTolerance(max_wait=2 * 60))
-        try:
-            account = Account(
-                primary_smtp_address=send_as, credentials=credentials, config=config, autodiscover=False, access_type=DELEGATE
-            )
-        except:
-            self.logger.exception("Email account could not be accessed.")
-            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
-
-        m = Message(
+	account = EmailAccount(email_address, email_password).account
+        
+	m = Message(
             account=account,
             subject=self.subject,
             body=self.body,
