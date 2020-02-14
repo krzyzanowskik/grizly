@@ -178,12 +178,12 @@ class Email:
         -------
         None
         """
-        
+
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
-	if self.proxy:
+        if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
-        
-	to = to if isinstance(to, list) else [to]
+
+        to = to if isinstance(to, list) else [to]
         cc = cc if cc is None or isinstance(cc, list) else [cc]
 
         if not send_as:
@@ -195,9 +195,9 @@ class Email:
 
         email_address = self.email_address
         email_password = self.email_password
-	account = EmailAccount(email_address, email_password).account
-        
-	m = Message(
+        account = EmailAccount(email_address, email_password).account
+
+        m = Message(
             account=account,
             subject=self.subject,
             body=self.body,
