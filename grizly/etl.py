@@ -183,10 +183,8 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
     config = ConfigParser()
-    with open("tst.txt", "w") as f:
-        f.write(get_path(".aws", "credentials"))
     config.read(get_path('.aws','credentials'))
-    if config['default']:
+    if config.get('default'):
          aws_access_key_id = config['default']['aws_access_key_id']
          aws_secret_access_key = config['default']['aws_secret_access_key']
     #aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")

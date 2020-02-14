@@ -65,6 +65,7 @@ class S3:
         if not self.s3_key.endswith("/"):
             self.s3_key += "/"
         self.logger = logger or logging.getLogger(__name__)
+        self.status = "initiated"
 
     def _check_if_s3_exists(f):
         @wraps(f)
@@ -216,14 +217,18 @@ class S3:
 
         s3_key = self.s3_key + self.file_name
         s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        
         if not self._can_upload():
             msg = (
                 f"File {self.file_name} was not uploaded because a recent version exists."
                 + f"\nSet S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window})."
             )
             self.logger.warning(msg)
+            self.status = "failed"
             return self
+
         s3_file.upload_file(file_path)
+        self.status = "uploaded"
 
         print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
@@ -366,9 +371,9 @@ class S3:
             access_key_id '{S3_access_key_id}'
             secret_access_key '{S3_secret_access_key}'
             delimiter '{sep}'
+            FORMAT AS CSV
             NULL ''
             IGNOREHEADER 1
-            REMOVEQUOTES
             ;commit;
             """
 
