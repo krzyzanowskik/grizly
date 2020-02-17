@@ -12,6 +12,11 @@ class EmailAccount:
     def __init__(self, email_address, email_password, alias=None, config_key=None, proxy=None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="email")
+        else:
+            try:
+                config = Config().get_service(config_key="standard", service="email")
+            except:
+                pass
         self.logger = logging.getLogger(__name__)
         self.email_address = email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
         self.email_password = email_password or os.getenv("EMAIL_PASSWORD") or config.get("email_password")

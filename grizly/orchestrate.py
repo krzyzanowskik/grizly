@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from json.decoder import JSONDecodeError
 from logging import Logger
@@ -26,7 +26,7 @@ from sqlalchemy.pool import NullPool
 
 from grizly.config import Config
 
-from .email import Email
+from .email import Email, EmailAccount
 from .etl import df_to_s3, s3_to_rds
 from .utils import get_last_working_day, read_config
 
@@ -346,7 +346,6 @@ class Listener:
         if self.should_trigger(table_refresh_date):
             self.last_data_refresh = table_refresh_date
             self.update_json()
-            self.logger.info(f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow...")
             sleep(self.delay)
             return True
 
@@ -364,7 +363,7 @@ class EmailListener(Listener):
         db=None,
         trigger=None,
         trigger_type="default",
-        delay=300,
+        delay=0,
         notification_title=None,
         email_folder=None,
         search_email_address=None,

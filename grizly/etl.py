@@ -184,7 +184,7 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
 
     config = ConfigParser()
     config.read(get_path('.aws','credentials'))
-    if config.get('default'):
+    if config['default']:
          aws_access_key_id = config['default']['aws_access_key_id']
          aws_secret_access_key = config['default']['aws_secret_access_key']
     #aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
