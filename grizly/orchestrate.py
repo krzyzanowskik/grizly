@@ -583,6 +583,7 @@ class Workflow:
         self.status = computation.status
         fire_and_forget(computation)
         self.submit_to_queue()
+        client.close()
         return computation
 
     @retry_task(Exception, tries=3, delay=10)
