@@ -438,7 +438,7 @@ def get_path(*args, from_where='python'):
     else:
         raise NotImplementedError(f"Unable to retrieve home env variable for {platform}")
 
-    home_path = os.getenv("HOME")
+    home_path = os.getenv(home_env)
     if not home_path:
         raise ValueError(f"{home_path}, {os.environ}, \nEnvironment variable {home_env} on platform {platform} is not set")
     cwd = os.path.join(home_path, *args)
