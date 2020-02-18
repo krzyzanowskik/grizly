@@ -79,12 +79,21 @@ class Schedule:
         - ValueError: if the cron string is invalid
     """
 
-    def __init__(self, cron, start_date=None, end_date=None):
+    def __init__(self, cron, name=None, start_date=None, end_date=None):
         if not croniter.is_valid(cron):
             raise ValueError("Invalid cron string: {}".format(cron))
         self.cron = cron
+        self._name = name
         self.start_date = start_date
         self.end_date = end_date
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        self._name = name
 
     def emit_dates(self, start_date: datetime = None) -> Iterable[datetime]:
         """
@@ -115,6 +124,9 @@ class Schedule:
 
         return dates
 
+    def __repr__(self):
+        return f"{type(self).__name__}({self.cron})"
+
 
 class Trigger:
     def __init__(self, func, params=None):
@@ -141,6 +153,7 @@ class Listener:
     def __init__(
         self,
         workflow,
+        class_name="Listener",
         schema=None,
         table=None,
         field=None,
@@ -166,6 +179,11 @@ class Listener:
         self.last_trigger_run = self.get_last_trigger_run()
         self.delay = delay
         self.config_key = "standard"
+
+    def __repr__(self):
+        if self.query:
+            return f"{type(self).__name__}(query=\"\"\"{self.query}\"\"\")"
+        return f"{type(self).__name__}(db={self.db}, schema={self.schema}, table={self.table}, field={self.field})"
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -379,6 +397,7 @@ class EmailListener(Listener):
         trigger=None,
         trigger_type="default",
         delay=300,
+        notification_title=None,
         email_folder=None,
         search_email_address=None,
         email_address=None,
@@ -386,6 +405,7 @@ class EmailListener(Listener):
         proxy=None
         ):
         self.name = workflow.name
+        self.notification_title = notification_title or workflow.name.lower().replace(" ", "")
         self.db = db
         self.logger = logging.getLogger(__name__)
         self.engine = self.get_engine()
@@ -407,6 +427,9 @@ class EmailListener(Listener):
         )
         # super().__init__(self, self.last_data_refresh)
 
+    def __repr__(self):
+        return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
+
     def _validate_folder(self, account, folder_name):
         if not folder_name:
             return True
@@ -417,7 +440,7 @@ class EmailListener(Listener):
 
     def get_last_email_date(
         self,
-        workflow_name,
+        notification_title,
         email_folder=None,
         search_email_address=None,
         email_address=None,
@@ -427,12 +450,12 @@ class EmailListener(Listener):
         account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
         self._validate_folder(account, email_folder)
         last_message = None
-        
+
         if email_folder:
             try:
                 last_message = (
                     account.inbox.glob("**/" + email_folder)
-                    .filter(subject__contains=workflow_name)
+                    .filter(subject=notification_title)
                     .order_by("-datetime_received")
                     .only("datetime_received")[0]
                 )
@@ -441,8 +464,8 @@ class EmailListener(Listener):
         else:
             try:
                 last_message = (
-                    account.inbox.filter(subject__contains=workflow_name)
-                    .filter(subject__contains=workflow_name)
+                    account.inbox.filter(subject=notification_title)
+                    .filter(subject=notification_title)
                     .order_by("-datetime_received")
                     .only("datetime_received")[0]
                 )
@@ -613,13 +636,19 @@ class Workflow:
     def gen_triggered_wf_email_body(self):
         run_time_str = str(timedelta(seconds=self.run_time))
         l = self.listener
-        if l.trigger:
-            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {l.table} {l.field}'s latest value has changed to {l.trigger.last_data_refresh}"""
+        if not isinstance(self.listener, EmailListener):
+            if l.trigger:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                    \nTrigger: {l.table} {l.field}'s latest value has changed to {l.trigger.last_data_refresh}"""
+            else:
+                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
+                \nTrigger: {l.table} {l.field}'s latest value has changed to
+                    {l.last_data_refresh}"""
         else:
             email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-            \nTrigger: {l.table} {l.field}'s latest value has changed to
-                {l.last_data_refresh}"""
+            \nTrigger:
+            Received notification in {l.search_email_address}'s {l.email_folder} folder for
+            {l.notification_title}'s update on {l.last_data_refresh}"""
         return email_body
 
     def gen_manual_wf_email_body(self):
