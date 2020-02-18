@@ -91,6 +91,9 @@ class Schedule:
         self.start_date = start_date
         self.end_date = end_date
 
+    def __repr__(self):
+        return f"{type(self).__name__}({self.cron})"
+
     def emit_dates(self, start_date: datetime = None) -> Iterable[datetime]:
         """
         Generator that emits workflow run dates
@@ -172,6 +175,11 @@ class Listener:
         self.last_trigger_run = self.get_last_json_refresh(key="last_trigger_run")
         self.delay = delay
         self.config_key = "standard"
+
+    def __repr__(self):
+        if self.query:
+            return f"{type(self).__name__}(query=\"\"\"{self.query}\"\"\")"
+        return f"{type(self).__name__}(db={self.db}, schema={self.schema}, table={self.table}, field={self.field})"
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -385,6 +393,9 @@ class EmailListener(Listener):
         self.email_password = email_password
         self.proxy = proxy
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
+
+    def __repr__(self):
+        return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
 
     def _validate_folder(self, account, folder_name):
         if not folder_name:
