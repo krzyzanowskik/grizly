@@ -1,9 +1,13 @@
 import json
 from .utils import get_path
+import logging
 
-class Config():
+class Config:
     """Class which stores grizly configuration"""
     data = {}
+
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
 
     def from_dict(self, data:dict):
         """Overwrites Config.data using dictionary data
@@ -67,7 +71,7 @@ class Config():
                 _validate_config(data['config'][key], services = list(data['config'][key]))
 
             Config.data = data['config']
-            print("Config data has been saved.")
+            self.logger.info("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
@@ -101,7 +105,7 @@ class Config():
                 _validate_config(data['config'][key], services = list(data['config'][key]))
 
             Config.data = data['config']
-            print("Config data has been saved.")
+            self.logger.info("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
