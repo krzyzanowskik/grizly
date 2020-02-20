@@ -96,7 +96,7 @@ class Email:
             )
         except:
             self.proxy = None
-
+        
     def to_list(self, maybe_list: Union[List[str], str]):
         if isinstance(maybe_list, str):
             maybe_list = [maybe_list]
@@ -185,6 +185,7 @@ class Email:
         """
 
         BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
 
