@@ -45,7 +45,9 @@ class S3:
         self.s3_key = s3_key
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
-        self.redshift_str = redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
+        self.redshift_str = (
+            redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
+        )
         self.s3_resource = resource("s3")
         folders = s3_key.split("/")
         self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
@@ -117,12 +119,20 @@ class S3:
         """
         files = []
         key_list = self.s3_key.split("/")[:-1]
-        for file in self.s3_resource.meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)["Contents"]:
-            file_list = file["Key"].split("/")
-            for item in key_list:
-                file_list.pop(0)
-            if len(file_list) == 1:
-                files.append(file_list[0])
+        data = self.s3_resource.meta.client.list_objects(
+            Bucket=self.bucket, Prefix=self.s3_key
+        )
+        if "Contents" in data:
+            for file in self.s3_resource.meta.client.list_objects(
+                Bucket=self.bucket, Prefix=self.s3_key
+            )["Contents"]:
+                file_list = file["Key"].split("/")
+                for item in key_list:
+                    file_list.pop(0)
+                if len(file_list) == 1:
+                    files.append(file_list[0])
+        else:
+            files = []
         return files
 
     @_check_if_s3_exists
@@ -136,7 +146,13 @@ class S3:
         return self
 
     @_check_if_s3_exists
-    def copy_to(self, file_name: str = None, s3_key: str = None, bucket: str = None, keep_file: bool = True):
+    def copy_to(
+        self,
+        file_name: str = None,
+        s3_key: str = None,
+        bucket: str = None,
+        keep_file: bool = True,
+    ):
         """Copies S3 file to another S3 file.
 
         Parameters
@@ -183,12 +199,20 @@ class S3:
         copy_source = {"Key": source_s3_key, "Bucket": self.bucket}
 
         s3_file.copy(copy_source)
-        print(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
+        print(
+            f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'"
+        )
 
         if not keep_file:
             self.delete()
 
-        return S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str)
+        return S3(
+            file_name=file_name,
+            s3_key=s3_key,
+            bucket=bucket,
+            file_dir=self.file_dir,
+            redshift_str=self.redshift_str,
+        )
 
     def from_file(self, keep_file=True):
         """Writes local file to S3.
@@ -254,7 +278,9 @@ class S3:
     def to_df(self, **kwargs):
 
         if not self.file_name.endswith("csv") or self.file_name.endswith("parquet"):
-            raise NotImplementedError("Unsupported file format. Please use CSV or Parquet files.")
+            raise NotImplementedError(
+                "Unsupported file format. Please use CSV or Parquet files."
+            )
 
         file_path = os.path.join(self.file_dir, self.file_name)
         self.to_file()
@@ -295,7 +321,9 @@ class S3:
         file_path = os.path.join(self.file_dir, self.file_name)
 
         if not file_path.endswith(".csv"):
-            raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
+            raise ValueError(
+                "Invalid file extention - 'file_name' attribute must end with '.csv'"
+            )
 
         if clean_df:
             df = clean(df)
@@ -383,7 +411,9 @@ class S3:
             Key=self.s3_key + self.file_name,
             ExpressionType="SQL",
             Expression="SELECT * FROM s3object LIMIT 21",
-            InputSerialization={"CSV": {"FileHeaderInfo": "None", "FieldDelimiter": sep}},
+            InputSerialization={
+                "CSV": {"FileHeaderInfo": "None", "FieldDelimiter": sep}
+            },
             OutputSerialization={"CSV": {}},
         )
 
