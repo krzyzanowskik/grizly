@@ -71,7 +71,7 @@ class Config:
                 _validate_config(data['config'][key], services = list(data['config'][key]))
 
             Config.data = data['config']
-            self.logger.info("Config data has been saved.")
+            self.logger.debug("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
@@ -105,7 +105,7 @@ class Config:
                 _validate_config(data['config'][key], services = list(data['config'][key]))
 
             Config.data = data['config']
-            self.logger.info("Config data has been saved.")
+            self.logger.debug("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
