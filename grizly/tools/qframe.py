@@ -2,6 +2,7 @@ from pandas import read_sql
 import re
 import os
 import sqlparse
+import logging
 from copy import deepcopy
 import json
 from sqlalchemy import create_engine
@@ -37,6 +38,7 @@ from ..utils import(
 
 from .tool import Tool
 
+logger = logging.getLogger(__name__)
 
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
@@ -276,10 +278,10 @@ class QFrame(Tool):
 
         for field in fields:
             if field not in sq_fields:
-                print(f"Field {field} not found")
+                logger.debug(f"Field {field} not found")
 
             elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
-                print(f"Field {field} is not selected in subquery.")
+                logger.debug(f"Field {field} is not selected in subquery.")
 
             else:
                 if "as" in sq_fields[field] and sq_fields[field]["as"] != '':
@@ -594,7 +596,7 @@ class QFrame(Tool):
                 if field in self.data["select"]["fields"]:
                     self.data["select"]["fields"][field]["group_by"] = aggtype
                 else:
-                    print("Field not found.")
+                    logger.debug("Field not found.")
 
         return self
 
@@ -642,7 +644,7 @@ class QFrame(Tool):
                 order = 'ASC' if ascending[iterator] else 'DESC'
                 self.data["select"]["fields"][field]["order_by"] = order
             else:
-                print(f"Field {field} not found.")
+                logger.debug(f"Field {field} not found.")
 
             iterator+=1
 
