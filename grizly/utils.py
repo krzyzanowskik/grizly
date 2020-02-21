@@ -202,7 +202,7 @@ def get_denodo_columns(schema, table, column_types=False, columns=None, date_for
         return col_names, col_types
 
 
-def get_redshift_columns(schema, table, column_types=False):
+def get_redshift_columns(schema, table, column_types=False, columns=None):
     """Get column names (and optionally types) from a Redshift table.
 
     Parameters
@@ -241,6 +241,15 @@ def get_redshift_columns(schema, table, column_types=False):
             col_type = column[2]
             col_names.append(col_name)
             col_types.append(col_type)
+        # leave only the cols provided in the columns argument
+        if columns:
+            col_names_and_types = {
+                col_name: col_type
+                for col_name, col_type in zip(col_names, col_types)
+                if col_name in columns
+            }
+            col_names = [col for col in col_names_and_types]
+            col_types = [type for type in col_names_and_types.values()]
         to_return = (col_names, col_types)
     else:
         while True:
@@ -249,6 +258,9 @@ def get_redshift_columns(schema, table, column_types=False):
                 break
             col_name = column[1]
             col_names.append(col_name)
+        # leave only the cols provided in the columns argument
+        if columns:
+            col_names = [col for col in col_names if col in columns]
         to_return = col_names
 
     cursor.close()
@@ -263,7 +275,7 @@ def get_columns(table, schema=None, column_types=False, date_format="DATE", db="
     if db == "denodo":
         return get_denodo_columns(schema=schema, table=table, column_types=column_types, date_format=date_format, columns=columns)
     elif db == "redshift":
-        return get_redshift_columns(schema=schema, table=table, column_types=column_types)
+        return get_redshift_columns(schema=schema, table=table, column_types=column_types, columns=columns)
     elif db == "sfdc":
         return get_sfdc_columns(table=table, column_types=column_types, columns=columns)
     else:
