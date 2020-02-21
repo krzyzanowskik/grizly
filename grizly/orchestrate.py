@@ -33,7 +33,7 @@ from .utils import get_last_working_day, read_config
 workflows_dir = "/home/acoe_workflows"
 LISTENER_STORE = os.path.join(workflows_dir, "workflows", "etc", "listener_store.json")
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
@@ -156,7 +156,6 @@ class Listener:
         query=None,
         db="denodo",
         trigger=None,
-        trigger_type="default",
         delay=0,
     ):
 
@@ -168,7 +167,6 @@ class Listener:
         self.field = field
         self.query = query
         self.logger = logging.getLogger(__name__)
-        self.trigger_type = trigger_type
         self.trigger = trigger
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
         self.engine = self.get_engine()
@@ -307,11 +305,6 @@ class Listener:
         if table_refresh_date != self.last_data_refresh:
             return True
 
-        # elif isinstance(self.trigger_type, Schedule):
-        #     next_check_on = datetime.date(self.trigger_type.next_run)
-        #     if next_check_on == table_refresh_date:
-        #         return True
-
     def detect_change(self) -> bool:
         """Determine whether the listener should trigger a worfklow run.
 
@@ -335,10 +328,6 @@ class Listener:
                     today = datetime.today().date()
                     self.last_trigger_run = today
                     self.update_json()
-                    self.logger.info(
-                        f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow..."
-                    )
-                    sleep(self.delay)
                     return True
         try:
             table_refresh_date = self.get_table_refresh_date()
@@ -370,7 +359,6 @@ class EmailListener(Listener):
         query=None,
         db=None,
         trigger=None,
-        trigger_type="default",
         delay=0,
         notification_title=None,
         email_folder=None,
@@ -393,7 +381,7 @@ class EmailListener(Listener):
         self.email_password = email_password
         self.proxy = proxy
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
-
+        
     def __repr__(self):
         return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
 
@@ -424,6 +412,7 @@ class EmailListener(Listener):
         email_password=None,
         config_key="standard",
     ):
+
         account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
         self._validate_folder(account, email_folder)
         last_message = None
@@ -466,27 +455,35 @@ class Workflow:
     """
 
     def __init__(
-            self, name, tasks, owner_email=None, backup_email=None, trigger_on_success=None, priority=0, execution_options: dict = None
-            ):
+        self,
+        name,
+        tasks,
+        owner_email=None,
+        backup_email=None,
+        children=None,
+        priority=0,
+        trigger=None,
+        trigger_type="manual",
+        execution_options: dict = None
+    ):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
         self.tasks = tasks
-        self.trigger_on_success = trigger_on_success
+        self.children = children
         self.execution_options = execution_options
         self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
-        self.run_time = 0
         self.status = "pending"
         self.is_scheduled = False
         self.is_triggered = False
         self.is_manual = False
-        self.stage = "prod"
+        self.env = "prod"
         self.logger = logging.getLogger(__name__)
         self.error_value = None
         self.error_type = None
-        self.scheduler = "threads"
-        self.num_workers = 8
         self.priority = priority
+        self.trigger = trigger
+        self.trigger_type = trigger_type
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
 
@@ -531,47 +528,17 @@ class Workflow:
 
         return deco_retry
 
-    # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
-    #     tasks = [load_qf(qf, depends_on=None)]
-    #     fnretry = retry(fn)
-    #     self.tasks
-    #     return fn_decorated
-
     def __str__(self):
         return self.tasks
 
-    def log(self, begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
-        """
-        A decorator that wraps the passed in function and logs
-        exceptions should one occur
-        """
-
-        def deco_wrapper(function):
-            @wraps(function)
-            def wrapper(*args, **kwargs):
-                logger = logging.getLogger(__name__)
-                if begin_msg:
-                    logger.warning(begin_msg)
-                try:
-                    result = function(*args, **kwargs)
-                    if end_msg:
-                        logger.warning(end_msg)
-                    return result
-                except exception:
-                    if error_msg:
-                        logger.exception(error_msg)
-                    raise
-
-            return wrapper
-
-        return deco_wrapper
-
-    # def log_task(self, task):
-    #     def deco():
-    #         pass
-
     def visualize(self):
         return self.graph.visualize()
+
+    def add_trigger(self, trigger):
+        self.trigger = trigger
+        self.trigger_type = type(trigger)
+        if isinstance(trigger, Schedule):
+            self.next_run = self.trigger.next(1)[0] # should prbably keep in Scheduele and not propagate here
 
     def add_schedule(self, schedule):
         self.schedule = schedule
@@ -582,50 +549,36 @@ class Workflow:
         self.listener = listener
         self.is_triggered = True
 
-    def check_if_manual(self):
-        if not (self.is_scheduled or self.is_triggered):
-            self.is_manual = True
-            return True
-
     def submit(self, client, priority=None):
+
         if not priority:
             priority = self.priority
+
         computation = client.compute(self.graph, retries=3, priority=priority)
         self.status = computation.status
         fire_and_forget(computation)
-        self.submit_to_queue()
         client.close()
+
+        schema = "administration"
+        table = "workflow_queue"
+        engine = os.getenv("QUEUE_ENGINE") or "mssql+pyodbc://redshift_acoe"
+        self.submit_to_queue(engine, schema, table, priority)
         return computation
 
     @retry_task(Exception, tries=3, delay=10)
-    def submit_to_queue(self):
+    def submit_to_queue(self, engine: str, schema: str, table: str, priority: int):
 
-        schema = "sandbox"
-        table = "workflow_queue"
-        submission_time = datetime.now(timezone.utc).replace(microsecond=0)
+        now_utc = datetime.now(timezone.utc).replace(microsecond=0)
 
-        workflow_metadata = {
-            "workflow_name": [self.name],
-            "owner_email": [self.owner_email],
-            "backup_email": [self.backup_email],
-            "submitted": [submission_time],
-            "workflow_status": [self.status],
-        }
-        workflow_metadata = pd.DataFrame(workflow_metadata)
+        sql = f"""INSERT INTO {schema}.{table} (workflow_name, priority, submitted) VALUES (
+        '{self.name}',
+        {priority},
+        '{now_utc}'
+        )"""
+        sqla_engine = create_engine(engine)
+        execute_query(sqla_engine, sql)
 
-        s3 = S3(file_name="workflow_queue.csv", s3_key="bulk")
-        try:
-            s3.from_df(workflow_metadata)
-        except:
-            self.logger.exception("Upload to S3 failed")
-            raise
-        try:
-            s3.to_rds(schema=schema, table=table, if_exists="append", types={"submitted": "TIMESTAMPTZ"})
-        except:
-            self.logger.exception("Upload to Redshift failed")
-            raise
-
-        self.logger.info(f"{self.name} status has been uploaded to workflow_queue table")
+        self.logger.info(f"{self.name} has been uploaded to workflow_queue")
 
         return None
 
@@ -654,25 +607,35 @@ class Runner:
         bool
             Whether the workflow's scheduled next run coincides with current time
         """
-
-        if workflow.is_scheduled:
-
-            self.logger.info(
-                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})"
-            )
-
+        
+        if isinstance(workflow.trigger, Schedule):
+        # if workflow.is_scheduled:
+            next_run_short = workflow.next_run.strftime("%Y-%m-%d %H:%M")
             now = datetime.now(timezone.utc)
-            next_run = workflow.next_run
-
-            if (next_run.day == now.day) and (
-                next_run.hour == now.hour
-            ):  # and (next_run.minute == now.minute): # minutes for precise scheduling
-                workflow.next_run = workflow.schedule.next(1)[0]
-                return True
-
-        elif workflow.is_triggered:
             
-            listener = workflow.listener
+            self.logger.info(
+                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run_short})"
+            )
+            # self.logger.info(f"Day: {type(workflow.next_run.day)}:{workflow.next_run.day} vs now: {type(now.day)}:{now.day}")
+            # self.logger.info(f"Hour: {type(workflow.next_run.hour)}:{workflow.next_run.hour} vs now: {type(now.hour)}:{now.hour}")
+            # self.logger.info(f"Minute: {type(workflow.next_run.minute)}:{workflow.next_run.minute} vs now: {type(now.minute)}:{now.minute}")
+            
+            next_run = workflow.next_run
+            if (
+                    (next_run.day == now.day) and 
+                    (next_run.hour == now.hour) and 
+                    (next_run.minute == now.minute + 1)  # if we don't add 1 here, cron will just skip to next date once it hits now
+                ): # minutes for precise scheduling - this assumes runner runs for less than 1 min
+                # ideally, each listener should run in a separate thread so that this is guaranteed
+                # (now, if e.g. Denodo is not responding, a scheduled workflow that comes below the triggered one will not run)
+                workflow.next_run = workflow.trigger.next(1)[0]
+                return True
+        
+        elif isinstance(workflow.trigger, Listener):
+        # elif workflow.is_triggered:
+            
+            #listener = workflow.listener
+            listener = workflow.trigger
 
             if isinstance(listener, EmailListener):
                 folder = listener.email_folder or "inbox"
@@ -760,7 +723,7 @@ class Runner:
                 future = workflow.submit(client)
         else:
             self.logger.info(f"No pending workflows found")
-
+            client.close()
         return {workflow.name: workflow.status for workflow in workflows}
 
 
@@ -894,29 +857,3 @@ def update_queue(client, engine, schema=None, table=None):
                 execute_query(engine=engine, query=query)
     return None
 
-
-# def log(begin_msg=None, end_msg=None, error_msg=None, exception=Exception):
-#     """
-#     A decorator that wraps the passed in function and logs
-#     exceptions should one occur
-#     """
-
-#     def deco_wrapper(function):
-#         @wraps(function)
-#         def wrapper(*args, **kwargs):
-#             logger = logging.getLogger(__name__)
-#             if begin_msg:
-#                 logger.warning(begin_msg)
-#             try:
-#                 result = function(*args, **kwargs)
-#                 if end_msg:
-#                     logger.warning(end_msg)
-#                 return result
-#             except exception:
-#                 if error_msg:
-#                     logger.exception(error_msg)
-#                 raise
-
-#         return wrapper
-
-#     return deco_wrapper
