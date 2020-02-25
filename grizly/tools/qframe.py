@@ -79,6 +79,7 @@ class QFrame(Tool):
         self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
+        self.dtypes = {}
         super().__init__()
 
 
@@ -181,12 +182,18 @@ class QFrame(Tool):
             if data != {}:
                 if subquery == '':
                     self.data = self.validate_data(data)
-                    #self.engine = data["engine"]
                 else:
                     self.data = self.validate_data(data[subquery])
-                    #self.engine = data[subquery]["select"]["engine"]
             else:
                 self.data = data
+        for field in self.data["select"]["fields"]:
+            _type = self.data["select"]["fields"][field]["type"]
+            dtype = "object"
+            if _type == "num":
+                dtype = "float64"
+            elif _type == "dim":
+                dtype == "object"
+            self.dtypes[field] = dtype
         return self
 
     def read_json(self, json_path, subquery=''):

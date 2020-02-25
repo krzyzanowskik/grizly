@@ -23,6 +23,32 @@ class Tool:
         elif self.tool_name == "GitHub":
             self.df.to_csv(csv_path)
 
+    def to_parquet(self, parquet_path, chunksize=None, debug=False, cursor=None):
+        """Saves data to Parquet file.
+        TO CHECK: I don't think we need chunksize anymore since we do chunks with
+        sql
+        
+        Parameters
+        ----------
+        parquet_path : str
+            Path to template Parquet file
+        chunksize : str
+            Not implemented
+        debug : str, optional
+            Not implemented
+        cursor : int, optional
+            Not implemented
+        Returns
+        -------
+        Class
+        """
+        if self.tool_name == "QFrame":
+            self.create_sql_blocks()
+            self.sql = self.get_sql()
+            con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
+            self.df = pd.read_sql(sql=self.sql, con=con)
+            self.df.astype(dtype = self.dtypes).to_parquet(parquet_path)
+
     def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0
                     , index=False, header=False):
         """Saves data to Excel file.
