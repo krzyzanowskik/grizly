@@ -34,7 +34,7 @@ class S3:
     def __init__(
         self,
         file_name: str,
-        s3_key: str,
+        s3_key: str = None,
         bucket: str = None,
         file_dir: str = None,
         redshift_str: str = None,

@@ -87,7 +87,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep="\t", chunksize=None, debug=False
     return cursor_row_count
 
 
-def create_table(qf, table, engine, schema="", char_size=500):
+def create_table(qf, table, engine_str, schema="", char_size=500):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -102,11 +102,11 @@ def create_table(qf, table, engine, schema="", char_size=500):
         Specify the schema.
     char_size : int, size of the VARCHAR field in the database column
     """
-    engine = create_engine(engine, encoding="utf8", poolclass=NullPool)
+    engine = create_engine(engine_str, encoding="utf8", poolclass=NullPool)
 
     table_name = f"{schema}.{table}" if schema else f"{table}"
 
-    if check_if_exists(table, schema):
+    if check_if_exists(table, schema, engine_str):
         print("Table {} already exists...".format(table_name))
 
     else:
@@ -121,7 +121,6 @@ def create_table(qf, table, engine, schema="", char_size=500):
 
         columns_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
-
         con = engine.connect()
         con.execute(sql)
         con.close()
@@ -129,7 +128,8 @@ def create_table(qf, table, engine, schema="", char_size=500):
         print("Table {} has been created successfully.".format(sql))
 
 
-def s3_to_rds_qf(qf, table, s3_name, schema="", if_exists="fail", sep="\t", use_col_names=True, redshift_str=None, bucket=None):
+def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
+                    , if_exists="fail", sep="\t", use_col_names=True, redshift_str=None, bucket=None):
     """
     Writes s3 to Redshift database.
 
@@ -178,8 +178,8 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", if_exists="fail", sep="\t", use_
     else:
         create_table(qf, table, engine=redshift_str, schema=schema)
 
-    if s3_name[-4:] != ".csv":
-        s3_name += ".csv"
+    if s3_name.split(".")[1] != file_format:
+        s3_name += file_format
 
     col_names = "(" + ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"]) + ")" if use_col_names else ""
 
@@ -190,23 +190,32 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", if_exists="fail", sep="\t", use_
 
     print("Loading {} data into {} ...".format(s3_name, table_name))
 
-    sql = f"""
-        COPY {table_name} {col_names} FROM 's3://{bucket_name}/{s3_name}'
-        access_key_id '{aws_access_key_id}'
-        secret_access_key '{aws_secret_access_key}'
-        delimiter '{sep}'
-        FORMAT AS CSV
-        NULL ''
-        IGNOREHEADER 1
-        ;commit;
-        """
+    if file_format.upper() == "CSV":
+        sql = f"""
+            COPY {table_name} {col_names} FROM 's3://{bucket_name}/{s3_name}'
+            access_key_id '{aws_access_key_id}'
+            secret_access_key '{aws_secret_access_key}'
+            delimiter '{sep}'
+            FORMAT AS CSV
+            NULL ''
+            IGNOREHEADER 1
+            ;commit;
+            """
+    elif file_format.upper() == "PARQUET":
+        sql = f"""
+            COPY {table_name} FROM 's3://{bucket_name}/{s3_name}'
+            access_key_id '{aws_access_key_id}'
+            secret_access_key '{aws_secret_access_key}'
+            FORMAT AS PARQUET
+            ;commit;
+            """
 
     result = engine.execute(sql)
     result.close()
     print("Data has been copied to {}".format(table_name))
 
 
-def csv_to_s3(csv_path, keep_csv=True, bucket: str = None):
+def csv_to_s3(csv_path, s3_key: str = None, keep_csv=True, bucket: str = None):
     """
     Writes csv file to s3.
 
@@ -225,7 +234,7 @@ def csv_to_s3(csv_path, keep_csv=True, bucket: str = None):
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
 
-    s3_name = os.path.basename(csv_path)
+    s3_name = s3_key + os.path.basename(csv_path)
 
     bucket.upload_file(csv_path, s3_name)
     print("{} uploaded to s3 as {}".format(os.path.basename(csv_path), s3_name))
@@ -478,7 +487,7 @@ def clean(df):
     return df
 
 
-def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=None, bucket=None, s3_dir=None,
+def build_copy_statement(file_name, schema, table_name, file_format, sep="\t", time_format=None, bucket=None, s3_dir=None,
                         remove_inside_quotes=False):
     """[summary]
 
@@ -519,7 +528,7 @@ def build_copy_statement(file_name, schema, table_name, sep="\t", time_format=No
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
-        FORMAT AS CSV
+        FORMAT AS {file_format}
         NULL ''
         IGNOREHEADER 1
         ;commit;
@@ -542,6 +551,7 @@ def s3_to_rds(
     file_name,
     table_name=None,
     schema="",
+    file_format="CSV",
     time_format=None,
     if_exists="fail",
     sep="\t",
@@ -582,7 +592,7 @@ def s3_to_rds(
     engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
     if not table_name:
-        table_name = file_name.replace(".csv", "")
+        table_name = file_name.replace(file_format, "")
 
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == "fail":
@@ -598,6 +608,7 @@ def s3_to_rds(
         file_name=file_name,
         schema=schema,
         table_name=table_name,
+        format=file_format,
         sep=sep,
         time_format=time_format,
         bucket=bucket_name,

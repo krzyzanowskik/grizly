@@ -789,7 +789,7 @@ class QFrame(Tool):
         return self.sql
 
     # Remove and move to Tool()
-    def create_table(self, table, schema='', char_size=500):
+    def create_table(self, table, schema='', char_size=500, engine_str=None):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
         Parameters
@@ -805,7 +805,9 @@ class QFrame(Tool):
         -------
         QFrame
         """
-        create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
+        if engine_str == None:
+            engine_str = self.engine
+        create_table(qf=self, table=table, engine_str=engine_str, schema=schema, char_size=char_size)
         return self
 
     ## Non SQL Processing qf.to_csv(), S3(csv).from_file().to_rds()
@@ -967,7 +969,7 @@ class QFrame(Tool):
         return self
 
     #AC: this probably needs to be removed
-    def csv_to_s3(self, csv_path, keep_csv=True, bucket=None):
+    def csv_to_s3(self, csv_path, s3_key=None, keep_csv=True, bucket=None):
         """Writes csv file to s3.
 
         Parameters
@@ -983,7 +985,7 @@ class QFrame(Tool):
         -------
         QFrame
         """
-        csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
+        csv_to_s3(csv_path, keep_csv=keep_csv, s3_key=s3_key, bucket=bucket)
         return self
 
     #AC: this probably needs to be removed
@@ -1020,11 +1022,13 @@ class QFrame(Tool):
         """
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
+        file_format = s3_name.split(".")[1]
 
         s3_to_rds_qf(self,
                     table,
                     s3_name=s3_name,
-                    schema=schema ,
+                    schema=schema,
+                    file_format = file_format,
                     if_exists=if_exists,
                     sep=sep,
                     use_col_names=use_col_names,
