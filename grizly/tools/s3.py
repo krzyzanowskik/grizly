@@ -50,12 +50,9 @@ class S3:
         folders = s3_key.split("/")
         self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
         try:
-            self.s3_obj = self.s3_resource.Object(self.bucket, self.full_s3_key)
-            self.last_modified = self.s3_obj.last_modified
+            self.last_modified = self.s3_resource.Object(self.bucket, self.full_s3_key).last_modified
         except:
-            self.s3_obj = None
             self.last_modified = None
-        # self.last_modified = self.s3_obj.last_modified
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
 
@@ -82,7 +79,7 @@ class S3:
         return wrapped
 
     def _can_upload(self):
-        if not self.s3_obj or self.min_time_window == 0:
+        if not self.last_modified or self.min_time_window == 0:
             return True
         now_utc = datetime.now(timezone.utc)
         diff = now_utc - self.last_modified

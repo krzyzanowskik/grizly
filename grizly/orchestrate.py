@@ -469,7 +469,7 @@ class Workflow:
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
-        self.tasks = tasks
+        self.tasks = [tasks]
         self.children = children
         self.execution_options = execution_options
         self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
