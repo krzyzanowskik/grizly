@@ -285,9 +285,9 @@ def check_if_exists(table, schema='', redshift_str=None):
     Parameters
     ----------
     redshift_str : str, optional
-        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
     """
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
 
     engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
     if schema == '':
@@ -360,10 +360,10 @@ def delete_where(table, schema='', redshift_str=None, *argv):
     schema : string, optional
         Specify the schema.
     redshift_str : str, optional
-        Redshift engine string, if None then 'mssql+pyodbc://Redshift'
+        Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
     """
     table_name = f'{schema}.{table}' if schema else f'{table}'
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
 
     if check_if_exists(table, schema):
         engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
@@ -388,7 +388,7 @@ def copy_table(schema, copy_from, to, redshift_str=None):
     print("Executing...")
     print(sql)
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
 
     engine = create_engine(redshift_str)
     engine.execute(sql)
