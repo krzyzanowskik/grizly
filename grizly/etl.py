@@ -19,7 +19,7 @@ except:
     pass
 
 
-def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
+def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False):
     """
     Writes table to csv file.
     Parameters
@@ -28,35 +28,26 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
         Path to csv file.
     sql : string
         SQL query.
-    engine : str, optional
-        Engine string. Required if cursor is not provided.
+    engine : str, required
+        Engine string.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     chunksize : int, default None
         If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-    cursor : Cursor, optional
-        The cursor to be used to execute the SQL, by default None
     """
-    if cursor:
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+    try:
+        con = engine.connect().connection
+        cursor = con.cursor()
         cursor.execute(sql)
-        close_cursor = False
-
-    else:
-        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
-
+    except:
         try:
             con = engine.connect().connection
             cursor = con.cursor()
             cursor.execute(sql)
         except:
-            try:
-                con = engine.connect().connection
-                cursor = con.cursor()
-                cursor.execute(sql)
-            except:
-                raise
-
-        close_cursor = True
+            raise
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
@@ -80,9 +71,8 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
         else:
             writer.writerows(cursor.fetchall())
 
-    if close_cursor:
-        cursor.close()
-        con.close()
+    cursor.close()
+    con.close()
 
     return cursor_row_count
 
@@ -160,8 +150,8 @@ def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError("'{}' is not valid for if_exists".format(if_exists))
 
-    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://Redshift'
-    bucket_name = bucket if bucket else 'teis-data'
+    redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
+    bucket_name = bucket if bucket else 'acoe-s3'
     engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}'

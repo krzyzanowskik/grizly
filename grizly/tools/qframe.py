@@ -68,15 +68,15 @@ class QFrame(Tool):
         Other engine strings:
 
         * DenodoPROD: "mssql+pyodbc://DenodoPROD",
-        * Redshift: "mssql+pyodbc://Redshift",
+        * Redshift: "mssql+pyodbc://redshift_acoe",
         * MariaDB: "mssql+pyodbc://retool_dev_db"
     """
     # KM: can we delete sql argument?
-    def __init__(self, data={}, engine='', sql='', getfields=[]):
+    def __init__(self, data={}, engine=None, sql=None, getfields=[]):
         self.tool_name = "QFrame"
-        self.engine =  engine if engine!='' else "mssql+pyodbc://DenodoODBC"
+        self.engine =  engine if engine else "mssql+pyodbc://DenodoODBC"
         self.data = data
-        self.sql = sql
+        self.sql = sql or ''
         self.getfields = getfields
         self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
         self.fieldtypes = ["dim", "num"]
@@ -804,7 +804,7 @@ class QFrame(Tool):
         return self
 
     ## Non SQL Processing qf.to_csv(), S3(csv).from_file().to_rds()
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, cursor=None, redshift_str=None, bucket=None):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None, keep_csv=True, redshift_str=None, bucket=None):
         """Writes QFrame table to Redshift database.
 
         Parameters
@@ -830,12 +830,10 @@ class QFrame(Tool):
             If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
         keep_csv : bool, optional
             Whether to keep the local csv copy after uploading it to Amazon S3, by default True
-        cursor : Cursor, optional
-            The cursor to be used to execute the SQL, by default None
         redshift_str : str, optional
-            Redshift engine string, by default 'mssql+pyodbc://Redshift'
+            Redshift engine string to pass to s3_to_rds_qf, by default None
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name to pass to s3_to_rds_qf, by default None
 
         Examples
         --------
@@ -855,7 +853,7 @@ class QFrame(Tool):
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
-        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize, cursor=cursor)
+        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
         csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
 
         s3_to_rds_qf(self,
@@ -1005,14 +1003,15 @@ class QFrame(Tool):
         use_col_names : bool, optional
             If True the data will be loaded by the names of columns, by default True
         redshift_str : str, optional
-            Redshift engine string, by default 'mssql+pyodbc://Redshift'
+            Redshift engine string, by default None
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name, by default None
 
         Returns
         -------
         QFrame
         """
+
         self.create_sql_blocks()
         self.sql = get_sql(self.data)
 
