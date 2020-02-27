@@ -302,19 +302,22 @@ class Crosstab:
                     counter += self.emptyrows[i]
             return counter
 
-        def get_cell_def(group, measure, level):
-            if level == "content":
-                value = self.content[group][measure]
-            elif level == "subtotals":
-                value = self.subtotals[group][measure]
+        def get_cell_def(group, column, level):
+            if column in self.dimensions:
+                value = group[self.dimensions.index(column)]
+            elif column in self.measures:
+                if level == "content":
+                    value = self.content[group][column]
+                elif level == "subtotals":
+                    value = self.subtotals[group][column]
 
             style = ""
-            if level in self.styling and measure in self.styling[level]:
-                style = self.styling[level][measure](value)
+            if level in self.styling and column in self.styling[level]:
+                style = self.styling[level][column](value)
 
-            if measure in self.formatter:
-                # value = self.formatter[measure].format(value)
-                value = self.formatter[measure](value)
+            if column in self.formatter:
+                # value = self.formatter[column].format(value)
+                value = self.formatter[column](value)
 
             return style, value
 
@@ -329,7 +332,10 @@ class Crosstab:
                         items.append(row[len(group)])
                 for item in items:
                     group.append(item)
-                    row_def.append(("h", get_rowspan(tuple(group)), 1, "", "", item))
+                    style, value = get_cell_def(group, columns[0], "content")
+                    row_def.append(
+                        ("h", get_rowspan(tuple(group)), 1, "", style, value)
+                    )
                     html = get_body(columns[1:], group, row_def, html)
                     if tuple(group) in self.subtotals:
                         name = self.subtotals_names.get(tuple(group)) or "Total"
@@ -345,7 +351,7 @@ class Crosstab:
                         html += f"  <tr>\n" + get_row(row_def) + "  </tr>\n"
                         if tuple(group) in self.emptyrows:
                             colspan = len(self.columns)
-                            rowspan = self.emptyrows[tuple(group)]
+                            # rowspan = self.emptyrows[tuple(group)]
                             for i in range(self.emptyrows[tuple(group)]):
                                 html += (
                                     f"  <tr>\n"
