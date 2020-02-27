@@ -253,7 +253,7 @@ def write_to(qf, table, schema, if_exists):
     table: string
     schema: string
     """
-    sql = qf.get_sql().sql
+    sql = qf.get_sql()
     columns = ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"])
     if schema != "":
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
