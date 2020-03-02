@@ -2,10 +2,9 @@ from numpy import isnan
 
 
 class Crosstab:
-    def __init__(self, caption="", formatter={}, styling={}, na_rep=0, css_class=""):
-        self.caption = caption
-        self.formatter = formatter
-        self.styling = styling
+    def __init__(self, formatter=None, styling=None, na_rep=0):
+        self.formatter = formatter or {}
+        self.styling = styling or {}
         self.na_rep = na_rep
         self.dimensions = []
         self.measures = []
@@ -83,9 +82,10 @@ class Crosstab:
         return self
 
     def apply_style(self, styling, level=["content", "subtotals"]):
-        for item in level:
-            self.styling[item] = {} if item not in self.styling else self.styling[item]
-            self.styling[item].update(styling)
+        for lev in level:
+            self.styling[lev] = {} if lev not in self.styling else self.styling[lev]
+            for col in styling:
+                self.styling[lev][col] = styling[col]
         return self
 
     def append(self, group, values, axis=0):
@@ -158,8 +158,8 @@ class Crosstab:
                 self.content.pop(group)
             elif group in self.subtotals:
                 self.subtotals.pop(group)
-            if group in self.emptyrow:
-                self.emptyrow.pop(group)
+            if group in self.emptyrows:
+                self.emptyrows.pop(group)
         elif axis == 1:
             self.columns.remove(group)
             if group in self.measures:
@@ -215,23 +215,22 @@ class Crosstab:
                 raise ValueError(f"Keys {unknown_keys} not found in columns")
             columns = []
             dimensions = []
-            for group in self.dimensions:
-                new_group = group if group not in groups else groups[group]
-                dimensions.append(new_group)
-                columns.append(new_group)
             measures = []
             content = {item: {} for item in self.content}
             subtotals = {item: {} for item in self.subtotals}
             formatter = {}
             styling = {level: {} for level in self.styling}
-            for group in self.measures:
+            for group in self.columns:
                 new_group = group if group not in groups else groups[group]
-                measures.append(new_group)
                 columns.append(new_group)
-                for item in self.content:
-                    content[item][new_group] = self.content[item][group]
-                for item in self.subtotals:
-                    subtotals[item][new_group] = self.subtotals[item][group]
+                if group in self.dimensions:
+                    dimensions.append(new_group)
+                elif group in self.measures:
+                    measures.append(new_group)
+                    for item in self.content:
+                        content[item][new_group] = self.content[item][group]
+                    for item in self.subtotals:
+                        subtotals[item][new_group] = self.subtotals[item][group]
                 if group in self.formatter:
                     formatter[new_group] = self.formatter[group]
                 for level in self.styling:
@@ -242,6 +241,8 @@ class Crosstab:
             self.dimensions = dimensions
             self.content = content
             self.subtotals = subtotals
+            self.formatter = formatter
+            self.styling = styling
         return self
 
     def add_subtotals(self, columns, aggregation={}, names={}):
@@ -404,13 +405,10 @@ class Crosstab:
 
             return html
 
-        caption = (
-            "<caption>\n" + self.caption + "</caption>\n" if self.caption != "" else ""
-        )
         thead = "<thead>\n" + get_header() + "</thead>\n"
         tbody = "<tbody>\n" + get_body(self.dimensions, [], [], "") + "</tbody>\n"
 
-        table = f"<table>\n" + caption + thead + tbody + "</table>\n"
+        table = f"<table>\n" + thead + tbody + "</table>\n"
 
         return table
 
