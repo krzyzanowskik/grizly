@@ -12,11 +12,13 @@ if platform.startswith("linux"):
     default_config_dir = "/root/.grizly"
 else:
     default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
+
 import dask
 import time
 import logging
 from logging import config
 from json import load
+
 
 def read_config():    
     try:
@@ -288,14 +290,14 @@ def check_if_exists(table, schema='', redshift_str=None):
         Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
     """
     redshift_str = redshift_str if redshift_str else 'mssql+pyodbc://redshift_acoe'
-
     engine = create_engine(redshift_str, encoding='utf8', poolclass=NullPool)
-    if schema == '':
+    
+    if not schema:
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
     else:
         sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
 
-    return not pd.read_sql_query(sql = sql_exists, con=engine).empty
+    return not pd.read_sql_query(sql=sql_exists, con=engine).empty
 
 
 def check_if_valid_type(type:str):
@@ -473,13 +475,3 @@ def get_last_working_day(utc=True):
         t += timedelta(days=-1)
     return str(t.date())
 
-
-def initialize_logging(config_path):
-
-    class UTCFormatter(logging.Formatter):
-        converter = time.gmtime
-    with open(config_path) as f:
-        conf = load(f)
-    for formatter in conf["formatters"]:
-        conf["formatters"][formatter]["()"] = UTCFormatter
-    logging.config.dictConfig(conf)

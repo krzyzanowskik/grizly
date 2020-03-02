@@ -75,6 +75,8 @@ class QFrame(Tool):
     def __init__(self, data={}, engine=None, sql=None, getfields=[]):
         self.tool_name = "QFrame"
         self.engine =  engine if engine else "mssql+pyodbc://DenodoODBC"
+        if not isinstance(self.engine, str):
+            raise ValueError("QFrame engine is not of type: str")
         self.data = data
         self.sql = sql or ''
         self.getfields = getfields
@@ -791,8 +793,6 @@ class QFrame(Tool):
         ----------
         table : str
             Name of SQL table.
-        engine : str
-            Engine string (where we want to create table).
         schema : str, optional
             Specify the schema.
 
@@ -800,7 +800,7 @@ class QFrame(Tool):
         -------
         QFrame
         """
-        create_table(qf=self, table=table, engine=self.engine, schema=schema, char_size=char_size)
+        create_table(qf=self, table=table, engine_str=self.engine, schema=schema, char_size=char_size)
         return self
 
     ## Non SQL Processing qf.to_csv(), S3(csv).from_file().to_rds()
@@ -912,7 +912,7 @@ class QFrame(Tool):
         return df
 
 
-    def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
+    def to_sql(self, table, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.to_sql.
 
@@ -920,8 +920,6 @@ class QFrame(Tool):
         ----------
         table : str
             Name of SQL table.
-        engine : str
-            Engine string.
         schema : string, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'

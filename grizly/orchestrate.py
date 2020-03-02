@@ -250,6 +250,11 @@ class Listener:
         if not isinstance(self, EmailListener):  # to be done properly with TriggerListener subclass
             if self.trigger:
                 listener_store[self.name] = {"last_trigger_run": str(self.last_trigger_run)}
+            else:
+                if isinstance(self.last_data_refresh, dt.date):
+                    listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+                else:
+                    listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
         else:
             if isinstance(self.last_data_refresh, dt.date):
                 listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
