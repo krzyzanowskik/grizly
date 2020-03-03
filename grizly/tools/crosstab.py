@@ -1,4 +1,5 @@
 from numpy import isnan
+import logging
 
 
 class Crosstab:
@@ -20,6 +21,11 @@ class Crosstab:
         self.columns = dimensions + measures
 
         content = {}
+        if df[dimensions].isnull().values.any():
+            df[dimensions] = df[dimensions].fillna("")
+            print(
+                "NaN values occured in dimensions and has been replaced with empty strings."
+            )
         for group in df[dimensions].values:
             filters = [
                 f"`{column}`=='{item}'" "" for column, item in zip(dimensions, group)
