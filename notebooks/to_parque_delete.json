@@ -56,7 +56,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "current_fiscal_quarter_short_number": {
           "type": "",
@@ -64,7 +64,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "current_fiscal_week_short_number": {
           "type": "",
@@ -73,7 +73,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "current_fiscal_year": {
           "type": "",
@@ -82,7 +82,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "customer_account_number_suffix": {
           "type": "",
@@ -127,7 +127,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "fiscal_month_short_number": {
           "type": "",
@@ -424,7 +424,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "total_work_days_week": {
           "type": "",
@@ -433,7 +433,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "work_day_of_month": {
           "type": "",
@@ -442,7 +442,7 @@
           "order_by": "",
           "expression": "",
           "select": "",
-          "custom_type": "INTEGER"
+          "custom_type": "BIGINT"
         },
         "worldwide_customer_level_1": {
           "type": "",
@@ -505,13 +505,48 @@
           "order_by": "",
           "expression": "CURRENT_DATE()",
           "select": "",
-          "custom_type": ""
+          "custom_type": "TIMESTAMP"
         }
       },
       "where": "trade_interco_indicator = 'T' AND segment_name = 'Industrial Solutions'",
       "distinct": "",
       "having": "",
       "limit": ""
+    }
+  },
+  "sales_daily_news_emea_2": {
+    "select": {
+      "table": "sales_daily_news_emea",
+      "schema": "te_global_data",
+      "fields": {
+        "business_unit_group": {
+          "type": "",
+          "as": "",
+          "group_by": "",
+          "order_by": "",
+          "expression": "",
+          "select": "",
+          "custom_type": "VARCHAR(10)"
+        },
+        "business_unit_group_name": {
+          "type": "",
+          "as": "",
+          "group_by": "",
+          "order_by": "",
+          "expression": "",
+          "select": "",
+          "custom_type": "VARCHAR(40)"
+        },
+        "current_fiscal_week_short_number": {
+          "type": "",
+          "as": "",
+          "group_by": "",
+          "order_by": "",
+          "expression": "",
+          "select": "",
+          "custom_type": "BIGINT"
+        }
+      }
     }
   }
 }

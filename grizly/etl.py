@@ -202,10 +202,10 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
             ;commit;
             """
     elif file_format.upper() == "PARQUET":
+        iam_role = aws_access_key_id = config["default"]["iam_role"]
         sql = f"""
             COPY {table_name} FROM 's3://{bucket_name}/{s3_name}'
-            access_key_id '{aws_access_key_id}'
-            secret_access_key '{aws_secret_access_key}'
+            IAM_ROLE  '{iam_role}'
             FORMAT AS PARQUET
             ;commit;
             """

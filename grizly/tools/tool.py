@@ -27,6 +27,9 @@ class Tool:
         """Saves data to Parquet file.
         TO CHECK: I don't think we need chunksize anymore since we do chunks with
         sql
+
+        Note: You need to use BIGINT and not INTEGER as custom_type in QFrame. The
+        problem is that parquet files use int64 and INTEGER is only int4
         
         Parameters
         ----------
