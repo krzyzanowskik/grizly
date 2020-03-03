@@ -230,7 +230,7 @@ class S3:
         --------
         >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
         >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
-        >>> s3.from_file()
+        >>> s3 = s3.from_file()
         'test_table.csv' uploaded to 'acoe-s3' bucket as 'analytics_project_starter/test/test_table.csv'
         """
         file_path = os.path.join(self.file_dir, self.file_name)
@@ -303,7 +303,7 @@ class S3:
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
+        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
         DataFrame saved in 'C:\\Users\\test.csv'
         'test.csv' uploaded to 'acoe-s3' bucket as 'bulk/test.csv'
         'C:\\Users\\test.csv' has been removed
