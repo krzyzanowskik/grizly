@@ -255,6 +255,7 @@ def csv_to_s3(csv_path, s3_key: str = None, keep_csv=True, bucket: str = None):
     bucket_name = bucket if bucket else "teis-data"
     s3 = boto3.resource("s3")
     bucket = s3.Bucket(bucket_name)
+    s3_key = s3_key or ""
 
     # if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
 
