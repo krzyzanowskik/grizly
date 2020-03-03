@@ -14,12 +14,16 @@ from .utils import check_if_exists, get_path, read_config
 # config_path = get_path('.grizly', 'config.json')
 # config = Config().from_json(config_path)
 try:
-    os.environ["HTTPS_PROXY"] = read_config()["https"]  # remove the second option once whole team has moved to Config
+    os.environ["HTTPS_PROXY"] = read_config()[
+        "https"
+    ]  # remove the second option once whole team has moved to Config
 except:
     pass
 
 
-def to_csv(qf, csv_path, sql, engine=None, sep="\t", chunksize=None, debug=False, cursor=None):
+def to_csv(
+    qf, csv_path, sql, engine=None, sep="\t", chunksize=None, debug=False, cursor=None
+):
     """
     Writes table to csv file.
     Parameters
@@ -114,9 +118,15 @@ def create_table(qf, table, engine_str, schema="", char_size=500):
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
             if sql_blocks["types"][item] == "VARCHAR(500)":
-                column = sql_blocks["select_aliases"][item] + " " + "VARCHAR({})".format(char_size)
+                column = (
+                    sql_blocks["select_aliases"][item]
+                    + " "
+                    + "VARCHAR({})".format(char_size)
+                )
             else:
-                column = sql_blocks["select_aliases"][item] + " " + sql_blocks["types"][item]
+                column = (
+                    sql_blocks["select_aliases"][item] + " " + sql_blocks["types"][item]
+                )
             columns.append(column)
 
         columns_str = ", ".join(columns)
@@ -128,8 +138,18 @@ def create_table(qf, table, engine_str, schema="", char_size=500):
         print("Table {} has been created successfully.".format(sql))
 
 
-def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
-                    , if_exists="fail", sep="\t", use_col_names=True, redshift_str=None, bucket=None):
+def s3_to_rds_qf(
+    qf,
+    table,
+    s3_name,
+    schema="",
+    file_format="csv",
+    if_exists="fail",
+    sep="\t",
+    use_col_names=True,
+    redshift_str=None,
+    bucket=None,
+):
     """
     Writes s3 to Redshift database.
 
@@ -176,12 +196,16 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
         else:
             pass
     else:
-        create_table(qf, table, engine=redshift_str, schema=schema)
+        create_table(qf, table, engine_str=redshift_str, schema=schema)
 
-    if s3_name.split(".")[1] != file_format:
-        s3_name += file_format
+    if s3_name.split(".")[1] != file_format.lower():
+        s3_name += file_format.lower()
 
-    col_names = "(" + ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"]) + ")" if use_col_names else ""
+    col_names = (
+        "(" + ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"]) + ")"
+        if use_col_names
+        else ""
+    )
 
     config = ConfigParser()
     config.read(get_path(".aws", "credentials"))
@@ -190,7 +214,15 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
 
     print("Loading {} data into {} ...".format(s3_name, table_name))
 
-    if file_format.upper() == "CSV":
+    if file_format.upper() == "PARQUET":
+        sql = f"""
+            COPY {table_name} FROM 's3://{bucket_name}/{s3_name}'
+            access_key_id '{aws_access_key_id}'
+            secret_access_key '{aws_secret_access_key}'
+            FORMAT AS PARQUET
+            ;commit;
+            """
+    else:
         sql = f"""
             COPY {table_name} {col_names} FROM 's3://{bucket_name}/{s3_name}'
             access_key_id '{aws_access_key_id}'
@@ -199,14 +231,6 @@ def s3_to_rds_qf(qf, table, s3_name, schema="", file_format="csv"
             FORMAT AS CSV
             NULL ''
             IGNOREHEADER 1
-            ;commit;
-            """
-    elif file_format.upper() == "PARQUET":
-        iam_role = aws_access_key_id = config["default"]["iam_role"]
-        sql = f"""
-            COPY {table_name} FROM 's3://{bucket_name}/{s3_name}'
-            IAM_ROLE  '{iam_role}'
-            FORMAT AS PARQUET
             ;commit;
             """
 
@@ -253,7 +277,7 @@ def write_to(qf, table, schema, if_exists):
     table: string
     schema: string
     """
-    sql = qf.get_sql().sql
+    sql = qf.get_sql()
     columns = ", ".join(qf.data["select"]["sql_blocks"]["select_aliases"])
     if schema != "":
         sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
@@ -274,7 +298,7 @@ def write_to(qf, table, schema, if_exists):
             engine.execute(sql_statement)
             print(f"Data has been appended to {table}")
     else:
-        create_table(qf=qf, table=table, engine=engine, schema=schema)
+        create_table(qf=qf, table=table, engine_str=engine, schema=schema)
         engine.execute(sql_statement)
 
 
@@ -399,7 +423,9 @@ def df_to_s3(
         df = clean(df)
 
     df = clean_colnames(df)
-    df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
+    df.columns = df.columns.str.strip().str.replace(
+        " ", "_"
+    )  # Redshift won't accept column names with spaces
 
     df.to_csv(filepath, sep=sep, encoding="utf-8", index=False, chunksize=chunksize)
     print(f"{filename} created in {filepath}")
@@ -421,7 +447,9 @@ def df_to_s3(
         else:
             pass
     else:
-        df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
+        df.head(1).to_sql(
+            table_name, schema=schema, index=False, con=engine, dtype=dtype
+        )
 
     if not keep_csv:
         os.remove(filepath)
@@ -431,8 +459,12 @@ def clean_colnames(df):
 
     reserved_words = ["user"]
 
-    df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
-    df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
+    df.columns = df.columns.str.strip().str.replace(
+        " ", "_"
+    )  # Redshift won't accept column names with spaces
+    df.columns = [
+        f'"{col}"' if col.lower() in reserved_words else col for col in df.columns
+    ]
 
     return df
 
@@ -477,7 +509,9 @@ def clean(df):
         df_string_cols.applymap(remove_inside_quotes)
         .applymap(remove_inside_single_quote)
         .replace(to_replace="\\", value="")
-        .replace(to_replace="\n", value="", regex=True)  # regex=True means "find anywhere within the string"
+        .replace(
+            to_replace="\n", value="", regex=True
+        )  # regex=True means "find anywhere within the string"
     )
     df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
 
@@ -487,8 +521,17 @@ def clean(df):
     return df
 
 
-def build_copy_statement(file_name, schema, table_name, file_format, sep="\t", time_format=None, bucket=None, s3_dir=None,
-                        remove_inside_quotes=False):
+def build_copy_statement(
+    file_name,
+    schema,
+    table_name,
+    file_format="csv",
+    sep="\t",
+    time_format=None,
+    bucket=None,
+    s3_dir=None,
+    remove_inside_quotes=False,
+):
     """[summary]
 
     Parameters
@@ -516,7 +559,9 @@ def build_copy_statement(file_name, schema, table_name, file_format, sep="\t", t
     if not s3_dir:
         s3_key = file_name
     else:
-        s3_key = s3_dir + file_name if s3_dir.endswith("/") else s3_dir + "/" + file_name
+        s3_key = (
+            s3_dir + file_name if s3_dir.endswith("/") else s3_dir + "/" + file_name
+        )
 
     config = ConfigParser()
     config.read(get_path(".aws", "credentials"))
@@ -528,7 +573,7 @@ def build_copy_statement(file_name, schema, table_name, file_format, sep="\t", t
         access_key_id '{aws_access_key_id}'
         secret_access_key '{aws_secret_access_key}'
         delimiter '{sep}'
-        FORMAT AS {file_format}
+        FORMAT AS {file_format.upper()}
         NULL ''
         IGNOREHEADER 1
         ;commit;
@@ -539,7 +584,13 @@ def build_copy_statement(file_name, schema, table_name, file_format, sep="\t", t
         last_line_pos = len(sql) - len(";commit;") - indent
         spaces = indent * " "  # print formatting
         time_format_argument = f"timeformat '{time_format}'"
-        sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
+        sql = (
+            sql[:last_line_pos]
+            + time_format_argument
+            + "\n"
+            + spaces[:-1]
+            + sql[last_line_pos:]
+        )
 
     if remove_inside_quotes:
         sql = sql.replace("REMOVEQUOTES", r"CSV QUOTE AS '\"'")
@@ -551,7 +602,7 @@ def s3_to_rds(
     file_name,
     table_name=None,
     schema="",
-    file_format="CSV",
+    file_format="csv",
     time_format=None,
     if_exists="fail",
     sep="\t",
@@ -592,7 +643,7 @@ def s3_to_rds(
     engine = create_engine(redshift_str, encoding="utf8", poolclass=NullPool)
 
     if not table_name:
-        table_name = file_name.replace(file_format, "")
+        table_name = file_name.replace(f".{file_format.lower()}", "")
 
     if check_if_exists(table_name, schema, redshift_str=redshift_str):
         if if_exists == "fail":
@@ -608,7 +659,7 @@ def s3_to_rds(
         file_name=file_name,
         schema=schema,
         table_name=table_name,
-        format=file_format,
+        file_format=file_format,
         sep=sep,
         time_format=time_format,
         bucket=bucket_name,
