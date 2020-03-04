@@ -84,7 +84,7 @@ class S3:
             return True
 
         now_utc = datetime.now(timezone.utc)
-        diff = now_utc - self.last_modified
+        diff = now_utc - last_modified
         diff_seconds = diff.seconds
         if diff_seconds < self.min_time_window:
             return False
@@ -107,7 +107,8 @@ class S3:
         print(f"bucket: \t'{self.bucket}'")
         print(f"file_dir: \t'{self.file_dir}'")
         try:
-            print(f"last_modified: \t {self.last_modified}")
+            print(f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}")
+
         except:
             pass
         print(f"redshift_str: \t'{self.redshift_str}'")
