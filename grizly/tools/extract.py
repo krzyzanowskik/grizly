@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
 #Rename to Extract and remove existing Extract class
-class Tool:
+class Extract:
     def __init__(self):
         self.df = None
         self.path = None
@@ -80,15 +80,6 @@ class Tool:
         copy_df_to_excel(df=self.df, input_excel_path=input_excel_path, output_excel_path=output_excel_path
                             , sheet_name=sheet_name, startrow=startrow, startcol=startcol, index=index, header=header)
                             
-
-
-class SQLDB():
-
-    def get_column_types():
-        pass
-
-    def create_table(self):
-        pass
 
 def copy_df_to_excel(df, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
     writer = pd.ExcelWriter(input_excel_path, engine='openpyxl')

@@ -1,11 +1,11 @@
 import pandas
 import requests
 from ..config import Config, _validate_config
-from .tool import Tool
+from .extract import Extract
 from .s3 import S3
 
 
-class GitHub(Tool):
+class GitHub(Extract):
 
     def __init__(self, username:str=None, username_password:str=None, pages:int=100
                     , proxies:dict=None, config_key="standard"):
