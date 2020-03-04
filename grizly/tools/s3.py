@@ -46,13 +46,8 @@ class S3:
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
         self.redshift_str = redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
-        self.s3_resource = resource("s3")
         folders = s3_key.split("/")
         self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
-        try:
-            self.last_modified = self.s3_resource.Object(self.bucket, self.full_s3_key).last_modified
-        except:
-            self.last_modified = None
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
 
@@ -69,7 +64,7 @@ class S3:
         def wrapped(self, *args, **kwargs):
             s3_key = self.s3_key + self.file_name
             try:
-                self.s3_resource.Object(self.bucket, s3_key).load()
+                resource('s3').Object(self.bucket, s3_key).load()
             except ClientError as e:
                 if e.response["Error"]["Code"] == "404":
                     raise FileNotFoundError(f"{s3_key} file not found")
@@ -79,8 +74,15 @@ class S3:
         return wrapped
 
     def _can_upload(self):
-        if not self.last_modified or self.min_time_window == 0:
+
+        try:
+            last_modified = resource('s3').Object(self.bucket, self.full_s3_key).last_modified
+        except:
+            last_modified = None
+
+        if not last_modified or self.min_time_window == 0:
             return True
+
         now_utc = datetime.now(timezone.utc)
         diff = now_utc - self.last_modified
         diff_seconds = diff.seconds
@@ -115,7 +117,7 @@ class S3:
         """
         files = []
         key_list = self.s3_key.split("/")[:-1]
-        for file in self.s3_resource.meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)["Contents"]:
+        for file in resource('s3').meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)["Contents"]:
             file_list = file["Key"].split("/")
             for item in key_list:
                 file_list.pop(0)
@@ -128,7 +130,7 @@ class S3:
         """Removes S3 file.
         """
         s3_key = self.s3_key + self.file_name
-        self.s3_resource.Object(self.bucket, s3_key).delete()
+        resource('s3').Object(self.bucket, s3_key).delete()
 
         print(f"'{s3_key}' has been removed successfully")
         return self
@@ -175,7 +177,7 @@ class S3:
         s3_key = s3_key if s3_key else self.s3_key
         bucket = bucket if bucket else self.bucket
 
-        s3_file = self.s3_resource.Object(bucket, s3_key + file_name)
+        s3_file = resouce('s3').Object(bucket, s3_key + file_name)
 
         source_s3_key = self.s3_key + self.file_name
         copy_source = {"Key": source_s3_key, "Bucket": self.bucket}
@@ -213,7 +215,7 @@ class S3:
             raise FileNotFoundError(f"File '{file_path}' does not exist.")
 
         s3_key = self.s3_key + self.file_name
-        s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        s3_file = resource('s3').Object(self.bucket, s3_key)
         
         if not self._can_upload():
             msg = (
@@ -248,7 +250,7 @@ class S3:
         file_path = os.path.join(self.file_dir, self.file_name)
 
         s3_key = self.s3_key + self.file_name
-        s3_file = self.s3_resource.Object(self.bucket, s3_key)
+        s3_file = resource('s3').Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
         print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
@@ -378,7 +380,7 @@ class S3:
         print(f"Data has been copied to {table_name}")
 
     def _create_table_like_s3(self, table_name, sep, types):
-        s3_client = self.s3_resource.meta.client
+        s3_client = resource('s3').meta.client
 
         obj_content = s3_client.select_object_content(
             Bucket=self.bucket,
@@ -441,3 +443,4 @@ class S3:
         engine.execute(sql)
 
         print("Table {} has been created successfully.".format(table_name))
+
