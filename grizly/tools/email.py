@@ -1,6 +1,6 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
 from exchangelib import Credentials, Account, Message, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
-from .config import Config
+from ..config import Config
 from os.path import basename
 import os
 import logging

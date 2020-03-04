@@ -6,9 +6,7 @@ from pandas import read_sql, read_csv, merge, concat
 
 from ..grizly.utils import get_path
 
-from ..grizly.tools.qframe import QFrame, union, join, initiate
-
-from ..grizly.sqlbuilder import build_column_strings, get_sql
+from ..grizly.tools.qframe import QFrame, union, join, initiate, build_column_strings, get_sql
 
 excel_path = get_path("tables.xlsx", from_where="here")
 engine_string = "sqlite:///" + get_path("Chinook.sqlite", from_where="here")

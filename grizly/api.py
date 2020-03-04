@@ -22,14 +22,6 @@ from .utils import (
     file_extension
 )
 
-from .extract import(
-    Extract
-)
-
-from .load import(
-    Load
-)
-
 from .etl import (
     to_s3,
     read_s3,
@@ -39,12 +31,9 @@ from .etl import (
     df_to_s3
 )
 
-from .excel import (
-    copy_df_to_excel,
-    Excel
-)
+from .tools.email import Email
 
-from .email import Email
+from .tools.sfdc import SFDC
 
 from .tools.s3 import (
     S3
