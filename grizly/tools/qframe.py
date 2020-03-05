@@ -6,12 +6,20 @@ from copy import deepcopy
 import json
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from functools import partial
+import logging
+import deprecation
 
-from ..excel import copy_df_to_excel
-from ..etl import to_csv, create_table, csv_to_s3, s3_to_rds_qf, write_to
+from .s3 import csv_to_s3
+from .sqldb import SQLDB, check_if_valid_type
+from ..etl import to_csv, s3_to_rds_qf
 from ..ui.qframe import SubqueryUI, FieldUI
-from ..utils import check_if_valid_type, get_path
+from ..utils import get_path
 from .extract import Extract
+
+deprecation.deprecated = partial(
+    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
+)
 
 
 def prepend_table(data, expression):
@@ -73,7 +81,7 @@ class QFrame(Extract):
             print("Your QFrame is empty.")
             return self
         else:
-            self.data["select"]["sql_blocks"] = build_column_strings(self.data)
+            self.data["select"]["sql_blocks"] = _build_column_strings(self.data)
             return self
 
     def validate_data(self, data):
@@ -98,7 +106,7 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        duplicates = get_duplicated_columns(self.data)
+        duplicates = _get_duplicated_columns(self.data)
 
         if duplicates != {}:
             print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
@@ -819,10 +827,10 @@ class QFrame(Extract):
         QFrame
         """
         self.create_sql_blocks()
-        self.sql = get_sql(self.data)
+        self.sql = _get_sql(self.data)
         return self.sql
 
-    # Remove and move to Tool()
+    @deprecation.deprecated(details="Moved to SQLDB class",)
     def create_table(self, table, schema="", char_size=500, engine_str=None):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
@@ -839,12 +847,13 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        if engine_str == None:
-            engine_str = self.engine
-        create_table(
-            qf=self,
+        engine_str = engine_str or self.engine
+        self.create_sql_blocks()
+        sqldb = SQLDB(db="redshift", engine_str=engine_str)
+        sqldb.create_table(
+            columns=self.get_fields(aliased=True),
+            types=self.get_dtypes(),
             table=table,
-            engine_str=engine_str,
             schema=schema,
             char_size=char_size,
         )
@@ -913,7 +922,7 @@ class QFrame(Extract):
         QFrame
         """
         self.create_sql_blocks()
-        self.sql = get_sql(self.data)
+        self.sql = _get_sql(self.data)
 
         to_csv(
             self,
@@ -940,7 +949,7 @@ class QFrame(Extract):
 
         return self
 
-    def to_table(self, table, schema="", if_exists="fail"):
+    def to_table(self, table, schema="", if_exists="fail", char_size=500):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
 
         Parameters
@@ -960,7 +969,22 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        write_to(qf=self, table=table, schema=schema, if_exists=if_exists)
+        self.create_sql_blocks()
+        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        sqldb.create_table(
+            columns=self.get_fields(aliased=True),
+            types=self.get_dtypes(),
+            table=table,
+            schema=schema,
+            char_size=char_size,
+        )
+        sqldb.write_to(
+            table=table,
+            columns=self.get_fields(aliased=True),
+            sql=self.get_sql(),
+            schema=schema,
+            if_exists=if_exists,
+        )
         return self
 
     def to_df(self):
@@ -974,7 +998,7 @@ class QFrame(Extract):
             Data generated from sql.
         """
         self.create_sql_blocks()
-        self.sql = get_sql(self.data)
+        self.sql = _get_sql(self.data)
 
         con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
         df = read_sql(sql=self.sql, con=con)
@@ -1110,7 +1134,7 @@ class QFrame(Extract):
         QFrame
         """
         self.create_sql_blocks()
-        self.sql = get_sql(self.data)
+        self.sql = _get_sql(self.data)
         file_format = s3_name.split(".")[1]
 
         s3_to_rds_qf(
@@ -1598,12 +1622,8 @@ def initiate(
 
     print(f"Data saved in {json_path}")
 
-import sqlparse
-from copy import deepcopy
-import re
 
-
-def get_duplicated_columns(data):
+def _get_duplicated_columns(data):
     columns = {}
     fields = data["select"]["fields"]
 
@@ -1626,11 +1646,11 @@ def get_duplicated_columns(data):
     return duplicates
 
 
-def build_column_strings(data):
+def _build_column_strings(data):
     if data == {}:
         return {}
 
-    duplicates = get_duplicated_columns(data)
+    duplicates = _get_duplicated_columns(data)
     assert (
         duplicates == {}
     ), f"""Some of your fields have the same aliases {duplicates}. Use your_qframe.remove() to remove or your_qframe.rename() to rename columns."""
@@ -1716,22 +1736,22 @@ def build_column_strings(data):
     return sql_blocks
 
 
-def get_sql(data):
+def _get_sql(data):
     if data == {}:
         return ""
 
-    data["select"]["sql_blocks"] = build_column_strings(data)
+    data["select"]["sql_blocks"] = _build_column_strings(data)
     sql = ""
 
     if "union" in data["select"]:
         iterator = 1
         sq_data = deepcopy(data[f"sq{iterator}"])
-        sql += get_sql(sq_data)
+        sql += _get_sql(sq_data)
 
         for union in data["select"]["union"]["union_type"]:
             union_type = data["select"]["union"]["union_type"][iterator - 1]
             sq_data = deepcopy(data[f"sq{iterator+1}"])
-            right_table = get_sql(sq_data)
+            right_table = _get_sql(sq_data)
 
             sql += f" {union_type} {right_table}"
             iterator += 1
@@ -1756,13 +1776,13 @@ def get_sql(data):
         elif "join" in data["select"]:
             iterator = 1
             sq_data = deepcopy(data[f"sq{iterator}"])
-            left_table = get_sql(sq_data)
+            left_table = _get_sql(sq_data)
             sql += f" FROM ({left_table}) sq{iterator}"
 
             for join in data["select"]["join"]["join_type"]:
                 join_type = data["select"]["join"]["join_type"][iterator - 1]
                 sq_data = deepcopy(data[f"sq{iterator+1}"])
-                right_table = get_sql(sq_data)
+                right_table = _get_sql(sq_data)
                 on = data["select"]["join"]["on"][iterator - 1]
 
                 sql += f" {join_type} ({right_table}) sq{iterator+1}"
@@ -1776,7 +1796,7 @@ def get_sql(data):
             and "sq" in data
         ):
             sq_data = deepcopy(data["sq"])
-            sq = get_sql(sq_data)
+            sq = _get_sql(sq_data)
             sql += f" FROM ({sq}) sq"
 
         if "where" in data["select"] and data["select"]["where"] != "":
@@ -1798,7 +1818,6 @@ def get_sql(data):
 
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     return sql
-
 
 
 if __name__ == "__main__":

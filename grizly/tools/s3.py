@@ -2,15 +2,20 @@ from boto3 import resource
 from botocore.exceptions import ClientError
 import os
 from datetime import datetime, timezone
-from ..utils import get_path, check_if_exists
-from ..etl import clean
+from .sqldb import SQLDB
+from ..utils import get_path, clean, clean_colnames
 from pandas import DataFrame, read_csv, read_parquet
 from sqlalchemy import create_engine
 from io import StringIO
 from csv import reader
 from configparser import ConfigParser
-from functools import wraps
+from functools import wraps, partial
 import logging
+import deprecation
+
+deprecation.deprecated = partial(
+    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
+)
 
 
 class S3:
@@ -42,15 +47,20 @@ class S3:
         logger=None,
     ):
         self.file_name = file_name
-        self.s3_key = s3_key
+        self.s3_key = s3_key or ""
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
         self.redshift_str = (
             redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
         )
         self.s3_resource = resource("s3")
-        folders = s3_key.split("/")
-        self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
+        try:
+            folders = s3_key.split("/")
+            self.full_s3_key = os.path.join(*folders, self.file_name).replace(
+                "\\", " / "
+            )
+        except:
+            self.full_s3_key = file_name
         try:
             self.s3_obj = self.s3_resource.Object(self.bucket, self.full_s3_key)
             self.last_modified = self.s3_obj.last_modified
@@ -61,10 +71,7 @@ class S3:
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
 
-        if self.s3_key == "":
-            raise ValueError("s3_key not specified")
-
-        if not self.s3_key.endswith("/"):
+        if not self.s3_key.endswith("/") and self.s3_key != "":
             self.s3_key += "/"
         self.logger = logger or logging.getLogger(__name__)
 
@@ -296,7 +303,14 @@ class S3:
 
         return df
 
-    def from_df(self, df: DataFrame, sep: str = "\t", clean_df=False, keep_file=True):
+    def from_df(
+        self,
+        df: DataFrame,
+        sep: str = "\t",
+        clean_df: bool = False,
+        keep_file: bool = True,
+        chunksize: int = 10000,
+    ):
         """Saves DataFrame in S3.
 
         Examples
@@ -314,6 +328,12 @@ class S3:
             DataFrame object
         sep : str, optional
             Separator, by default '\t'
+        clean_df : bool, optional
+            Whether to clean DataFrame before loading to s3, by default True
+        keep_file : bool, optional
+            Whether to keep the local file copy after uploading it to Amazon S3, by default True
+        chunksize : int, optional
+            Rows to write at a time from DataFrame to csv, by default 10000
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
@@ -327,8 +347,9 @@ class S3:
 
         if clean_df:
             df = clean(df)
+        df = clean_colnames(df)
 
-        df.to_csv(file_path, index=False, sep=sep)
+        df.to_csv(file_path, index=False, sep=sep, chunksize=chunksize)
         print(f"DataFrame saved in '{file_path}'")
 
         return self.from_file(keep_file=keep_file)
@@ -365,16 +386,14 @@ class S3:
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
+        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
         table_name = f"{schema}.{table}" if schema else table
 
-        engine = create_engine(self.redshift_str, encoding="utf8")
-
-        if check_if_exists(table, schema, redshift_str=self.redshift_str):
+        if sqldb.check_if_exists(table, schema):
             if if_exists == "fail":
-                raise AssertionError("Table {} already exists".format(table_name))
+                raise AssertionError(f"Table {table_name} already exists")
             elif if_exists == "replace":
-                sql = "DELETE FROM {}".format(table_name)
-                engine.execute(sql)
+                sqldb.delete_from(table=table, schema=schema)
                 print("SQL table has been cleaned up successfully.")
             else:
                 pass
@@ -400,7 +419,9 @@ class S3:
             ;commit;
             """
 
-        engine.execute(sql)
+        con = sqldb.get_connection()
+        con.execute(sql)
+        con.close()
         print(f"Data has been copied to {table_name}")
 
     def _create_table_like_s3(self, table_name, sep, types):
@@ -469,3 +490,77 @@ class S3:
         engine.execute(sql)
 
         print("Table {} has been created successfully.".format(table_name))
+
+
+@deprecation.deprecated(details="Use S3.to_file function instead",)
+def s3_to_csv(csv_path, bucket: str = None):
+    """
+    Writes s3 to csv file.
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    s3 = S3(
+        file_name=os.path.basename(csv_path),
+        bucket=bucket,
+        file_dir=os.path.dirname(csv_path),
+    )
+    s3.to_file()
+
+
+@deprecation.deprecated(details="Use S3.from_file function instead",)
+def csv_to_s3(csv_path, s3_key: str = None, keep_csv=True, bucket: str = None):
+    """
+    Writes csv file to s3.
+
+    Parameters
+    ----------
+    csv_path : string
+        Path to csv file.
+    keep_csv : bool, optional
+        Whether to keep the local csv copy after uploading it to Amazon S3, by default True
+    bucket : str, optional
+        Bucket name, if None then 'teis-data'
+    """
+    s3 = S3(
+        file_name=os.path.basename(csv_path),
+        s3_key=s3_key,
+        bucket=bucket,
+        file_dir=os.path.dirname(csv_path),
+    )
+    return s3.from_file(keep_file=keep_csv)
+
+
+@deprecation.deprecated(
+    details="Use S3.from_df and S3.to_rds functions instead. Parameters: schema, dtype, if_exists are ignored.",
+)
+def df_to_s3(
+    df,
+    table_name,
+    schema=None,
+    dtype=None,
+    sep="\t",
+    clean_df=False,
+    keep_csv=True,
+    chunksize=10000,
+    if_exists="fail",
+    redshift_str=None,
+    s3_key=None,
+    bucket=None,
+):
+    s3 = S3(
+        file_name=table_name + ".csv",
+        s3_key=s3_key,
+        bucket=bucket,
+        file_dir=os.getcwd(),
+        redshift_str=redshift_str,
+    )
+
+    return s3.from_df(
+        df=df, sep=sep, clean_df=clean_df, keep_file=keep_csv, chunksize=chunksize
+    )
+

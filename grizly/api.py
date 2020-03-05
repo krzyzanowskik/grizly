@@ -1,13 +1,6 @@
-from .tools.qframe import (
-    QFrame,
-    union,
-    join,
-    initiate
-)
+from .tools.qframe import QFrame, union, join, initiate
 
-from .tools.crosstab import (
-    Crosstab
-)
+from .tools.crosstab import Crosstab
 
 from .ui.start import UI
 
@@ -19,25 +12,16 @@ from .utils import (
     copy_table,
     set_cwd,
     get_path,
-    file_extension
+    file_extension,
 )
 
-from .etl import (
-    to_s3,
-    read_s3,
-    csv_to_s3,
-    s3_to_csv,
-    s3_to_rds,
-    df_to_s3
-)
+from .etl import s3_to_rds
 
 from .tools.email import Email
 
 from .tools.sfdc import SFDC
 
-from .tools.s3 import (
-    S3
-)
+from .tools.s3 import S3, s3_to_csv, csv_to_s3, df_to_s3
 
 from .tools.github import GitHub
 
@@ -48,6 +32,6 @@ from .config import Config
 from os import environ
 
 try:
-    cwd = environ['USERPROFILE']
+    cwd = environ["USERPROFILE"]
 except KeyError:
     pass
