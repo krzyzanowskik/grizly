@@ -2,11 +2,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from pandas import read_sql_query
 import os
-from functools import partial
-import deprecation
 
 from ..config import Config
 from ..utils import get_sfdc_columns
+
+from functools import partial
+import deprecation
 
 deprecation.deprecated = partial(
     deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
@@ -17,12 +18,17 @@ class SQLDB:
     def __init__(self, db: str, engine_str: str = None, config_key: str = None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="sqldb")
-        if db not in {"denodo", "redshift"}:
+        else:
+            config = {
+                "redshift": "mssql+pyodbc://redshift_acoe",
+                "denodo": "mssql+pyodbc://DenodoPROD",
+            }
+        if db not in {"redshift", "denodo"}:
             raise NotImplementedError(
                 f"DB {db} not supported yet. Supported DB's: 'redshift', 'denodo'"
             )
         self.db = db
-        self.engine_str = engine_str or os.getenv(db) or config.get(db)
+        self.engine_str = engine_str or config.get(db)
 
     def get_connection(self):
         engine = create_engine(self.engine_str, encoding="utf8", poolclass=NullPool)
@@ -412,7 +418,7 @@ def get_columns(
     db = db.lower()
     if db == "denodo" or db == "redshift":
         sqldb = SQLDB(db=db, engine_str=engine_str)
-        sqldb.get_columns(
+        return sqldb.get_columns(
             table=table,
             schema=schema,
             column_types=column_types,

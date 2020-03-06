@@ -1,5 +1,5 @@
 import ipywidgets as w
-from ..utils import get_columns
+from ..tools.sqldb import SQLDB
 from ..store import Store
 
 
@@ -75,9 +75,8 @@ class SubqueryUI:
 
     def _btn_build_subquery_step_2(self, button):
         self.label.value = "Select Your Columns"
-        cols = get_columns(
-            schema=self.schema.value, table=self.table.value, db=self.database
-        )
+        sqldb = SQLDB(db=self.database)
+        cols = sqldb.get_columns(schema=self.schema.value, table=self.table.value)
         self.options = [w.Checkbox(description=col) for col in cols]
         self._options = w.Box(
             self.options, layout=w.Layout(height="200px", width="auto", display="grid")

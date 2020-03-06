@@ -1,28 +1,9 @@
 import os
-import json
-from sqlalchemy import create_engine
 import pandas as pd
-from sqlalchemy.pool import NullPool
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-from datetime import datetime, timedelta
-import dask
-import time
 import logging
 from logging import config
-from json import load
-
-
-def read_config():
-    try:
-        json_path = os.path.join(
-            os.environ["USERPROFILE"], ".grizly", "etl_config.json"
-        )
-        with open(json_path, "r") as f:
-            config = json.load(f)
-    except KeyError:
-        config = "Error with UserProfile"
-    return config
 
 
 def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
@@ -179,9 +160,9 @@ def file_extension(file_path: str):
     Returns
     -------
     str
-        File extension, eg '.csv'
+        File extension, eg 'csv'
     """
-    return os.path.splitext(file_path)[1]
+    return os.path.splitext(file_path)[1][1:]
 
 
 def clean_colnames(df):

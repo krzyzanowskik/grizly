@@ -14,10 +14,10 @@ Welcome to grizly's documentation!
    content/tutorials
    content/api_QFrame
    content/api_Email
-   content/api_Extract
-   content/api_Load
    content/api_S3
    content/api_Config
+   content/api_SQLDB
+   content/api_Crosstab
 
 
 Indices and tables

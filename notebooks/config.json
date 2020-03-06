@@ -31,6 +31,10 @@
           "password": "my_password",
           "organizationId": "OrgId"
         }
+      },
+	  "sqldb": {
+          "redshift": "mssql+pyodbc://redshift_acoe",
+          "denodo": "mssql+pyodbc://DenodoPROD"
       }
     }
   }
