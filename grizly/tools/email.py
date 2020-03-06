@@ -1,6 +1,16 @@
 from exchangelib.protocol import BaseProtocol, NoVerifyHTTPAdapter
-from exchangelib import Credentials, Account, Message, Configuration, DELEGATE, FaultTolerance, HTMLBody, FileAttachment
+from exchangelib import (
+    Credentials,
+    Account,
+    Message,
+    Configuration,
+    DELEGATE,
+    FaultTolerance,
+    HTMLBody,
+    FileAttachment,
+)
 from ..config import Config
+from ..utils import get_path
 from os.path import basename
 import os
 import logging
@@ -8,16 +18,26 @@ from typing import Union, List
 
 
 class EmailAccount:
-    def __init__(self, email_address, email_password, alias=None, config_key=None, proxy=None):
+    def __init__(
+        self, email_address, email_password, alias=None, config_key=None, proxy=None
+    ):
         if config_key:
             config = Config().get_service(config_key=config_key, service="email")
         self.logger = logging.getLogger(__name__)
-        self.email_address = email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
-        self.email_password = email_password or os.getenv("EMAIL_PASSWORD") or config.get("email_password")
+        self.email_address = (
+            email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
+        )
+        self.email_password = (
+            email_password
+            or os.getenv("EMAIL_PASSWORD")
+            or config.get("email_password")
+        )
         self.alias = alias
         self.credentials = Credentials(self.email_address, self.email_password)
         self.config = Configuration(
-            server="smtp.office365.com", credentials=self.credentials, retry_policy=FaultTolerance(max_wait=2 * 60)
+            server="smtp.office365.com",
+            credentials=self.credentials,
+            retry_policy=FaultTolerance(max_wait=2 * 60),
         )
         self.proxy = proxy or os.getenv("HTTPS_PROXY")
         if self.proxy:
@@ -35,7 +55,9 @@ class EmailAccount:
             )
         except:
             self.logger.exception("Email account could not be accessed.")
-            raise ConnectionError("Connection to Exchange server failed. Please check your credentials and/or proxy settings")
+            raise ConnectionError(
+                "Connection to Exchange server failed. Please check your credentials and/or proxy settings"
+            )
 
 
 class Email:
@@ -78,15 +100,23 @@ class Email:
         self.config_key = config_key or "standard"
         if None in [email_address, email_password]:
             config = Config().get_service(config_key=self.config_key, service="email")
-        self.email_address = email_address or config.get("email_address") or os.getenv("EMAIL_ADDRESS")
-        self.email_password = email_password or config.get("email_password") or os.getenv("EMAIL_PASSWORD")
+        self.email_address = (
+            email_address or config.get("email_address") or os.getenv("EMAIL_ADDRESS")
+        )
+        self.email_password = (
+            email_password
+            or config.get("email_password")
+            or os.getenv("EMAIL_PASSWORD")
+        )
         self.attachment_paths = self.to_list(attachment_paths)
         self.attachments = self.get_attachments(self.attachment_paths)
         try:
             self.proxy = (
                 proxy
                 or os.getenv("HTTPS_PROXY")
-                or Config().get_service(config_key=self.config_key, service="proxies").get("https")
+                or Config()
+                .get_service(config_key=self.config_key, service="proxies")
+                .get("https")
             )
         except:
             self.proxy = None
@@ -101,9 +131,17 @@ class Email:
         if not attachment_paths:
             return None
 
-        names = [self.get_attachment_name(attachment_path) for attachment_path in attachment_paths]
-        contents = [self.get_attachment_content(attachment_path, name) for attachment_path, name in zip(attachment_paths, names)]
-        attachments = [self.get_attachment(name, content) for name, content in zip(names, contents)]
+        names = [
+            self.get_attachment_name(attachment_path)
+            for attachment_path in attachment_paths
+        ]
+        contents = [
+            self.get_attachment_content(attachment_path, name)
+            for attachment_path, name in zip(attachment_paths, names)
+        ]
+        attachments = [
+            self.get_attachment(name, content) for name, content in zip(names, contents)
+        ]
 
         return attachments
 
@@ -118,8 +156,25 @@ class Email:
         doc_formats = ["pdf", "ppt", "pptx", "xls", "xlsx", "doc", "docx"]
         archive_formats = ["zip", "7z", "tar", "rar", "iso"]
         compression_formats = ["pkl", "gzip", "bz", "bz2"]
-        binary_formats = image_formats + doc_formats + archive_formats + compression_formats
-        text_formats = ["txt", "log", "html", "xml", "json", "py", "md", "ini", "yaml", "yml", "toml", "cfg", "csv", "tsv"]
+        binary_formats = (
+            image_formats + doc_formats + archive_formats + compression_formats
+        )
+        text_formats = [
+            "txt",
+            "log",
+            "html",
+            "xml",
+            "json",
+            "py",
+            "md",
+            "ini",
+            "yaml",
+            "yml",
+            "toml",
+            "cfg",
+            "csv",
+            "tsv",
+        ]
 
         attachment_format = attachment_name.split(".")[-1]
         if attachment_format in binary_formats:
@@ -178,7 +233,9 @@ class Email:
         None
         """
 
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        BaseProtocol.HTTP_ADAPTER_CLS = (
+            NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        )
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
 
@@ -187,7 +244,11 @@ class Email:
 
         if not send_as:
             try:
-                send_as = Config().get_service(config_key=self.config_key, service="email").get("send_as")
+                send_as = (
+                    Config()
+                    .get_service(config_key=self.config_key, service="email")
+                    .get("send_as")
+                )
             except KeyError:
                 pass
             send_as = self.email_address

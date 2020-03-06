@@ -4,14 +4,20 @@ import os
 import sqlparse
 from copy import deepcopy
 import json
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
+import logging
 
-from ..excel import copy_df_to_excel
-from ..etl import to_csv, create_table, csv_to_s3, s3_to_rds_qf, write_to
+from .s3 import S3
+from .sqldb import SQLDB, check_if_valid_type
 from ..ui.qframe import SubqueryUI, FieldUI
-from ..utils import check_if_valid_type, get_path
+from ..utils import get_path
 from .extract import Extract
+
+import deprecation
+from functools import partial
+
+deprecation.deprecated = partial(
+    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
+)
 
 
 def prepend_table(data, expression):
@@ -73,7 +79,7 @@ class QFrame(Extract):
             print("Your QFrame is empty.")
             return self
         else:
-            self.data["select"]["sql_blocks"] = build_column_strings(self.data)
+            self.data["select"]["sql_blocks"] = _build_column_strings(self.data)
             return self
 
     def validate_data(self, data):
@@ -98,7 +104,7 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        duplicates = get_duplicated_columns(self.data)
+        duplicates = _get_duplicated_columns(self.data)
 
         if duplicates != {}:
             print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
@@ -144,9 +150,6 @@ class QFrame(Extract):
         return SubqueryUI(store_path=store_path).build_subquery(
             self, subquery, database
         )
-
-    # def build_field(self, store_path):
-    #     return FieldUI(store_path=store_path).build_field(store_path, self)
 
     def from_json(self, json_path, subquery=""):
         """Reads QFrame.data from json file.
@@ -819,10 +822,10 @@ class QFrame(Extract):
         QFrame
         """
         self.create_sql_blocks()
-        self.sql = get_sql(self.data)
+        self.sql = _get_sql(self.data)
         return self.sql
 
-    # Remove and move to Tool()
+    @deprecation.deprecated(details="Moved to SQLDB class",)
     def create_table(self, table, schema="", char_size=500, engine_str=None):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
@@ -839,18 +842,21 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        if engine_str == None:
-            engine_str = self.engine
-        create_table(
-            qf=self,
+        engine_str = engine_str or self.engine
+        self.create_sql_blocks()
+        sqldb = SQLDB(db="redshift", engine_str=engine_str)
+        sqldb.create_table(
+            columns=self.get_fields(aliased=True),
+            types=self.get_dtypes(),
             table=table,
-            engine_str=engine_str,
             schema=schema,
             char_size=char_size,
         )
         return self
 
-    ## Non SQL Processing qf.to_csv(), S3(csv).from_file().to_rds()
+    @deprecation.deprecated(
+        details="Use QFrame.to_csv and then S3 class to move S3 to redshift",
+    )
     def to_rds(
         self,
         table,
@@ -903,8 +909,8 @@ class QFrame(Extract):
         >>> playlist_track = {"select": {"fields":{"PlaylistId": {"type" : "dim"}, "TrackId": {"type" : "dim"}}, "table" : "PlaylistTrack"}}
         >>> qf = QFrame(engine=engine_string).read_dict(playlist_track).limit(5)
         >>> qf = qf.to_rds(table='test', csv_path=get_path('test.csv'), schema='sandbox', if_exists='replace', redshift_str='mssql+pyodbc://redshift_acoe', bucket='acoe-s3', keep_csv=False)
-        test.csv uploaded to s3 as test.csv
-        SQL table has been cleaned up successfully.
+        'test.csv' uploaded to 'acoe-s3' bucket as 'test.csv'
+        Records from table sandbox.test has been removed successfully.
         Loading test.csv data into sandbox.test ...
         Data has been copied to sandbox.test
 
@@ -912,35 +918,30 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        self.create_sql_blocks()
-        self.sql = get_sql(self.data)
-
-        to_csv(
-            self,
-            csv_path,
-            self.sql,
-            engine=self.engine,
-            sep=sep,
-            chunksize=chunksize,
-            cursor=cursor,
+        self.to_csv(
+            csv_path=csv_path, sep=sep, chunksize=chunksize, cursor=cursor,
         )
-        csv_to_s3(csv_path, keep_csv=keep_csv, bucket=bucket)
-
-        s3_to_rds_qf(
-            self,
-            table,
-            s3_name=os.path.basename(csv_path),
+        s3 = S3(
+            file_name=os.path.basename(csv_path),
+            file_dir=os.path.dirname(csv_path),
+            bucket=bucket,
+            redshift_str=redshift_str,
+        )
+        s3.from_file()
+        if use_col_names:
+            column_order = self.get_fields(aliased=True)
+        else:
+            column_order = None
+        s3.to_rds(
+            table=table,
             schema=schema,
             if_exists=if_exists,
             sep=sep,
-            use_col_names=use_col_names,
-            redshift_str=redshift_str,
-            bucket=bucket,
+            column_order=column_order,
         )
-
         return self
 
-    def to_table(self, table, schema="", if_exists="fail"):
+    def to_table(self, table, schema="", if_exists="fail", char_size=500):
         """Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
 
         Parameters
@@ -960,7 +961,22 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        write_to(qf=self, table=table, schema=schema, if_exists=if_exists)
+        self.create_sql_blocks()
+        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        sqldb.create_table(
+            columns=self.get_fields(aliased=True),
+            types=self.get_dtypes(),
+            table=table,
+            schema=schema,
+            char_size=char_size,
+        )
+        sqldb.write_to(
+            table=table,
+            columns=self.get_fields(aliased=True),
+            sql=self.get_sql(),
+            schema=schema,
+            if_exists=if_exists,
+        )
         return self
 
     def to_df(self):
@@ -973,12 +989,12 @@ class QFrame(Extract):
         DataFrame
             Data generated from sql.
         """
-        self.create_sql_blocks()
-        self.sql = get_sql(self.data)
-
-        con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
-        df = read_sql(sql=self.sql, con=con)
+        sql = self.get_sql()
+        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        con = sqldb.get_connection()
+        df = read_sql(sql=sql, con=con)
         self.df = df
+        con.close()
         return df
 
     def to_sql(
@@ -1032,7 +1048,8 @@ class QFrame(Extract):
             * callable with signature ``(pd_table, conn, keys, data_iter)``.
         """
         df = self.to_df()
-        con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
+        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        con = sqldb.get_connection()
 
         df.to_sql(
             name=table,
@@ -1045,9 +1062,10 @@ class QFrame(Extract):
             dtype=dtype,
             method=method,
         )
+        con.close()
         return self
 
-    # AC: this probably needs to be removed
+    @deprecation.deprecated(details="Use S3.from_file function instead",)
     def csv_to_s3(self, csv_path, s3_key=None, keep_csv=True, bucket=None):
         """Writes csv file to s3.
 
@@ -1064,10 +1082,15 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        csv_to_s3(csv_path, keep_csv=keep_csv, s3_key=s3_key, bucket=bucket)
-        return self
+        s3 = S3(
+            file_name=os.path.basename(csv_path),
+            s3_key=s3_key,
+            bucket=bucket,
+            file_dir=os.path.dirname(csv_path),
+        )
+        return s3.from_file(keep_file=keep_csv)
 
-    # AC: this probably needs to be removed
+    @deprecation.deprecated(details="Use S3.to_rds function instead",)
     def s3_to_rds(
         self,
         table,
@@ -1109,21 +1132,21 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        self.create_sql_blocks()
-        self.sql = get_sql(self.data)
-        file_format = s3_name.split(".")[1]
-
-        s3_to_rds_qf(
-            self,
-            table,
-            s3_name=s3_name,
+        file_name = s3_name.split("/")[-1]
+        s3_key = "/".join(s3_name.split("/")[:-1])
+        s3 = S3(
+            file_name=file_name, s3_key=s3_key, bucket=bucket, redshift_str=redshift_str
+        )
+        if use_col_names:
+            column_order = self.get_fields(aliased=True)
+        else:
+            column_order = None
+        s3.to_rds(
+            table=table,
             schema=schema,
-            file_format=file_format,
             if_exists=if_exists,
             sep=sep,
-            use_col_names=use_col_names,
-            redshift_str=redshift_str,
-            bucket=bucket,
+            column_order=column_order,
         )
         return self
 
@@ -1598,12 +1621,8 @@ def initiate(
 
     print(f"Data saved in {json_path}")
 
-import sqlparse
-from copy import deepcopy
-import re
 
-
-def get_duplicated_columns(data):
+def _get_duplicated_columns(data):
     columns = {}
     fields = data["select"]["fields"]
 
@@ -1626,11 +1645,11 @@ def get_duplicated_columns(data):
     return duplicates
 
 
-def build_column_strings(data):
+def _build_column_strings(data):
     if data == {}:
         return {}
 
-    duplicates = get_duplicated_columns(data)
+    duplicates = _get_duplicated_columns(data)
     assert (
         duplicates == {}
     ), f"""Some of your fields have the same aliases {duplicates}. Use your_qframe.remove() to remove or your_qframe.rename() to rename columns."""
@@ -1716,22 +1735,22 @@ def build_column_strings(data):
     return sql_blocks
 
 
-def get_sql(data):
+def _get_sql(data):
     if data == {}:
         return ""
 
-    data["select"]["sql_blocks"] = build_column_strings(data)
+    data["select"]["sql_blocks"] = _build_column_strings(data)
     sql = ""
 
     if "union" in data["select"]:
         iterator = 1
         sq_data = deepcopy(data[f"sq{iterator}"])
-        sql += get_sql(sq_data)
+        sql += _get_sql(sq_data)
 
         for union in data["select"]["union"]["union_type"]:
             union_type = data["select"]["union"]["union_type"][iterator - 1]
             sq_data = deepcopy(data[f"sq{iterator+1}"])
-            right_table = get_sql(sq_data)
+            right_table = _get_sql(sq_data)
 
             sql += f" {union_type} {right_table}"
             iterator += 1
@@ -1756,13 +1775,13 @@ def get_sql(data):
         elif "join" in data["select"]:
             iterator = 1
             sq_data = deepcopy(data[f"sq{iterator}"])
-            left_table = get_sql(sq_data)
+            left_table = _get_sql(sq_data)
             sql += f" FROM ({left_table}) sq{iterator}"
 
             for join in data["select"]["join"]["join_type"]:
                 join_type = data["select"]["join"]["join_type"][iterator - 1]
                 sq_data = deepcopy(data[f"sq{iterator+1}"])
-                right_table = get_sql(sq_data)
+                right_table = _get_sql(sq_data)
                 on = data["select"]["join"]["on"][iterator - 1]
 
                 sql += f" {join_type} ({right_table}) sq{iterator+1}"
@@ -1776,7 +1795,7 @@ def get_sql(data):
             and "sq" in data
         ):
             sq_data = deepcopy(data["sq"])
-            sq = get_sql(sq_data)
+            sq = _get_sql(sq_data)
             sql += f" FROM ({sq}) sq"
 
         if "where" in data["select"] and data["select"]["where"] != "":
@@ -1798,7 +1817,6 @@ def get_sql(data):
 
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     return sql
-
 
 
 if __name__ == "__main__":

@@ -4,19 +4,26 @@ import openpyxl
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
-#Rename to Extract and remove existing Extract class
+# Rename to Extract and remove existing Extract class
 class Extract:
     def __init__(self):
         self.df = None
         self.path = None
 
-    def to_csv(self, csv_path, chunksize=None, debug=False, cursor=None):
+    def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False, cursor=None):
         if self.tool_name == "QFrame":
-            self.create_sql_blocks()
             self.sql = self.get_sql()
             if "denodo" in self.engine.lower():
                 self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
-            row_count = to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize, cursor=cursor)
+            row_count = to_csv(
+                columns=self.get_fields(aliased=True),
+                csv_path=csv_path,
+                sql=self.sql,
+                engine=self.engine,
+                sep=sep,
+                chunksize=chunksize,
+                cursor=cursor,
+            )
             if debug:
                 return row_count
             return self
@@ -30,7 +37,7 @@ class Extract:
 
         Note: You need to use BIGINT and not INTEGER as custom_type in QFrame. The
         problem is that parquet files use int64 and INTEGER is only int4
-        
+
         Parameters
         ----------
         parquet_path : str
@@ -48,12 +55,20 @@ class Extract:
         if self.tool_name == "QFrame":
             self.create_sql_blocks()
             self.sql = self.get_sql()
-            con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
+            con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
             self.df = pd.read_sql(sql=self.sql, con=con)
-            self.df.astype(dtype = self.dtypes).to_parquet(parquet_path)
+            self.df.astype(dtype=self.dtypes).to_parquet(parquet_path)
 
-    def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0
-                    , index=False, header=False):
+    def to_excel(
+        self,
+        input_excel_path,
+        output_excel_path,
+        sheet_name="",
+        startrow=0,
+        startcol=0,
+        index=False,
+        header=False,
+    ):
         """Saves data to Excel file.
 
         Parameters
@@ -77,24 +92,58 @@ class Extract:
         -------
         Class
         """
-        copy_df_to_excel(df=self.df, input_excel_path=input_excel_path, output_excel_path=output_excel_path
-                            , sheet_name=sheet_name, startrow=startrow, startcol=startcol, index=index, header=header)
-                            
+        copy_df_to_excel(
+            df=self.df,
+            input_excel_path=input_excel_path,
+            output_excel_path=output_excel_path,
+            sheet_name=sheet_name,
+            startrow=startrow,
+            startcol=startcol,
+            index=index,
+            header=header,
+        )
 
-def copy_df_to_excel(df, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
-    writer = pd.ExcelWriter(input_excel_path, engine='openpyxl')
+
+def copy_df_to_excel(
+    df,
+    input_excel_path,
+    output_excel_path,
+    sheet_name="",
+    startrow=0,
+    startcol=0,
+    index=False,
+    header=False,
+):
+    writer = pd.ExcelWriter(input_excel_path, engine="openpyxl")
     book = openpyxl.load_workbook(input_excel_path)
     writer.book = book
 
     writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
 
-    df.to_excel(writer, sheet_name=sheet_name,startrow=startrow,startcol=startcol,index=index,header=header)
+    df.to_excel(
+        writer,
+        sheet_name=sheet_name,
+        startrow=startrow,
+        startcol=startcol,
+        index=index,
+        header=header,
+    )
 
     writer.path = output_excel_path
     writer.save()
     writer.close()
 
-def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False, cursor=None):
+
+def to_csv(
+    columns,
+    csv_path,
+    sql,
+    engine=None,
+    sep="\t",
+    chunksize=None,
+    debug=False,
+    cursor=None,
+):
     """
     Writes table to csv file.
     Parameters
@@ -117,7 +166,7 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
         close_cursor = False
 
     else:
-        engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+        engine = create_engine(engine, encoding="utf8", poolclass=NullPool)
 
         try:
             con = engine.connect().connection
@@ -133,9 +182,9 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
 
         close_cursor = True
 
-    with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
+    with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
-        writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"])
+        writer.writerow(columns)
         cursor_row_count = 0
         if isinstance(chunksize, int):
             if chunksize == 1:
@@ -160,5 +209,4 @@ def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False
         con.close()
 
     return cursor_row_count
-
 

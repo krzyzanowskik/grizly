@@ -6,7 +6,14 @@ from pandas import read_sql, read_csv, merge, concat
 
 from ..grizly.utils import get_path
 
-from ..grizly.tools.qframe import QFrame, union, join, initiate, build_column_strings, get_sql
+from ..grizly.tools.qframe import (
+    QFrame,
+    union,
+    join,
+    initiate,
+    _build_column_strings,
+    _get_sql,
+)
 
 excel_path = get_path("tables.xlsx", from_where="here")
 engine_string = "sqlite:///" + get_path("Chinook.sqlite", from_where="here")
@@ -85,19 +92,19 @@ def test_read_dict():
 
 def test_create_sql_blocks():
     q = QFrame().read_dict(deepcopy(orders))
-    assert build_column_strings(q.data)["select_names"] == [
+    assert _build_column_strings(q.data)["select_names"] == [
         "Order as Bookings",
         "Part",
         "Customer",
         "Value",
     ]
-    assert build_column_strings(q.data)["select_aliases"] == [
+    assert _build_column_strings(q.data)["select_aliases"] == [
         "Bookings",
         "Part",
         "Customer",
         "Value",
     ]
-    assert q.create_sql_blocks().data["select"]["sql_blocks"] == build_column_strings(
+    assert q.create_sql_blocks().data["select"]["sql_blocks"] == _build_column_strings(
         q.data
     )
 
@@ -273,7 +280,7 @@ def test_get_sql():
     sql = q.get_sql()
     # write_out(str(sql))
     assert clean_testexpr(sql) == clean_testexpr(testsql)
-    assert sql == get_sql(q.data)
+    assert sql == _get_sql(q.data)
 
 
 def test_to_csv():
