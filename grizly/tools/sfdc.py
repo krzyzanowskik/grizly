@@ -218,24 +218,11 @@ class SFDCResponseBulk(SFDCResponse):
         self.logger = logger
 
     def to_df(self, dtype=None):
-        # l = []
-        # for item in self.data:
-        #     row = []
-        #     for column in self.columns:
-        #         row.append(item[column])
-        #     l.append(row)
-
-        # df = (pd
-        #         .DataFrame(l, columns=self.columns, dtype=dtype)
-        #         .replace(to_replace=["None"], value=np.nan)
-        #         )
-
         df = (
             pd.DataFrame(self.data)
             .drop("attributes", axis=1)
             .replace(to_replace=["None"], value=np.nan)
         )
-
         return df
 
     def to_csv(self, file_path, sep="\t"):
