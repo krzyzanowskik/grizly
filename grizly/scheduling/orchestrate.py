@@ -22,13 +22,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 from exchangelib.errors import ErrorFolderNotFound
 
-from .config import Config
+from ..config import Config
 
-from .email import Email, EmailAccount
+from ..tools.email import Email, EmailAccount
 from exchangelib.errors import ErrorFolderNotFound
 
-from .etl import df_to_s3, s3_to_rds
-from .utils import read_config, get_path
+from ..tools.s3 import df_to_s3, s3_to_rds
+from ..utils import get_path
+from ..tools.sqldb import SQLDB
 
 LISTENER_STORE = get_path(
     "acoe_projects", "workflows_dev", "etc", "listener_store.json"
@@ -154,6 +155,13 @@ class Listener:
     A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
 
     Checks and stores table's last refresh/trigger date.
+
+
+    Paramaters
+    ----------
+    engine_str : str, optional
+        Use to overwrite the defaults. By default if db="denodo" then "mssql+pyodbc://DenodoPROD",
+        if db="redshift" then "mssql+pyodbc://redshift_acoe"
     """
 
     def __init__(
@@ -165,6 +173,7 @@ class Listener:
         field=None,
         query=None,
         db="denodo",
+        engine_str=None,
         trigger=None,
         trigger_type="default",
         delay=300,
@@ -173,6 +182,7 @@ class Listener:
         self.workflow = workflow
         self.name = workflow.name
         self.db = db
+        self.engine_str = engine_str
         self.schema = trigger.schema if trigger else schema
         self.table = table or trigger.table
         self.field = field
@@ -233,12 +243,7 @@ class Listener:
         return deco_retry
 
     def get_engine(self):
-
-        config = read_config()
-        engine_str = config[self.db]
-        engine = create_engine(engine_str, encoding="utf8", poolclass=NullPool)
-
-        return engine
+        return SQLDB(db=self.db, engine_str=self.engine_str).get_connection()
 
     def get_last_json_refresh(self, key):
         with open(LISTENER_STORE) as f:

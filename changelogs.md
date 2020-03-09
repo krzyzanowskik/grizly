@@ -26,7 +26,6 @@
 - Load
 - to_s3
 - read_s3
-- read_config
 - s3_to_rds_qf
 
 ### Not published

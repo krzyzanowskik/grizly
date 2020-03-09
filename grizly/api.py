@@ -4,7 +4,7 @@ from .utils import (
     file_extension,
 )
 from .store import Store
-from .config import Config
+from .config import Config, read_config
 
 from .ui.start import UI
 
