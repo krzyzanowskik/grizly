@@ -107,12 +107,12 @@ class S3:
         print(f"s3_key: \t'{self.s3_key}'")
         print(f"bucket: \t'{self.bucket}'")
         print(f"file_dir: \t'{self.file_dir}'")
-        try:
-            print(
-                f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}"
-            )
-        except:
-            pass
+        # try:
+        #     print(
+        #         f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}"
+        #     )
+        # except:
+        #     pass
         print(f"redshift_str: \t'{self.redshift_str}'")
 
     def list(self):
@@ -144,7 +144,6 @@ class S3:
         resource("s3").Object(self.bucket, s3_key).delete()
 
         print(f"'{s3_key}' has been removed successfully")
-        return self
 
     @_check_if_s3_exists
     def copy_to(
@@ -153,6 +152,7 @@ class S3:
         s3_key: str = None,
         bucket: str = None,
         keep_file: bool = True,
+        if_exists: {"fail", "skip", "replace", "archive"} = "replace",
     ):
         """Copies S3 file to another S3 file.
 
@@ -164,8 +164,15 @@ class S3:
             New S3 key, if None then the same as in class
         bucket : str, optional
             New bucket, if None then the same as in class
-        keep_file:
+        keep_file : bool, optional
             Whether to keep the original S3 file after copying it to another S3 file, by default True
+        if_exists : str, optional
+            How to behave if the output S3 already exists.
+
+            * fail: Raise ValueError
+            * skip: Abort without throwing an error
+            * replace: Overwrite existing file
+            * archive: Move old S3 to s3_key/archive/file_name(version)
 
         Examples
         --------
@@ -190,9 +197,28 @@ class S3:
         S3
             S3 class with new parameters
         """
+        if if_exists not in ("fail", "skip", "replace", "archive"):
+            raise ValueError(f"'{if_exists}' is not valid for if_exists")
         file_name = file_name if file_name else self.file_name
         s3_key = s3_key if s3_key else self.s3_key
         bucket = bucket if bucket else self.bucket
+
+        out_s3 = S3(
+            file_name=file_name,
+            s3_key=s3_key,
+            bucket=bucket,
+            file_dir=self.file_dir,
+            redshift_str=self.redshift_str,
+        )
+        exists = True if file_name in out_s3.list() else False
+
+        if exists:
+            if if_exists == "fail":
+                raise ValueError(f"{s3_key + file_name} already exists")
+            elif if_exists == "skip":
+                return self
+            elif if_exists == "archive":
+                out_s3.archive()
 
         s3_file = resource("s3").Object(bucket, s3_key + file_name)
 
@@ -207,15 +233,13 @@ class S3:
         if not keep_file:
             self.delete()
 
-        return S3(
-            file_name=file_name,
-            s3_key=s3_key,
-            bucket=bucket,
-            file_dir=self.file_dir,
-            redshift_str=self.redshift_str,
-        )
+        return out_s3
 
-    def from_file(self, keep_file=True):
+    def from_file(
+        self,
+        keep_file: bool = True,
+        if_exists: {"fail", "skip", "replace", "archive"} = "replace",
+    ):
         """Writes local file to S3.
 
         Parameters
@@ -226,6 +250,13 @@ class S3:
             making the upload almost-idempotent)
         keep_file:
             Whether to keep the local file copy after uploading it to Amazon S3, by default True
+        if_exists : str, optional
+            How to behave if the S3 already exists.
+
+            * fail: Raise ValueError
+            * skip: Abort without throwing an error
+            * replace: Overwrite existing file
+            * archive: Move old S3 to s3_key/archive/file_name(version)
 
         Examples
         --------
@@ -234,13 +265,26 @@ class S3:
         >>> s3 = s3.from_file()
         'test_table.csv' uploaded to 'acoe-s3' bucket as 'analytics_project_starter/test/test_table.csv'
         """
+        if if_exists not in ("fail", "skip", "replace", "archive"):
+            raise ValueError(f"'{if_exists}' is not valid for if_exists")
         file_path = os.path.join(self.file_dir, self.file_name)
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File '{file_path}' does not exist.")
 
+        exists = True if self.file_name in self.list() else False
+
+        if exists:
+            if if_exists == "fail":
+                raise ValueError(f"{self.s3_key + self.file_name} already exists")
+            elif if_exists == "skip":
+                return self
+            elif if_exists == "archive":
+                self.archive()
+
         s3_key = self.s3_key + self.file_name
         s3_file = resource("s3").Object(self.bucket, s3_key)
+
         if not self._can_upload():
             msg = (
                 f"File {self.file_name} was not uploaded because a recent version exists."
@@ -259,8 +303,19 @@ class S3:
         return self
 
     @_check_if_s3_exists
-    def to_file(self):
+    def to_file(
+        self, if_exists: {"fail", "skip", "replace"} = "replace",
+    ):
         r"""Writes S3 to local file.
+
+        Parameters
+        ----------
+        if_exists : str, optional
+            How to behave if the local file already exists.
+
+            * fail: Raise ValueError
+            * skip: Abort without throwing an error
+            * replace: Overwrite existing file
 
         Examples
         --------
@@ -268,7 +323,15 @@ class S3:
         'bulk/test.csv' was successfully downloaded to 'C:\Users\test.csv'
         >>> os.remove('C:\\Users\\test.csv')
         """
+        if if_exists not in ("fail", "skip", "replace"):
+            raise ValueError(f"'{if_exists}' is not valid for if_exists")
         file_path = os.path.join(self.file_dir, self.file_name)
+
+        if os.path.exists(file_path):
+            if if_exists == "fail":
+                raise ValueError(f"File {file_path} already exists")
+            elif if_exists == "skip":
+                return None
 
         s3_key = self.s3_key + self.file_name
         s3_file = resource("s3").Object(self.bucket, s3_key)
@@ -284,7 +347,7 @@ class S3:
             )
 
         file_path = os.path.join(self.file_dir, self.file_name)
-        self.to_file()
+        self.to_file(if_exists=kwargs.get("if_exists"))
 
         if file_extension(self.file_name) == "csv":
             sep = kwargs.get("sep")
@@ -304,6 +367,7 @@ class S3:
         clean_df: bool = False,
         keep_file: bool = True,
         chunksize: int = 10000,
+        if_exists: {"fail", "skip", "replace", "archive"} = "replace",
     ):
         """Saves DataFrame in S3.
 
@@ -328,6 +392,13 @@ class S3:
             Whether to keep the local file copy after uploading it to Amazon S3, by default True
         chunksize : int, optional
             Rows to write at a time from DataFrame to csv, by default 10000
+        if_exists : str, optional
+            How to behave if the S3 already exists.
+
+            * fail: Raise ValueError
+            * skip: Abort without throwing an error
+            * replace: Overwrite existing file
+            * archive: Move old S3 to s3_key/archive/file_name(version)
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
@@ -346,7 +417,7 @@ class S3:
         df.to_csv(file_path, index=False, sep=sep, chunksize=chunksize)
         print(f"DataFrame saved in '{file_path}'")
 
-        return self.from_file(keep_file=keep_file)
+        return self.from_file(keep_file=keep_file, if_exists=if_exists)
 
     @_check_if_s3_exists
     def to_rds(
@@ -441,6 +512,40 @@ class S3:
         con.execute(sql)
         con.close()
         print(f"Data has been copied to {table_name}")
+
+    def archive(self):
+        """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
+
+        Examples
+        --------
+        >>> s3 = S3('test_old.csv', 'bulk/test/', file_dir=r'C:\\Users')
+        >>> s3_arch = s3.archive()
+            'bulk/test/test_old.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'archive/bulk/test/test_old(0).csv'
+            'bulk/test/test_old.csv' has been removed successfully
+        >>> s3_arch.delete()
+            'archive/bulk/test/test_old(0).csv' has been removed successfully
+        """
+        s3_archive = S3(
+            file_name=self.file_name,
+            s3_key="archive/" + self.s3_key,
+            bucket=self.bucket,
+        )
+
+        version = 0
+        while True:
+            file_name = (
+                s3_archive.file_name.split(".")[0]
+                + f"({version})."
+                + s3_archive.file_name.split(".")[1]
+            )
+            if file_name not in s3_archive.list():
+                return self.copy_to(
+                    file_name=file_name,
+                    s3_key="archive/" + self.s3_key,
+                    keep_file=False,
+                )
+            else:
+                version += 1
 
     def _create_table_like_s3(self, table_name, sep, types):
         s3_client = resource("s3").meta.client
