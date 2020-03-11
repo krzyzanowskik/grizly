@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine import Engine
 from pandas import read_sql_query
 import os
 
@@ -31,6 +32,21 @@ class SQLDB:
         self.engine_str = engine_str or config.get(db)
 
     def get_connection(self):
+        """Returns sqlalchemy engine.
+        
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> con = sqldb.get_connection()
+        >>> con.execute("SELECT * FROM administration.table_tutorial").fetchall()
+        [('item1', 1.3, None, 3.5), ('item2', 0.0, None, None)]
+        >>> con.close()
+
+        Returns
+        -------
+        Engine
+            sqlalchemy Engine
+        """
         engine = create_engine(self.engine_str, encoding="utf8", poolclass=NullPool)
         try:
             con = engine.connect().connection
@@ -39,7 +55,14 @@ class SQLDB:
         return con
 
     def check_if_exists(self, table, schema=None):
-        """Checks if a table exists in Redshift."""
+        """Checks if a table exists in Redshift.
+        
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb.check_if_exists(table="table_tutorial", schema="administration")
+            True
+        """
         if self.db == "redshift":
             con = self.get_connection()
             if schema == None:
@@ -59,7 +82,8 @@ class SQLDB:
         ----------
         columns : list
         types : list
-        char_size : int, size of the VARCHAR field in the database column
+        char_size : int,
+            Size of the VARCHAR field in the database column
         """
         table_name = f"{schema}.{table}" if schema else table
 
@@ -91,6 +115,7 @@ class SQLDB:
         ----------
         if_exists : str, optional
             How to behave if the output table already exists.
+
             * fail: Raise a ValueError
             * drop: Drop table
         """
@@ -103,15 +128,16 @@ class SQLDB:
                 out_table_name = (
                     f"{out_schema}.{out_table}" if out_schema else out_table
                 )
-                if self.check_if_exists(table=out_table, schema=out_schema):
-                    if if_exists == "drop":
-                        sql = f"""
+                if (
+                    self.check_if_exists(table=out_table, schema=out_schema)
+                    and if_exists == "fail"
+                ):
+                    raise ValueError(f"Table {in_table_name} already exists")
+                sql = f"""
                         DROP TABLE IF EXISTS {out_table_name};
                         CREATE TABLE {out_table_name} AS
                         SELECT * FROM {in_table_name}
                         """
-                    elif if_exists == "fail":
-                        raise ValueError(f"Table {in_table_name} already exists")
                 con.execute(sql)
             con.close()
         return self
@@ -180,18 +206,26 @@ class SQLDB:
                 raise ValueError("Table doesn't exist. Use create_table first")
 
     def get_denodo_columns(
-        self, table, schema=None, column_types=False, columns=None, date_format="DATE",
+        self,
+        table,
+        schema: str = None,
+        column_types: bool = False,
+        columns: list = None,
+        date_format: str = "DATE",
     ):
         """Get column names (and optionally types) from Denodo view.
+
         Parameters
         ----------
-        table : str
+        table: str
             Name of table.
-        schema : str
+        schema: str
             Name of schema.
-        column_types : bool
+        column_types: bool
             True means user wants to get also data types.
-        date_format : str
+        columns: list
+            List of column names to retrive.
+        date_format: str
             Denodo date format differs from those from other databases. User can choose which format is desired.
         """
         where = (
@@ -251,17 +285,24 @@ class SQLDB:
             return col_names, col_types
 
     def get_redshift_columns(
-        self, table, schema=None, column_types=False, columns=None
+        self,
+        table,
+        schema: str = None,
+        column_types: bool = False,
+        columns: list = None,
     ):
         """Get column names (and optionally types) from a Redshift table.
+
         Parameters
         ----------
-        table : str
+        table: str
             Name of table.
-        schema : str
+        schema: str
             Name of schema.
-        column_types : bool
+        column_types: bool
             Whether to retrieve field types.
+        columns: list
+            List of column names to retrive.
         """
         con = self.get_connection()
         cursor = con.cursor()
@@ -323,7 +364,21 @@ class SQLDB:
     def get_columns(
         self, table, schema=None, column_types=False, date_format="DATE", columns=None,
     ):
-        """ Retrieves column names and optionally other table metadata """
+        """Retrieves column names and optionally other table metadata
+
+        Parameters
+        ----------
+        table: str
+            Name of table.
+        schema: str
+            Name of schema.
+        column_types: bool
+            True means user wants to get also data types.
+        columns: list
+            List of column names to retrive.
+        date_format: str
+            Denodo date format differs from those from other databases. User can choose which format is desired.
+        """
         if self.db == "denodo":
             return self.get_denodo_columns(
                 schema=schema,
