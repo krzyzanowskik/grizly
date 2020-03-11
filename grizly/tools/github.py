@@ -39,8 +39,8 @@ class GitHub(Extract):
             self.config = None
         self.df = None
 
-    def from_issues(self, org_name:str):
-        """Gets issues into a data frame
+    def from_issues(self, org_name: str):
+        """Gets issues into a data frame extract
         
         Parameters
         ----------
@@ -55,6 +55,7 @@ class GitHub(Extract):
             "http": "http://restrictedproxy.tycoelectronics.com:80",
             "https": "https://restrictedproxy.tycoelectronics.com:80",
             }
+        print("Test")
         records = []
         if self.username is None:
             self.username = _validate_config(config=Config.data[self.config_key], 
@@ -71,7 +72,9 @@ class GitHub(Extract):
                 break
             if page == 1:
                 records.append(["url","repository_name", "user_login", "assignees_login"
-                , "milestone_title", "title", "created_at", "updated_at", "state", "labels"])
+                , "milestone_title", "milestone_description", "milestone_open_issues"
+                , "milestone_created_at", "milestone_updated_at", "milestone_closed_at"
+                , "milestone_due_on", "title", "created_at", "updated_at", "state", "labels"])
             for i in range(len(data.json())):
                 record = []
                 record.append(data.json()[i]["url"])
@@ -80,8 +83,17 @@ class GitHub(Extract):
                 record.append(', '.join([assignee["login"] for assignee in data.json()[i]["assignees"]]))
                 try:
                     record.append(data.json()[i]["milestone"]["title"])
+                    record.append(data.json()[i]["milestone"]["description"])
+                    record.append(data.json()[i]["milestone"]["open_issues"])
+                    record.append(data.json()[i]["milestone"]["closed_issues"])
+                    record.append(data.json()[i]["milestone"]["created_at"])
+                    record.append(data.json()[i]["milestone"]["updated_at"])
+                    record.append(data.json()[i]["milestone"]["closed_at"])
+                    record.append(data.json()[i]["milestone"]["due_on"])
                 except:
-                    record.append("no_milestone")
+                    record.append(["no_milestone", "no_milestone", "no_milestone"
+                                , "no_milestone", "no_milestone", "no_milestone"
+                                , "no_milestone", "no_milestone"])
                 record.append(data.json()[i]["title"])
                 record.append(data.json()[i]["created_at"])
                 record.append(data.json()[i]["updated_at"])
