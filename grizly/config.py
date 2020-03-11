@@ -178,7 +178,12 @@ class Config:
                 print(f"Key '{key}' has been added.")
         return Config()
 
-    def get_service(self, service: str, config_key: str = None, env: str = None):
+    def get_service(
+        self,
+        service: {"email", "github", "sfdc", "proxies", "sqldb"},
+        config_key: str = None,
+        env: str = None,
+    ):
         """Returns dictionary data for given service and config key.
 
         Parameters
@@ -190,6 +195,7 @@ class Config:
             * 'github'
             * 'sfdc'
             * 'proxies'
+            * 'sqldb'
         config_key : str, optional
             Config key, by default 'standard'
         env : str, optional
@@ -248,7 +254,8 @@ def _validate_config(config: dict, services: list = None, env: str = None):
         * 'github'
         * 'sfdc'
         * 'proxies'
-        * None: then ['email', 'github', 'sfdc', 'proxies']
+        * 'sqldb'
+        * None: then ['email', 'github', 'sfdc', 'proxies', 'sqldb']
     env : str
         ONLY FOR service='sfdc', options:
 
