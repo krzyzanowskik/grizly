@@ -172,7 +172,7 @@ class S3:
             * fail: Raise ValueError
             * skip: Abort without throwing an error
             * replace: Overwrite existing file
-            * archive: Move old S3 to s3_key/archive/file_name(version)
+            * archive: Move old S3 to archive/s3_key/file_name(version)
 
         Examples
         --------
@@ -256,7 +256,7 @@ class S3:
             * fail: Raise ValueError
             * skip: Abort without throwing an error
             * replace: Overwrite existing file
-            * archive: Move old S3 to s3_key/archive/file_name(version)
+            * archive: Move old S3 to archive/s3_key/file_name(version)
 
         Examples
         --------
@@ -398,7 +398,7 @@ class S3:
             * fail: Raise ValueError
             * skip: Abort without throwing an error
             * replace: Overwrite existing file
-            * archive: Move old S3 to s3_key/archive/file_name(version)
+            * archive: Move old S3 to archive/s3_key/file_name(version)
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
