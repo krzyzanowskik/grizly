@@ -77,10 +77,7 @@ class Config:
             if data["config"] == {}:
                 raise ValueError("config is empty")
 
-            for key in data["config"].keys():
-                _validate_config(
-                    data["config"][key], services=list(data["config"][key])
-                )
+            _validate_config(data["config"], services=list(data["config"]))
 
             Config.data = data["config"]
             print("Config data has been saved.")
@@ -268,7 +265,6 @@ def _validate_config(config: dict, services: list = None, env: str = None):
     dict
         Validated config
     """
-
     if not isinstance(config, dict):
         raise TypeError("config must be a dictionary")
     if config == {}:
@@ -278,7 +274,7 @@ def _validate_config(config: dict, services: list = None, env: str = None):
     invalid_keys = set(config.keys()) - valid_services
     if invalid_keys != set():
         raise KeyError(
-            f"Invalid keys {invalid_keys} in config. Valid keys: {valid_services}"
+            f"Root invalid keys {invalid_keys} in config. Valid keys: {valid_services}"
         )
 
     if services == None:
@@ -311,7 +307,7 @@ def _validate_config(config: dict, services: list = None, env: str = None):
         if service == "email":
             valid_keys = {"email_address", "email_password", "send_as"}
         elif service == "github":
-            valid_keys = {"username", "username_password", "pages", "proxies"}
+            valid_keys = {'pages', 'proxies', 'username', 'username_password'}
         elif service == "sfdc":
             valid_keys = {"stage", "prod"}
         elif service == "proxies":

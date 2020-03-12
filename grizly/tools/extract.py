@@ -58,6 +58,8 @@ class Extract:
             con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
             self.df = pd.read_sql(sql=self.sql, con=con)
             self.df.astype(dtype=self.dtypes).to_parquet(parquet_path)
+        elif self.tool_name == "GitHub":
+            self.df.astype(dtype=self.df.dtypes).to_parquet(parquet_path)
 
     def to_excel(
         self,

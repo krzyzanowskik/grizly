@@ -477,23 +477,33 @@ class S3:
         config.read(get_path(".aws", "credentials"))
         S3_access_key_id = config["default"]["aws_access_key_id"]
         S3_secret_access_key = config["default"]["aws_secret_access_key"]
+        S3_iam_role = config["default"]["iam_role"]
 
         if column_order != None:
             column_order = "(" + ", ".join(column_order) + ")"
         else:
             column_order = ""
         remove_inside_quotes = "REMOVEQUOTES" if remove_inside_quotes else ""
-        sql = f"""
-            COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
-            access_key_id '{S3_access_key_id}'
-            secret_access_key '{S3_secret_access_key}'
-            delimiter '{sep}'
-            NULL ''
-            IGNOREHEADER 1
-            {remove_inside_quotes}
-            FORMAT AS {file_extension(self.file_name)}
-            ;commit;
-            """
+        if {file_extension(self.file_name)} == "csv":
+            sql = f"""
+                COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
+                access_key_id '{S3_access_key_id}'
+                secret_access_key '{S3_secret_access_key}'
+                delimiter '{sep}'
+                NULL ''
+                IGNOREHEADER 1
+                {remove_inside_quotes}
+                FORMAT AS {file_extension(self.file_name)}
+                ;commit;
+                """
+        else:
+            sql = f"""
+                COPY {table_name}
+                FROM 's3://{self.bucket}/{s3_key}'
+                IAM_ROLE '{S3_iam_role}'
+                FORMAT AS PARQUET;
+                ;commit;
+                """
         if time_format:
             indent = 9
             last_line_pos = len(sql) - len(";commit;") - indent
