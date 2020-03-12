@@ -10,20 +10,12 @@ class Extract:
         self.df = None
         self.path = None
 
-    def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False, cursor=None):
+    def to_csv(self, csv_path, chunksize=None, debug=False):
         if self.tool_name == "QFrame":
             self.sql = self.get_sql()
             if "denodo" in self.engine.lower():
                 self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
-            row_count = to_csv(
-                columns=self.get_fields(aliased=True),
-                csv_path=csv_path,
-                sql=self.sql,
-                engine=self.engine,
-                sep=sep,
-                chunksize=chunksize,
-                cursor=cursor,
-            )
+            row_count = to_csv(qf=self, csv_path=csv_path, sql=self.sql, engine=self.engine, chunksize=chunksize)
             if debug:
                 return row_count
             return self
@@ -135,17 +127,7 @@ def copy_df_to_excel(
     writer.save()
     writer.close()
 
-
-def to_csv(
-    columns,
-    csv_path,
-    sql,
-    engine=None,
-    sep="\t",
-    chunksize=None,
-    debug=False,
-    cursor=None,
-):
+def to_csv(qf, csv_path, sql, engine=None, sep='\t', chunksize=None, debug=False):
     """
     Writes table to csv file.
     Parameters
@@ -154,35 +136,27 @@ def to_csv(
         Path to csv file.
     sql : string
         SQL query.
-    engine : str, optional
-        Engine string. Required if cursor is not provided.
+    engine : str
+        Engine string.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     chunksize : int, default None
         If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-    cursor : Cursor, optional
-        The cursor to be used to execute the SQL, by default None
     """
-    if cursor:
+
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
+
+    try:
+        con = engine.connect().connection
+        cursor = con.cursor()
         cursor.execute(sql)
-        close_cursor = False
-
-    else:
-        engine = create_engine(engine, encoding="utf8", poolclass=NullPool)
-
+    except:
         try:
             con = engine.connect().connection
             cursor = con.cursor()
             cursor.execute(sql)
         except:
-            try:
-                con = engine.connect().connection
-                cursor = con.cursor()
-                cursor.execute(sql)
-            except:
-                raise
-
-        close_cursor = True
+            raise
 
     with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
@@ -206,9 +180,7 @@ def to_csv(
         else:
             writer.writerows(cursor.fetchall())
 
-    if close_cursor:
-        cursor.close()
-        con.close()
+    cursor.close()
+    con.close()
 
     return cursor_row_count
-

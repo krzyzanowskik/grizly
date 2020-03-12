@@ -4,18 +4,21 @@ import logging
 import os
 import sys
 import traceback
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from json.decoder import JSONDecodeError
 from logging import Logger
 from time import sleep, time
 from typing import Any, Dict, Iterable, List
+from distributed import Client
+from grizly.tools.s3 import S3
 
 import dask
 import graphviz
 import pandas as pd
 from croniter import croniter
 from dask.core import get_dependencies
+from dask.distributed import fire_and_forget
 from dask.dot import _get_display_cls
 from dask.optimization import key_split
 from sqlalchemy import create_engine
@@ -23,18 +26,18 @@ from sqlalchemy.pool import NullPool
 from exchangelib.errors import ErrorFolderNotFound
 
 from ..config import Config
-
 from ..tools.email import Email, EmailAccount
-from exchangelib.errors import ErrorFolderNotFound
-
 from ..tools.s3 import df_to_s3, s3_to_rds
 from ..utils import get_path
 from ..tools.sqldb import SQLDB
 
-LISTENER_STORE = get_path(
-    "acoe_projects", "workflows_dev", "etc", "listener_store.json"
-)
 
+workflows_dir = os.getenv("WORKFLOWS_ROOT_DIR") or "/home/acoe_workflows"
+if sys.platform.startswith("win"):
+    workflows_dir = get_path("acoe_projects")
+LISTENER_STORE = os.path.join(workflows_dir, "workflows", "etc", "listener_store.json")
+
+# logger = logging.getLogger(__name__)
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
@@ -89,17 +92,12 @@ class Schedule:
         if not croniter.is_valid(cron):
             raise ValueError("Invalid cron string: {}".format(cron))
         self.cron = cron
-        self._name = name
+        self.name = name
         self.start_date = start_date
         self.end_date = end_date
 
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, name):
-        self._name = name
+    def __repr__(self):
+        return f"{type(self).__name__}({self.cron})"
 
     def emit_dates(self, start_date: datetime = None) -> Iterable[datetime]:
         """
@@ -175,8 +173,7 @@ class Listener:
         db="denodo",
         engine_str=None,
         trigger=None,
-        trigger_type="default",
-        delay=300,
+        delay=0,
     ):
 
         self.workflow = workflow
@@ -188,7 +185,6 @@ class Listener:
         self.field = field
         self.query = query
         self.logger = logging.getLogger(__name__)
-        self.trigger_type = trigger_type
         self.trigger = trigger
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
         self.engine = self.get_engine()
@@ -198,7 +194,7 @@ class Listener:
 
     def __repr__(self):
         if self.query:
-            return f'{type(self).__name__}(query="""{self.query}""")'
+            return f"{type(self).__name__}(query=\"\"\"{self.query}\"\"\")"
         return f"{type(self).__name__}(db={self.db}, schema={self.schema}, table={self.table}, field={self.field})"
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
@@ -250,14 +246,10 @@ class Listener:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None
-            last_json_refresh = listener_store[self.name].get(
-                key
-            )  # int or serialized date
+            last_json_refresh = listener_store[self.name].get(key)  # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
-                last_json_refresh = datetime.date(
-                    datetime.strptime(last_json_refresh, r"%Y-%m-%d")
-                )
+                last_json_refresh = datetime.date(datetime.strptime(last_json_refresh, r"%Y-%m-%d"))
             except:
                 pass
             return last_json_refresh
@@ -268,13 +260,14 @@ class Listener:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
                 listener_store = {}
-        if not isinstance(
-            self, EmailListener
-        ):  # to be done properly with TriggerListener subclass
+        if not isinstance(self, EmailListener):  # to be done properly with TriggerListener subclass
             if self.trigger:
-                listener_store[self.name] = {
-                    "last_trigger_run": str(self.last_trigger_run)
-                }
+                listener_store[self.name] = {"last_trigger_run": str(self.last_trigger_run)}
+            else:
+                if isinstance(self.last_data_refresh, dt.date):
+                    listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+                else:
+                    listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
         else:
             if isinstance(self.last_data_refresh, dt.date):
                 listener_store[self.name] = {
@@ -288,8 +281,11 @@ class Listener:
         with open(LISTENER_STORE, "w") as f_write:
             json.dump(listener_store, f_write, indent=4)
 
-    @retry_task(TypeError, tries=3, delay=10)
+    @retry_task(TypeError, tries=3, delay=5)
     def get_table_refresh_date(self):
+
+        table_refresh_date = None
+
         if self.query:
             sql = self.query
         else:
@@ -301,32 +297,26 @@ class Listener:
 
         try:
             table_refresh_date = cursor.fetchone()[0]
+            # try casting to date
+            table_refresh_date = cast_to_date(table_refresh_date)
         except TypeError:
-            self.logger.exception(f"{self.name}'s trigger field is empty")
-            raise
-
-        cursor.close()
-        con.close()
-
-        # try casting to date
-        table_refresh_date = cast_to_date(table_refresh_date)
+            self.logger.warning(f"{self.name}'s trigger field is empty")
+        finally:
+            cursor.close()
+            con.close()
 
         return table_refresh_date
 
     def should_trigger(self, table_refresh_date=None):
 
-        if not isinstance(
-            self, EmailListener
-        ):  # to be done properly with TriggerListener subclass
+        if not isinstance(self, EmailListener):  # to be done properly with TriggerListener subclass
             if self.trigger:
                 today = datetime.today().date()
                 if today == self.last_trigger_run:
                     return False  # workflow was already ran today
                 return self.trigger.should_run
 
-        self.logger.info(
-            f"{self.name}: last data refresh: {self.last_data_refresh}, table_refresh_date: {table_refresh_date}"
-        )
+        self.logger.info(f"{self.name}: last data refresh: {self.last_data_refresh}, table_refresh_date: {table_refresh_date}")
         # first run
         if not self.last_data_refresh:
             return True
@@ -337,11 +327,6 @@ class Listener:
         # trigger on day change
         if table_refresh_date != self.last_data_refresh:
             return True
-
-        # elif isinstance(self.trigger_type, Schedule):
-        #     next_check_on = datetime.date(self.trigger_type.next_run)
-        #     if next_check_on == table_refresh_date:
-        #         return True
 
     def detect_change(self) -> bool:
         """Determine whether the listener should trigger a worfklow run.
@@ -358,9 +343,7 @@ class Listener:
             If neither of [field, query, trigger] is provided.
         """
 
-        if not isinstance(
-            self, EmailListener
-        ):  # to be done properly with adding more subclasses
+        if not isinstance(self, EmailListener):  # to be done properly with adding more subclasses
             if not any([self.field, self.query, self.trigger]):
                 raise ValueError("Please specify the trigger for the listener")
             if self.trigger:
@@ -368,10 +351,6 @@ class Listener:
                     today = datetime.today().date()
                     self.last_trigger_run = today
                     self.update_json()
-                    self.logger.info(
-                        f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow..."
-                    )
-                    sleep(self.delay)
                     return True
         try:
             table_refresh_date = self.get_table_refresh_date()
@@ -381,17 +360,12 @@ class Listener:
                     f"Could not retrieve refresh date from {self.search_email_address}'s {self.email_folder} folder"
                 )
             else:
-                self.logger.exception(
-                    f"Connection or query error when connecting to {self.db}"
-                )
+                self.logger.exception(f"Connection or query error when connecting to {self.db}")
             table_refresh_date = None
 
         if self.should_trigger(table_refresh_date):
             self.last_data_refresh = table_refresh_date
             self.update_json()
-            self.logger.info(
-                f"Waiting {self.delay} seconds for the table upload to be finished before runnning workflow..."
-            )
             sleep(self.delay)
             return True
 
@@ -408,8 +382,7 @@ class EmailListener(Listener):
         query=None,
         db=None,
         trigger=None,
-        trigger_type="default",
-        delay=300,
+        delay=0,
         notification_title=None,
         email_folder=None,
         search_email_address=None,
@@ -418,9 +391,7 @@ class EmailListener(Listener):
         proxy=None,
     ):
         self.name = workflow.name
-        self.notification_title = notification_title or workflow.name.lower().replace(
-            " ", "_"
-        )
+        self.notification_title = notification_title or workflow.name.lower().replace(" ", "_")
         self.db = db
         self.logger = logging.getLogger(__name__)
         self.engine = None
@@ -433,15 +404,6 @@ class EmailListener(Listener):
         self.email_password = email_password
         self.proxy = proxy
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
-        # self.last_data_refresh = self.get_last_email_date(
-        #     self.workflow_report_name,
-        #     self.email_folder,
-        #     self.search_email_address,
-        #     email_address=self.email_address,
-        #     email_password=self.email_password,
-        #     config_key=self.config_key,
-        # )
-        # super().__init__(self, self.last_data_refresh)
 
     def __repr__(self):
         return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
@@ -473,12 +435,8 @@ class EmailListener(Listener):
         email_password=None,
         config_key="standard",
     ):
-        account = EmailAccount(
-            email_address,
-            email_password,
-            alias=self.search_email_address,
-            proxy=self.proxy,
-        ).account
+
+        account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
         self._validate_folder(account, email_folder)
         last_message = None
 
@@ -503,9 +461,7 @@ class EmailListener(Listener):
                     .only("datetime_received")[0]
                 )
             except IndexError:
-                self.logger.warning(
-                    f"No notifications for {self.name} were found in Inbox folder"
-                )
+                self.logger.warning(f"No notifications for {self.name} were found in Inbox folder")
 
         if not last_message:
             return None
@@ -536,62 +492,35 @@ class Workflow:
     def __init__(
         self,
         name,
-        owner_email,
-        backup_email,
         tasks,
-        trigger_on_success=None,
-        execution_options: dict = None,
+        owner_email=None,
+        backup_email=None,
+        children=None,
+        priority=0,
+        trigger=None,
+        trigger_type="manual",
+        execution_options: dict = None
     ):
         self.name = name
         self.owner_email = owner_email
         self.backup_email = backup_email
-        self.tasks = tasks
-        self.trigger_on_success = trigger_on_success
+        self.tasks = [tasks]
+        self.children = children
         self.execution_options = execution_options
-        self.graph = dask.delayed()(self.tasks)
-        self.run_time = 0
-        self.status = "idle"
+        self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
         self.is_scheduled = False
         self.is_triggered = False
         self.is_manual = False
-        self.stage = "prod"
+        self.env = "prod"
+        self.status = "idle"
         self.logger = logging.getLogger(__name__)
         self.error_value = None
         self.error_type = None
-        self.scheduler = "threads"
-        self.num_workers = 8
+        self.priority = priority
+        self.trigger = trigger
+        self.trigger_type = trigger_type
 
         self.logger.info(f"Workflow {self.name} initiated successfully")
-
-    # def add_task(fn, max_retries=5, retry_delay=5, depends_on=None):
-    #     tasks = [load_qf(qf, depends_on=None)]
-    #     fnretry = retry(fn)
-    #     self.tasks
-    #     return fn_decorated
-
-    def __str__(self):
-        return self.tasks
-
-    def log_task(self, task):
-        def deco():
-            pass
-
-    def visualize(self):
-        return self.graph.visualize()
-
-    def add_schedule(self, schedule):
-        self.schedule = schedule
-        self.next_run = self.schedule.next(1)[0]
-        self.is_scheduled = True
-
-    def add_listener(self, listener):
-        self.listener = listener
-        self.is_triggered = True
-
-    def check_if_manual(self):
-        if not (self.is_scheduled or self.is_triggered):
-            self.is_manual = True
-            return True
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
         """
@@ -634,202 +563,69 @@ class Workflow:
 
         return deco_retry
 
-    @retry_task(Exception, tries=3, delay=300)
-    def write_status_to_rds(
-        self,
-        name,
-        owner_email,
-        backup_email,
-        status,
-        run_time,
-        env,
-        error_value=None,
-        error_type=None,
-    ):
+    def __str__(self):
+        return f"{self.tasks}"
+
+    def visualize(self):
+        return self.graph.visualize()
+
+    def add_trigger(self, trigger):
+        self.trigger = trigger
+        self.trigger_type = type(trigger)
+        if isinstance(trigger, Schedule):
+            self.next_run = self.trigger.next(1)[0] # should prbably keep in Scheduele and not propagate here
+
+    def add_schedule(self, schedule):
+        self.schedule = schedule
+        self.next_run = self.schedule.next(1)[0]
+        self.is_scheduled = True
+
+    def add_listener(self, listener):
+        self.listener = listener
+        self.is_triggered = True
+
+    def submit(self, client: Client = None, client_address: str = None, priority: int = None) -> None:
+
+        if not priority:
+            priority = self.priority
+
+        if not client:
+            client = Client(client_address)
+        computation = client.compute(self.graph, retries=3, priority=priority)
+        fire_and_forget(computation)
+        self.status = "submitted"
+        if not client:  # if cient is provided, we assume the user will close it on their end
+            client.close()
 
         schema = "administration"
-        table = "status"
-
-        last_run_date = pd.datetime.utcnow()
-
-        status_data = {
-            "workflow_name": [name],
-            "owner_email": [owner_email],
-            "backup_email": [backup_email],
-            "run_date": [last_run_date],
-            "workflow_status": [status],
-            "run_time": [run_time],
-            "env": [env],
-            "error_value": [error_value],
-            "error_type": [error_type],
-        }
-
-        status_data = pd.DataFrame(status_data)
-
-        try:
-            df_to_s3(
-                status_data,
-                table,
-                schema,
-                if_exists="append",
-                redshift_str="mssql+pyodbc://redshift_acoe",
-                s3_key="bulk",
-                bucket="acoe-s3",
-            )
-        except:
-            self.logger.exception(f"{self.name} status could not be uploaded to S3")
-            return None
-
-        s3_to_rds(
-            file_name=table + ".csv",
-            schema=schema,
-            if_exists="append",
-            redshift_str="mssql+pyodbc://redshift_acoe",
-            s3_key="bulk",
-            bucket="acoe-s3",
-        )
-
-        self.logger.info(f"{self.name} status successfully uploaded to Redshift")
-
+        table = "workflow_queue"
+        engine = os.getenv("QUEUE_ENGINE") or "mssql+pyodbc://redshift_acoe"
+        self.submit_to_queue(engine, schema, table, priority)
         return None
 
-    def gen_scheduled_wf_email_body(self):
-        run_time_str = str(timedelta(seconds=self.run_time))
-        email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        return email_body
+    @retry_task(Exception, tries=3, delay=10)
+    def submit_to_queue(self, engine: str, schema: str, table: str, priority: int):
 
-    def gen_triggered_wf_email_body(self):
-        run_time_str = str(timedelta(seconds=self.run_time))
-        l = self.listener
-        if not isinstance(self.listener, EmailListener):
-            if l.trigger:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                    \nTrigger: {l.trigger.table} {l.field}'s latest value has changed to {l.trigger.last_table_refresh}"""
-            else:
-                email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-                \nTrigger: {l.table} {l.field}'s latest value has changed to
-                    {l.last_data_refresh}"""
-        else:
-            email_body = f"""Dependent workflow {self.name} has finished in {run_time_str} with the status {self.status}.
-            \nTrigger:
-            Received notification in {l.search_email_address}'s {l.email_folder} folder for
-            {l.notification_title}'s update on {l.last_data_refresh}"""
-        return email_body
+        now_utc = datetime.now(timezone.utc).replace(microsecond=0)
 
-    def gen_manual_wf_email_body(self):
-        run_time_str = str(timedelta(seconds=self.run_time))
-        email_body = f"Manual workflow {self.name} has finished in {run_time_str} with the status {self.status}"
-        return email_body
+        sql = f"""INSERT INTO {schema}.{table} (workflow_name, priority, submitted) VALUES (
+        '{self.name}',
+        {priority},
+        '{now_utc}'
+        )"""
+        sqla_engine = create_engine(engine)
+        execute_query(sqla_engine, sql)
 
-    def add_stacktrace(self, email_body):
-        email_body += f"\n\nError message: \n\n{self.error_message}"
-        return email_body
+        self.logger.info(f"{self.name} has been uploaded to workflow_queue")
 
-    def generate_notification(self):
-        # prepare email body; to be refactored into a function
-        subject = f"Workflow {self.status}"
-        if self.is_scheduled:
-            email_body = self.gen_scheduled_wf_email_body()
-        elif self.is_triggered:
-            email_body = self.gen_triggered_wf_email_body()
-        else:
-            email_body = self.gen_manual_wf_email_body()
-        if self.status == "fail":
-            email_body += self.add_stacktrace(email_body)
-
-        notification = Email(subject=subject, body=email_body, logger=self.logger)
-
-        return notification
-
-    def persist_start_time(self, time: float) -> None:
-        if not os.path.exists("etc"):
-            os.makedirs(f"etc")
-        with open("etc/cur_wf_start_time.txt", "w+") as f:
-            f.write(str(time))
         return None
-
-    def run(self, env="local"):
-        self.env = env
-        start = time()
-        self.persist_start_time(start)
-        try:
-            graph = dask.delayed()(self.tasks)
-            if self.execution_options:
-                scheduler = self.execution_options.get("scheduler") or self.scheduler
-                num_workers = (
-                    self.execution_options.get("num_workers") or self.num_workers
-                )
-            else:
-                scheduler = "threads"
-                num_workers = self.num_workers
-            graph.compute(scheduler=scheduler, num_workers=num_workers)
-            self.status = "success"
-        except:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            self.error_value = (
-                str(exc_value).replace("'", r"\'").replace('"', r"\"")[:250]
-            )  # escape unintended delimiters
-            self.error_type = str(exc_type).split("'")[
-                1
-            ]  # <class 'ZeroDivisionError'> -> ZeroDivisionError
-            self.error_message = traceback.format_exc()
-            self.logger.exception(f"{self.name} failed")
-            self.status = "fail"
-        end = time()
-        self.run_time = int(end - start)
-
-        notification = self.generate_notification()
-        cc = (
-            self.backup_email
-            if isinstance(self.backup_email, list)
-            else [self.backup_email]
-        )
-        to = (
-            self.owner_email
-            if isinstance(self.owner_email, list)
-            else [self.owner_email]
-        )
-        send_as = ""
-
-        notification.send(to=to, cc=cc, send_as=send_as)
-        # when ran on server, the status is handled by Runner
-        if env == "local":
-            self.write_status_to_rds(
-                self.name,
-                self.owner_email,
-                self.backup_email,
-                self.status,
-                self.run_time,
-                env=self.env,
-                error_value=self.error_value,
-                error_type=self.error_type,
-            )
-
-        if self.trigger_on_success:
-            triggered_wf = self.trigger_on_success
-            self.logger.info(f"Running {triggered_wf.name}...")
-            triggered_wf.run()
-            self.logger.info(
-                f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>"
-            )
-            triggered_wf.write_status_to_rds(
-                triggered_wf.name,
-                triggered_wf.owner_email,
-                triggered_wf.backup_email,
-                triggered_wf.status,
-                triggered_wf.run_time,
-                env=self.env,
-                error_value=triggered_wf.error_value,
-                error_type=triggered_wf.error_type,
-            )
-
-        return self.status
 
 
 class Runner:
     """Workflow runner"""
 
-    def __init__(self, logger: Logger = None, env: str = "prod") -> None:
+    def __init__(self, client_address: str = None, logger: Logger = None, env: str = "prod") -> None:
+        self.client_address = client_address
         self.env = env
         self.logger = logging.getLogger(__name__)
         self.run_params = None
@@ -851,32 +647,40 @@ class Runner:
             Whether the workflow's scheduled next run coincides with current time
         """
 
-        if workflow.is_scheduled:
+        if isinstance(workflow.trigger, Schedule):
+        # if workflow.is_scheduled:
+            next_run_short = workflow.next_run.strftime("%Y-%m-%d %H:%M")
+            now = datetime.now(timezone.utc)
 
             self.logger.info(
-                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})"
+                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run_short})"
             )
+            # self.logger.info(f"Day: {type(workflow.next_run.day)}:{workflow.next_run.day} vs now: {type(now.day)}:{now.day}")
+            # self.logger.info(f"Hour: {type(workflow.next_run.hour)}:{workflow.next_run.hour} vs now: {type(now.hour)}:{now.hour}")
+            # self.logger.info(f"Minute: {type(workflow.next_run.minute)}:{workflow.next_run.minute} vs now: {type(now.minute)}:{now.minute}")
 
-            now = datetime.now(timezone.utc)
             next_run = workflow.next_run
-
-            if (next_run.day == now.day) and (
-                next_run.hour == now.hour
-            ):  # and (next_run.minute == now.minute): # minutes for precise scheduling
-                workflow.next_run = workflow.schedule.next(1)[0]
+            if (
+                    (next_run.day == now.day) and
+                    (next_run.hour == now.hour) and
+                    (next_run.minute == now.minute + 1)  # if we don't add 1 here, cron will just skip to next date once it hits now
+                ): # minutes for precise scheduling - this assumes runner runs for less than 1 min
+                # ideally, each listener should run in a separate thread so that this is guaranteed
+                # (now, if e.g. Denodo is not responding, a scheduled workflow that comes below the triggered one will not run)
+                workflow.next_run = workflow.trigger.next(1)[0]
                 return True
 
-        elif workflow.is_triggered:
+        elif isinstance(workflow.trigger, Listener):
+        # elif workflow.is_triggered:
 
-            listener = workflow.listener
+            #listener = workflow.listener
+            listener = workflow.trigger
 
             if isinstance(listener, EmailListener):
                 folder = listener.email_folder or "inbox"
-                self.logger.info(
-                    f"Listening for changes in {listener.search_email_address}'s {folder} folder"
-                )
+                self.logger.info(f"{listener.name}: listening for changes in {listener.search_email_address}'s {folder} folder")
             else:
-                self.logger.info(f"Listening for changes in {listener.table}...")
+                self.logger.info(f"{listener.name}: listening for changes in {listener.table}...")
 
             if listener.detect_change():
                 return True
@@ -886,14 +690,6 @@ class Runner:
 
         return False
 
-    # def get_pending_workflows(self, pending=None):
-
-    #     pending = []
-    #     for workflow in self.workflows:
-    #         if self.should_run(workflow):
-    #             pending.append(workflow)
-
-    #     return pending
 
     def overwrite_params(self, workflow: Workflow, params: Dict) -> None:
         """Overwrites specified workflow's parameters
@@ -934,7 +730,8 @@ class Runner:
             else:
                 setattr(workflow, param, params[param])
 
-    def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> Dict:
+
+    def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> None:
         """[summary]
 
         Parameters
@@ -957,27 +754,17 @@ class Runner:
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
 
+        client = Client(self.client_address)
+
         for workflow in workflows:
             if self.should_run(workflow):
-                self.logger.info(f"Running {workflow.name}...")
-                workflow.run(env=self.env)
-                self.logger.info(
-                    f"Finished running {workflow.name} with the status <{workflow.status}>"
-                )
-                workflow.write_status_to_rds(
-                    workflow.name,
-                    workflow.owner_email,
-                    workflow.backup_email,
-                    workflow.status,
-                    workflow.run_time,
-                    env=self.env,
-                    error_value=workflow.error_value,
-                    error_type=workflow.error_type,
-                )
+                self.logger.info(f"Worfklow {workflow.name} has been enqueued...")
+                workflow.env = self.env
+                workflow.submit(client=client)
         else:
             self.logger.info(f"No pending workflows found")
-
-        return {workflow.name: workflow.status for workflow in workflows}
+            client.close()
+        return None
 
 
 class SimpleGraph:
@@ -1002,7 +789,7 @@ class SimpleGraph:
 
         deps = {k: get_dependencies(dsk, k) for k in dsk}
 
-        g = graphviz.Digraph(graph_attr={"rankdir": "LR"})
+        g = graphviz.Digraph(araph_attr={"rankdir": "LR"})
 
         nodes = set()
         edges = set()
@@ -1082,3 +869,13 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
 def get_con(engine):
     con = engine.connect().connection
     return con
+
+
+def execute_query(engine, query):
+    conn = engine.connect().connection
+    cursor = conn.cursor()
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return None

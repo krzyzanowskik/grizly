@@ -233,9 +233,8 @@ class Email:
         None
         """
 
-        BaseProtocol.HTTP_ADAPTER_CLS = (
-            NoVerifyHTTPAdapter  # change this in the future to avoid warnings
-        )
+        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
 

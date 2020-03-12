@@ -38,7 +38,7 @@ class S3:
     def __init__(
         self,
         file_name: str,
-        s3_key: str = None,
+        s3_key: str,
         bucket: str = None,
         file_dir: str = None,
         redshift_str: str = None,
@@ -46,18 +46,22 @@ class S3:
         logger=None,
     ):
         self.file_name = file_name
-        self.s3_key = s3_key if s3_key else ""
-        if not self.s3_key.endswith("/") and self.s3_key != "":
-            self.s3_key += "/"
-        self.full_s3_key = self.s3_key + self.file_name
+        self.s3_key = s3_key
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
-        self.redshift_str = (
-            redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
-        )
+        self.redshift_str = redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
+        folders = s3_key.split("/")
+        self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
+
+        if self.s3_key == "":
+            raise ValueError("s3_key not specified")
+
+        if not self.s3_key.endswith("/"):
+            self.s3_key += "/"
         self.logger = logger or logging.getLogger(__name__)
+        self.status = "initiated"
 
     def _check_if_s3_exists(f):
         @wraps(f)
@@ -74,10 +78,9 @@ class S3:
         return wrapped
 
     def _can_upload(self):
+
         try:
-            last_modified = (
-                resource("s3").Object(self.bucket, self.full_s3_key).last_modified
-            )
+            last_modified = resource('s3').Object(self.bucket, self.full_s3_key).last_modified
         except:
             last_modified = None
 
@@ -143,7 +146,7 @@ class S3:
         s3_key = self.s3_key + self.file_name
         resource("s3").Object(self.bucket, s3_key).delete()
 
-        print(f"'{s3_key}' has been removed successfully")
+        self.logger.info(f"'{s3_key}' has been removed successfully")
 
     @_check_if_s3_exists
     def copy_to(
@@ -226,9 +229,7 @@ class S3:
         copy_source = {"Key": source_s3_key, "Bucket": self.bucket}
 
         s3_file.copy(copy_source)
-        print(
-            f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'"
-        )
+        self.logger.info(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
 
         if not keep_file:
             self.delete()
@@ -246,7 +247,7 @@ class S3:
         ----------
         min_time_window:
             The minimum time required to pass between the last and current upload for the file to be uploaded.
-            This allows the uploads to be robust to retrying (retries will not re-upload the same file, 
+            This allows the uploads to be robust to retrying (retries will not re-upload the same file,
             making the upload almost-idempotent)
         keep_file:
             Whether to keep the local file copy after uploading it to Amazon S3, by default True
@@ -291,14 +292,17 @@ class S3:
                 + f"\nSet S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window})."
             )
             self.logger.warning(msg)
+            self.status = "failed"
             return self
-        s3_file.upload_file(file_path)
 
-        print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        s3_file.upload_file(file_path)
+        self.status = "uploaded"
+
+        self.logger.debug(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
-            print(f"'{file_path}' has been removed")
+            self.logger.info(f"'{file_path}' has been removed")
 
         return self
 
@@ -334,10 +338,10 @@ class S3:
                 return None
 
         s3_key = self.s3_key + self.file_name
-        s3_file = resource("s3").Object(self.bucket, s3_key)
+        s3_file = resource('s3').Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
-        print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
+        self.logger.info(f"'{s3_key}' was successfully downloaded to '{file_path}'")
 
     def to_df(self, **kwargs):
 
@@ -415,7 +419,7 @@ class S3:
         df = clean_colnames(df)
 
         df.to_csv(file_path, index=False, sep=sep, chunksize=chunksize)
-        print(f"DataFrame saved in '{file_path}'")
+        self.logger.info(f"DataFrame saved in '{file_path}'")
 
         return self.from_file(keep_file=keep_file, if_exists=if_exists)
 
@@ -466,6 +470,7 @@ class S3:
                 raise AssertionError(f"Table {table_name} already exists")
             elif if_exists == "replace":
                 sqldb.delete_from(table=table, schema=schema)
+                self.logger.info("SQL table has been cleaned up successfully.")
             else:
                 pass
         else:
@@ -484,7 +489,7 @@ class S3:
         else:
             column_order = ""
         remove_inside_quotes = "REMOVEQUOTES" if remove_inside_quotes else ""
-        if {file_extension(self.file_name)} == "csv":
+        if file_extension(self.file_name) == "csv":
             sql = f"""
                 COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
                 access_key_id '{S3_access_key_id}'
@@ -518,10 +523,10 @@ class S3:
             )
 
         con = sqldb.get_connection()
-        print("Loading {} data into {} ...".format(s3_key, table_name))
+        self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
         con.execute(sql)
         con.close()
-        print(f"Data has been copied to {table_name}")
+        self.logger.info(f"Data has been copied to {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
@@ -614,7 +619,7 @@ class S3:
             count += 1
         if types:
             other_cols = list(types.keys())
-            print(f"Columns {other_cols} were not found.")
+            self.logger.info(f"Columns {other_cols} were not found.")
 
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
@@ -624,7 +629,7 @@ class S3:
         con.execute(sql)
         con.close()
 
-        print("Table {} has been created successfully.".format(table_name))
+        self.logger.info("Table {table_name} has been created successfully.")
 
 
 @deprecation.deprecated(details="Use S3.to_file function instead",)

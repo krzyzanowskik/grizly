@@ -2,6 +2,7 @@ import json
 from .utils import get_path
 from functools import partial
 import deprecation
+import logging
 
 deprecation.deprecated = partial(
     deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
@@ -13,7 +14,10 @@ class Config:
 
     data = {}
 
-    def from_dict(self, data: dict):
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def from_dict(self, data:dict):
         """Overwrites Config.data using dictionary data
 
         Parameters
@@ -77,10 +81,13 @@ class Config:
             if data["config"] == {}:
                 raise ValueError("config is empty")
 
-            _validate_config(data["config"], services=list(data["config"]))
+            for key in data["config"].keys():
+                _validate_config(
+                    data["config"][key], services=list(data["config"][key])
+                )
 
-            Config.data = data["config"]
-            print("Config data has been saved.")
+            Config.data = data['config']
+            self.logger.debug("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
@@ -105,19 +112,15 @@ class Config:
         """
         with open(json_path, "r") as json_file:
             data = json.load(json_file)
-        if "config" in data:
-            if not isinstance(data["config"], dict):
-                raise TypeError("config must be a dictionary")
-            if data["config"] == {}:
-                raise ValueError("config is empty")
+        if 'config' in data:
+            if not isinstance(data['config'], dict): raise TypeError("config must be a dictionary")
+            if data['config'] == {}: raise ValueError("config is empty")
 
-            for key in data["config"].keys():
-                _validate_config(
-                    data["config"][key], services=list(data["config"][key])
-                )
+            for key in data['config'].keys():
+                _validate_config(data['config'][key], services = list(data['config'][key]))
 
-            Config.data = data["config"]
-            print("Config data has been saved.")
+            Config.data = data['config']
+            self.logger.debug("Config data has been saved.")
             return Config()
         else:
             raise KeyError("'config' key not found")
@@ -307,7 +310,7 @@ def _validate_config(config: dict, services: list = None, env: str = None):
         if service == "email":
             valid_keys = {"email_address", "email_password", "send_as"}
         elif service == "github":
-            valid_keys = {'pages', 'proxies', 'username', 'username_password'}
+            valid_keys = {"pages", "proxies", "username", "username_password"}
         elif service == "sfdc":
             valid_keys = {"stage", "prod"}
         elif service == "proxies":

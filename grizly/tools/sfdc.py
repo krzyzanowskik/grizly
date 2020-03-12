@@ -8,10 +8,8 @@ import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from ..config import Config
-from ..utils import get_path
 from logging import Logger
-from .s3 import S3
-from typing import Dict
+
 
 
 class SFDC:
@@ -19,6 +17,7 @@ class SFDC:
 
     Examples
     --------
+    >>> from .s3 import S3
     >>> S3(file_name='acoe_config.json', s3_key='acoe_internal/', file_dir=r'C:\\Users').to_file()
     'acoe_internal/acoe_config.json' was successfully downloaded to 'C:\\Users\\acoe_config.json'
     >>> config_path = get_path('.grizly', 'acoe_config.json') # contains SFDC username and password
@@ -53,7 +52,7 @@ class SFDC:
         self.proxies = (
             proxies
             or Config().get_service(config_key=config_key, service="proxies")
-            or {"http": os.getenv("HTTP_PROXY"), "https": os.getenv("HTTPS_PROXY"),}
+            or {"http": os.getenv("HTTP_PROXY"), "https": os.getenv("HTTPS_PROXY")}
         )
         self.username = username or config.get("username")
         self.password = password or config.get("password")
@@ -66,10 +65,7 @@ class SFDC:
         if self.env == "prod":
             try:
                 sf_conn = Salesforce(
-                    username=self.username,
-                    password=self.password,
-                    organizationId=self.organization_id,
-                    proxies=self.proxies,
+                    username=self.username, password=self.password, organizationId=self.organization_id, proxies=self.proxies
                 )
             except SalesforceAuthenticationFailed:
                 self.logger.exception(
@@ -185,9 +181,7 @@ class SFDCResponse:
                 row.append(item[column])
             l.append(row)
 
-        df = pd.DataFrame(l, columns=self.columns, dtype=dtype).replace(
-            to_replace=["None"], value=np.nan
-        )
+        df = pd.DataFrame(l, columns=self.columns, dtype=dtype).replace(to_replace=["None"], value=np.nan)
 
         return df
 
@@ -218,11 +212,7 @@ class SFDCResponseBulk(SFDCResponse):
         self.logger = logger
 
     def to_df(self, dtype=None):
-        df = (
-            pd.DataFrame(self.data)
-            .drop("attributes", axis=1)
-            .replace(to_replace=["None"], value=np.nan)
-        )
+        df = pd.DataFrame(self.data).drop("attributes", axis=1).replace(to_replace=["None"], value=np.nan)
         return df
 
     def to_csv(self, file_path, sep="\t"):
