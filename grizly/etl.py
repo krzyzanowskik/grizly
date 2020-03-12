@@ -4,12 +4,16 @@ from configparser import ConfigParser
 
 import boto3
 import pandas as pd
+import logging
+
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
 from .config import Config
 
 from .utils import check_if_exists, get_path, read_config
+
+logger = logging.getLogger(__name__)
 
 # config_path = get_path('.grizly', 'config.json')
 # config = Config().from_json(config_path)
@@ -220,7 +224,7 @@ def csv_to_s3(csv_path, keep_csv=True, bucket: str=None):
     s3_name = os.path.basename(csv_path)
 
     bucket.upload_file(csv_path, s3_name)
-    print('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
+    logger.info('{} uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
 
     if not keep_csv:
         os.remove(csv_path)

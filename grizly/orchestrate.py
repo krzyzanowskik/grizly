@@ -264,8 +264,11 @@ class Listener:
         with open(LISTENER_STORE, "w") as f_write:
             json.dump(listener_store, f_write, indent=4)
 
-    @retry_task(TypeError, tries=3, delay=10)
+    @retry_task(TypeError, tries=3, delay=5)
     def get_table_refresh_date(self):
+
+        table_refresh_date = None
+
         if self.query:
             sql = self.query
         else:
@@ -277,15 +280,13 @@ class Listener:
 
         try:
             table_refresh_date = cursor.fetchone()[0]
+            # try casting to date
+            table_refresh_date = cast_to_date(table_refresh_date)
         except TypeError:
-            self.logger.exception(f"{self.name}'s trigger field is empty")
-            raise
-
-        cursor.close()
-        con.close()
-
-        # try casting to date
-        table_refresh_date = cast_to_date(table_refresh_date)
+            self.logger.warning(f"{self.name}'s trigger field is empty")
+        finally:
+            cursor.close()
+            con.close()
 
         return table_refresh_date
 
@@ -478,11 +479,11 @@ class Workflow:
         self.children = children
         self.execution_options = execution_options
         self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
-        self.status = "pending"
         self.is_scheduled = False
         self.is_triggered = False
         self.is_manual = False
         self.env = "prod"
+        self.status = "idle"
         self.logger = logging.getLogger(__name__)
         self.error_value = None
         self.error_type = None
@@ -554,21 +555,24 @@ class Workflow:
         self.listener = listener
         self.is_triggered = True
 
-    def submit(self, client, priority=None):
+    def submit(self, client: Client = None, client_address: str = None, priority: int = None) -> None:
 
         if not priority:
             priority = self.priority
-
+        
+        if not client:
+            client = Client(client_address)
         computation = client.compute(self.graph, retries=3, priority=priority)
-        self.status = computation.status
         fire_and_forget(computation)
-        client.close()
+        self.status = "submitted"
+        if not client:  # if cient is provided, we assume the user will close it on their end
+            client.close()
 
         schema = "administration"
         table = "workflow_queue"
         engine = os.getenv("QUEUE_ENGINE") or "mssql+pyodbc://redshift_acoe"
         self.submit_to_queue(engine, schema, table, priority)
-        return computation
+        return None
 
     @retry_task(Exception, tries=3, delay=10)
     def submit_to_queue(self, engine: str, schema: str, table: str, priority: int):
@@ -591,7 +595,8 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-    def __init__(self, logger: Logger = None, env: str = "prod") -> None:
+    def __init__(self, client_address: str = None, logger: Logger = None, env: str = "prod") -> None:
+        self.client_address = client_address 
         self.env = env
         self.logger = logging.getLogger(__name__)
         self.run_params = None
@@ -644,9 +649,9 @@ class Runner:
 
             if isinstance(listener, EmailListener):
                 folder = listener.email_folder or "inbox"
-                self.logger.info(f"Listening for changes in {listener.search_email_address}'s {folder} folder")
+                self.logger.info(f"{listener.name}: listening for changes in {listener.search_email_address}'s {folder} folder")
             else:
-                self.logger.info(f"Listening for changes in {listener.table}...")
+                self.logger.info(f"{listener.name}: listening for changes in {listener.table}...")
             
             if listener.detect_change():
                 return True
@@ -697,7 +702,7 @@ class Runner:
                 setattr(workflow, param, params[param])
 
 
-    def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> Dict:
+    def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> None:
         """[summary]
 
         Parameters
@@ -720,16 +725,17 @@ class Runner:
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
         
-        client = Client("10.125.68.52:8786")
+        client = Client(self.client_address)
 
         for workflow in workflows:
             if self.should_run(workflow):
                 self.logger.info(f"Worfklow {workflow.name} has been enqueued...")
-                future = workflow.submit(client)
+                workflow.env = self.env
+                workflow.submit(client=client)
         else:
             self.logger.info(f"No pending workflows found")
             client.close()
-        return {workflow.name: workflow.status for workflow in workflows}
+        return None
 
 
 class SimpleGraph:

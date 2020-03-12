@@ -184,7 +184,7 @@ class S3:
         copy_source = {"Key": source_s3_key, "Bucket": self.bucket}
 
         s3_file.copy(copy_source)
-        print(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
+        self.logger.info(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
 
         if not keep_file:
             self.delete()
@@ -230,11 +230,11 @@ class S3:
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        print(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        self.logger.debug(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
-            print(f"'{file_path}' has been removed")
+            self.logger.info(f"'{file_path}' has been removed")
 
         return self
 
@@ -254,7 +254,7 @@ class S3:
         s3_file = resource('s3').Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
-        print(f"'{s3_key}' was successfully downloaded to '{file_path}'")
+        self.logger.info(f"'{s3_key}' was successfully downloaded to '{file_path}'")
 
     def to_df(self, **kwargs):
 
@@ -352,7 +352,7 @@ class S3:
             elif if_exists == "replace":
                 sql = "DELETE FROM {}".format(table_name)
                 engine.execute(sql)
-                print("SQL table has been cleaned up successfully.")
+                self.logger.info("SQL table has been cleaned up successfully.")
             else:
                 pass
         else:
@@ -364,7 +364,7 @@ class S3:
         S3_secret_access_key = config["default"]["aws_secret_access_key"]
 
         s3_key = self.s3_key + self.file_name
-        print("Loading {} data into {} ...".format(s3_key, table_name))
+        self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
 
         sql = f"""
             COPY {table_name} FROM 's3://{self.bucket}/{s3_key}'
@@ -378,7 +378,7 @@ class S3:
             """
 
         engine.execute(sql)
-        print(f"Data has been copied to {table_name}")
+        self.logger.info(f"Data has been copied to {table_name}")
 
     def _create_table_like_s3(self, table_name, sep, types):
         s3_client = resource('s3').meta.client
@@ -435,7 +435,7 @@ class S3:
             count += 1
         if types:
             other_cols = list(types.keys())
-            print(f"Columns {other_cols} were not found.")
+            self.logger.info(f"Columns {other_cols} were not found.")
 
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
@@ -443,5 +443,5 @@ class S3:
         engine = create_engine(self.redshift_str, encoding="utf8")
         engine.execute(sql)
 
-        print("Table {} has been created successfully.".format(table_name))
+        self.logger.info("Table {} has been created successfully.".format(table_name))
 
