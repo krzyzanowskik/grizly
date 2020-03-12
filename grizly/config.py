@@ -77,7 +77,10 @@ class Config:
             if data["config"] == {}:
                 raise ValueError("config is empty")
 
-            _validate_config(data["config"], services=list(data["config"]))
+            for key in data["config"].keys():
+                _validate_config(
+                    data["config"][key], services=list(data["config"][key])
+                )
 
             Config.data = data["config"]
             print("Config data has been saved.")
@@ -307,7 +310,7 @@ def _validate_config(config: dict, services: list = None, env: str = None):
         if service == "email":
             valid_keys = {"email_address", "email_password", "send_as"}
         elif service == "github":
-            valid_keys = {'pages', 'proxies', 'username', 'username_password'}
+            valid_keys = {"pages", "proxies", "username", "username_password"}
         elif service == "sfdc":
             valid_keys = {"stage", "prod"}
         elif service == "proxies":
