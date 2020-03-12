@@ -484,7 +484,7 @@ class S3:
         else:
             column_order = ""
         remove_inside_quotes = "REMOVEQUOTES" if remove_inside_quotes else ""
-        if {file_extension(self.file_name)} == "csv":
+        if file_extension(self.file_name) == "csv":
             sql = f"""
                 COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
                 access_key_id '{S3_access_key_id}'
