@@ -3,7 +3,25 @@ import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 import logging
-from logging import config
+from sys import platform
+import json
+
+logger = logging.getLogger(__name__)
+
+if platform.startswith("linux"):
+    default_config_dir = "/root/.grizly"
+else:
+    default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
+
+
+def read_config():
+    try:
+        json_path = os.path.join(default_config_dir, "etl_config.json")
+        with open(json_path, "r") as f:
+            config = json.load(f)
+    except KeyError:
+        config = "Error with UserProfile"
+    return config
 
 
 def sfdc_to_sqlalchemy_dtype(sfdc_dtype):
@@ -66,26 +84,19 @@ def get_sfdc_columns(table, columns=None, column_types=True):
     ----------
     List or Dict
     """
+
     config = read_config()
 
     sfdc_username = config["sfdc_username"]
     sfdc_pw = config["sfdc_password"]
 
     try:
-        sf = Salesforce(
-            password=sfdc_pw, username=sfdc_username, organizationId="00DE0000000Hkve"
-        )
+        sf = Salesforce(password=sfdc_pw, username=sfdc_username, organizationId="00DE0000000Hkve")
     except SalesforceAuthenticationFailed:
-        print(
-            "Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?"
-        )
+        logger.info("Could not log in to SFDC. Are you sure your password hasn't expired and your proxy is set up correctly?")
         raise SalesforceAuthenticationFailed
-    field_descriptions = eval(
-        f'sf.{table}.describe()["fields"]'
-    )  # change to variable table
-    types = {
-        field["name"]: (field["type"], field["length"]) for field in field_descriptions
-    }
+    field_descriptions = eval(f'sf.{table}.describe()["fields"]')  # change to variable table
+    types = {field["name"]: (field["type"], field["length"]) for field in field_descriptions}
 
     if columns:
         fields = columns
@@ -137,12 +148,22 @@ def get_path(*args, from_where="python"):
         path in string format
     """
     if from_where == "python":
-        try:
-            cwd = os.environ["USERPROFILE"]
-        except KeyError:
-            cwd = "Error with UserProfile"
-        cwd = os.path.join(cwd, *args)
+        if platform.startswith("linux"):
+            home_env = "HOME"
+            # temporary hack
+            return os.path.join("/root", *args)
+        elif platform.startswith("win"):
+            home_env = "USERPROFILE"
+        else:
+            raise NotImplementedError(f"Unable to retrieve home env variable for {platform}")
+
+        home_path = os.getenv(home_env)
+
+        if not home_path:
+            raise ValueError(f"{home_path}, {os.environ}, \nEnvironment variable {home_env} on platform {platform} is not set")
+        cwd = os.path.join(home_path, *args)
         return cwd
+
     elif from_where == "here":
         cwd = os.path.abspath("")
         cwd = os.path.join(cwd, *args)
@@ -169,12 +190,8 @@ def clean_colnames(df):
 
     reserved_words = ["user"]
 
-    df.columns = df.columns.str.strip().str.replace(
-        " ", "_"
-    )  # Redshift won't accept column names with spaces
-    df.columns = [
-        f'"{col}"' if col.lower() in reserved_words else col for col in df.columns
-    ]
+    df.columns = df.columns.str.strip().str.replace(" ", "_")  # Redshift won't accept column names with spaces
+    df.columns = [f'"{col}"' if col.lower() in reserved_words else col for col in df.columns]
 
     return df
 
@@ -219,9 +236,7 @@ def clean(df):
         df_string_cols.applymap(remove_inside_quotes)
         .applymap(remove_inside_single_quote)
         .replace(to_replace="\\", value="")
-        .replace(
-            to_replace="\n", value="", regex=True
-        )  # regex=True means "find anywhere within the string"
+        .replace(to_replace="\n", value="", regex=True)  # regex=True means "find anywhere within the string"
     )
     df.loc[:, df.columns.isin(df_string_cols.columns)] = df_string_cols
 

@@ -2,6 +2,7 @@ from pandas import read_sql
 import re
 import os
 import sqlparse
+import logging
 from copy import deepcopy
 import json
 import logging
@@ -18,6 +19,8 @@ from functools import partial
 deprecation.deprecated = partial(
     deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
 )
+
+logger = logging.getLogger(__name__)
 
 
 def prepend_table(data, expression):
@@ -48,16 +51,18 @@ class QFrame(Extract):
         Other engine strings:
 
         * DenodoPROD: "mssql+pyodbc://DenodoPROD",
-        * Redshift: "mssql+pyodbc://Redshift",
+        * Redshift: "mssql+pyodbc://redshift_acoe",
         * MariaDB: "mssql+pyodbc://retool_dev_db"
     """
 
     # KM: can we delete sql argument?
-    def __init__(self, data={}, engine="", sql="", getfields=[]):
+    def __init__(self, data={}, engine: str = None, sql=None, getfields=[]):
         self.tool_name = "QFrame"
-        self.engine = engine if engine != "" else "mssql+pyodbc://DenodoODBC"
+        self.engine = engine if engine else "mssql+pyodbc://DenodoODBC"
+        if not isinstance(self.engine, str):
+            raise ValueError("QFrame engine is not of type: str")
         self.data = data
-        self.sql = sql
+        self.sql = sql or ''
         self.getfields = getfields
         self.fieldattrs = [
             "type",
@@ -270,10 +275,10 @@ class QFrame(Extract):
 
         for field in fields:
             if field not in sq_fields:
-                print(f"Field {field} not found")
+                logger.debug(f"Field {field} not found")
 
-            elif "select" in sq_fields[field] and sq_fields[field]["select"] == 0:
-                print(f"Field {field} is not selected in subquery.")
+            elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
+                logger.debug(f"Field {field} is not selected in subquery.")
 
             else:
                 if "as" in sq_fields[field] and sq_fields[field]["as"] != "":
@@ -612,7 +617,7 @@ class QFrame(Extract):
                 if field in self.data["select"]["fields"]:
                     self.data["select"]["fields"][field]["group_by"] = aggtype
                 else:
-                    print("Field not found.")
+                    logger.debug("Field not found.")
 
         return self
 
@@ -688,7 +693,7 @@ class QFrame(Extract):
                 order = "ASC" if ascending[iterator] else "DESC"
                 self.data["select"]["fields"][field]["order_by"] = order
             else:
-                print(f"Field {field} not found.")
+                logger.debug(f"Field {field} not found.")
 
             iterator += 1
 
@@ -833,8 +838,6 @@ class QFrame(Extract):
         ----------
         table : str
             Name of SQL table.
-        engine : str
-            Engine string (where we want to create table).
         schema : str, optional
             Specify the schema.
 
@@ -896,12 +899,10 @@ class QFrame(Extract):
             If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
         keep_csv : bool, optional
             Whether to keep the local csv copy after uploading it to Amazon S3, by default True
-        cursor : Cursor, optional
-            The cursor to be used to execute the SQL, by default None
         redshift_str : str, optional
-            Redshift engine string, by default 'mssql+pyodbc://Redshift'
+            Redshift engine string to pass to s3_to_rds_qf, by default None
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name to pass to s3_to_rds_qf, by default None
 
         Examples
         --------
@@ -1015,8 +1016,6 @@ class QFrame(Extract):
         ----------
         table : str
             Name of SQL table.
-        engine : str
-            Engine string.
         schema : string, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -1124,9 +1123,9 @@ class QFrame(Extract):
         use_col_names : bool, optional
             If True the data will be loaded by the names of columns, by default True
         redshift_str : str, optional
-            Redshift engine string, by default 'mssql+pyodbc://Redshift'
+            Redshift engine string, by default None
         bucket : str, optional
-            Bucket name, if None then 'teis-data'
+            Bucket name, by default None
 
         Returns
         -------
