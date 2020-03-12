@@ -26,3 +26,5 @@ nbsphinx
 configparser
 fpdf
 jupyter_sphinx
+pypika
+deprecation

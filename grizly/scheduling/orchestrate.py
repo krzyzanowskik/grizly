@@ -23,14 +23,18 @@ from dask.dot import _get_display_cls
 from dask.optimization import key_split
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from exchangelib.errors import ErrorFolderNotFound
 
-from grizly.config import Config
+from ..config import Config
+from ..tools.email import Email, EmailAccount
+from ..tools.s3 import df_to_s3, s3_to_rds
+from ..utils import get_path
+from ..tools.sqldb import SQLDB
 
-from .email import Email, EmailAccount
-from .etl import df_to_s3, s3_to_rds
-from .utils import get_last_working_day, read_config
 
-workflows_dir = "/home/acoe_workflows"
+workflows_dir = os.getenv("WORKFLOWS_ROOT_DIR") or "/home/acoe_workflows"
+if sys.platform.startswith("win"):
+    workflows_dir = get_path("acoe_projects")
 LISTENER_STORE = os.path.join(workflows_dir, "workflows", "etc", "listener_store.json")
 
 # logger = logging.getLogger(__name__)
@@ -84,10 +88,11 @@ class Schedule:
         - ValueError: if the cron string is invalid
     """
 
-    def __init__(self, cron, start_date=None, end_date=None):
+    def __init__(self, cron, name=None, start_date=None, end_date=None):
         if not croniter.is_valid(cron):
             raise ValueError("Invalid cron string: {}".format(cron))
         self.cron = cron
+        self.name = name
         self.start_date = start_date
         self.end_date = end_date
 
@@ -123,6 +128,9 @@ class Schedule:
 
         return dates
 
+    def __repr__(self):
+        return f"{type(self).__name__}({self.cron})"
+
 
 class Trigger:
     def __init__(self, func, params=None):
@@ -145,16 +153,25 @@ class Listener:
     A class that listens for changes in a table and server as a trigger for upstream-dependent workflows.
 
     Checks and stores table's last refresh/trigger date.
+
+
+    Paramaters
+    ----------
+    engine_str : str, optional
+        Use to overwrite the defaults. By default if db="denodo" then "mssql+pyodbc://DenodoPROD",
+        if db="redshift" then "mssql+pyodbc://redshift_acoe"
     """
 
     def __init__(
         self,
         workflow,
+        class_name="Listener",
         schema=None,
         table=None,
         field=None,
         query=None,
         db="denodo",
+        engine_str=None,
         trigger=None,
         delay=0,
     ):
@@ -162,6 +179,7 @@ class Listener:
         self.workflow = workflow
         self.name = workflow.name
         self.db = db
+        self.engine_str = engine_str
         self.schema = trigger.schema if trigger else schema
         self.table = table or trigger.table
         self.field = field
@@ -221,12 +239,7 @@ class Listener:
         return deco_retry
 
     def get_engine(self):
-
-        config = read_config()
-        engine_str = config[self.db]
-        engine = create_engine(engine_str, encoding="utf8", poolclass=NullPool)
-
-        return engine
+        return SQLDB(db=self.db, engine_str=self.engine_str).get_connection()
 
     def get_last_json_refresh(self, key):
         with open(LISTENER_STORE) as f:
@@ -257,9 +270,13 @@ class Listener:
                     listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
         else:
             if isinstance(self.last_data_refresh, dt.date):
-                listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+                listener_store[self.name] = {
+                    "last_data_refresh": str(self.last_data_refresh)
+                }
             else:
-                listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
+                listener_store[self.name] = {
+                    "last_data_refresh": self.last_data_refresh
+                }
 
         with open(LISTENER_STORE, "w") as f_write:
             json.dump(listener_store, f_write, indent=4)
@@ -387,7 +404,7 @@ class EmailListener(Listener):
         self.email_password = email_password
         self.proxy = proxy
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
-        
+
     def __repr__(self):
         return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
 
@@ -559,7 +576,7 @@ class Workflow:
 
         if not priority:
             priority = self.priority
-        
+
         if not client:
             client = Client(client_address)
         computation = client.compute(self.graph, retries=3, priority=priority)
@@ -596,7 +613,7 @@ class Runner:
     """Workflow runner"""
 
     def __init__(self, client_address: str = None, logger: Logger = None, env: str = "prod") -> None:
-        self.client_address = client_address 
+        self.client_address = client_address
         self.env = env
         self.logger = logging.getLogger(__name__)
         self.run_params = None
@@ -617,33 +634,33 @@ class Runner:
         bool
             Whether the workflow's scheduled next run coincides with current time
         """
-        
+
         if isinstance(workflow.trigger, Schedule):
         # if workflow.is_scheduled:
             next_run_short = workflow.next_run.strftime("%Y-%m-%d %H:%M")
             now = datetime.now(timezone.utc)
-            
+
             self.logger.info(
                 f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run_short})"
             )
             # self.logger.info(f"Day: {type(workflow.next_run.day)}:{workflow.next_run.day} vs now: {type(now.day)}:{now.day}")
             # self.logger.info(f"Hour: {type(workflow.next_run.hour)}:{workflow.next_run.hour} vs now: {type(now.hour)}:{now.hour}")
             # self.logger.info(f"Minute: {type(workflow.next_run.minute)}:{workflow.next_run.minute} vs now: {type(now.minute)}:{now.minute}")
-            
+
             next_run = workflow.next_run
             if (
-                    (next_run.day == now.day) and 
-                    (next_run.hour == now.hour) and 
+                    (next_run.day == now.day) and
+                    (next_run.hour == now.hour) and
                     (next_run.minute == now.minute + 1)  # if we don't add 1 here, cron will just skip to next date once it hits now
                 ): # minutes for precise scheduling - this assumes runner runs for less than 1 min
                 # ideally, each listener should run in a separate thread so that this is guaranteed
                 # (now, if e.g. Denodo is not responding, a scheduled workflow that comes below the triggered one will not run)
                 workflow.next_run = workflow.trigger.next(1)[0]
                 return True
-        
+
         elif isinstance(workflow.trigger, Listener):
         # elif workflow.is_triggered:
-            
+
             #listener = workflow.listener
             listener = workflow.trigger
 
@@ -652,7 +669,7 @@ class Runner:
                 self.logger.info(f"{listener.name}: listening for changes in {listener.search_email_address}'s {folder} folder")
             else:
                 self.logger.info(f"{listener.name}: listening for changes in {listener.table}...")
-            
+
             if listener.detect_change():
                 return True
 
@@ -724,7 +741,7 @@ class Runner:
             self.logger.debug(f"Overwriting workflow parameters: {overwrite_params}")
             for workflow in workflows:
                 self.overwrite_params(workflow, params=overwrite_params)
-        
+
         client = Client(self.client_address)
 
         for workflow in workflows:
@@ -840,31 +857,3 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
 def get_con(engine):
     con = engine.connect().connection
     return con
-
-
-def execute_query(engine, query):
-    conn = engine.connect().connection
-    cursor = conn.cursor()
-    cursor.execute(query)
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return None
-
-
-def update_queue(client, engine, schema=None, table=None):
-    tasks = client.cluster.scheduler.tasks
-    for task_name in tasks:
-        if task_name.endswith("_graph"):
-            task = tasks[task_name]
-            workflow_name = task_name[: -len("_graph")]
-            workflow_status = task.state
-            if workflow_status == "memory":  # = finished
-                query = f"""
-                DELETE FROM {schema}.{table}
-                WHERE workflow_name = '{workflow_name}';
-                """
-                print(query)
-                execute_query(engine=engine, query=query)
-    return None
-

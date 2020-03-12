@@ -1,14 +1,14 @@
 import pandas
 import requests
 from ..config import Config, _validate_config
-from .tool import Tool
+from .extract import Extract
 from .s3 import S3
 
 
-class GitHub(Tool):
+class GitHub(Extract):
 
     def __init__(self, username:str=None, username_password:str=None, pages:int=100
-                    , proxies:dict=None, config_key="standard"):
+                    , proxies:dict=None, config_key="config"):
         """Pulls GitHub data into a pandas data frame
         
         Parameters
@@ -23,9 +23,7 @@ class GitHub(Tool):
         super().__init__()
         
         if username_password is None:
-            _validate_config(config=Config.data[config_key],
-                            services='github')
-            config = Config.data[config_key]['github']
+            config = Config.data['github']
             self.config = config
             self.username =  config['username']
             self.username_password = config['username_password']
@@ -37,10 +35,11 @@ class GitHub(Tool):
             self.pages = pages
             self.proxies = proxies
             self.config = None
+        self.tool_name = "GitHub"
         self.df = None
 
-    def from_issues(self, org_name:str):
-        """Gets issues into a data frame
+    def from_issues(self, org_name: str):
+        """Gets issues into a data frame extract
         
         Parameters
         ----------
@@ -55,6 +54,7 @@ class GitHub(Tool):
             "http": "http://restrictedproxy.tycoelectronics.com:80",
             "https": "https://restrictedproxy.tycoelectronics.com:80",
             }
+        print("Test")
         records = []
         if self.username is None:
             self.username = _validate_config(config=Config.data[self.config_key], 
@@ -71,7 +71,10 @@ class GitHub(Tool):
                 break
             if page == 1:
                 records.append(["url","repository_name", "user_login", "assignees_login"
-                , "milestone_title", "title", "created_at", "updated_at", "state", "labels"])
+                , "milestone_title", "milestone_description", "milestone_open_issues"
+                , "milestone_closed_issues", "milestone_created_at", "milestone_updated_at"
+                , "milestone_closed_at", "milestone_due_on", "title", "created_at"
+                , "updated_at", "state", "labels"])
             for i in range(len(data.json())):
                 record = []
                 record.append(data.json()[i]["url"])
@@ -80,8 +83,19 @@ class GitHub(Tool):
                 record.append(', '.join([assignee["login"] for assignee in data.json()[i]["assignees"]]))
                 try:
                     record.append(data.json()[i]["milestone"]["title"])
+                    record.append(data.json()[i]["milestone"]["description"])
+                    record.append(data.json()[i]["milestone"]["open_issues"])
+                    record.append(data.json()[i]["milestone"]["closed_issues"])
+                    record.append(data.json()[i]["milestone"]["created_at"])
+                    record.append(data.json()[i]["milestone"]["updated_at"])
+                    record.append(data.json()[i]["milestone"]["closed_at"])
+                    record.append(data.json()[i]["milestone"]["due_on"])
                 except:
-                    record.append("no_milestone")
+                    no_milestones = ["no_milestone", "no_milestone", 0
+                                , 0, "no_milestone", "no_milestone"
+                                , "no_milestone", "no_milestone"]
+                    for no_milestone in no_milestones:
+                        record.append(no_milestone)
                 record.append(data.json()[i]["title"])
                 record.append(data.json()[i]["created_at"])
                 record.append(data.json()[i]["updated_at"])
