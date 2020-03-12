@@ -391,7 +391,13 @@ class EmailListener(Listener):
         proxy=None,
     ):
         self.name = workflow.name
+<<<<<<< HEAD:grizly/scheduling/orchestrate.py
         self.notification_title = notification_title or workflow.name.lower().replace(" ", "_")
+=======
+        self.notification_title = notification_title or workflow.name.lower().replace(
+            " ", "_"
+        )
+>>>>>>> 0.3:grizly/orchestrate.py
         self.db = db
         self.logger = logging.getLogger(__name__)
         self.engine = None
@@ -404,6 +410,18 @@ class EmailListener(Listener):
         self.email_password = email_password
         self.proxy = proxy
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
+<<<<<<< HEAD:grizly/scheduling/orchestrate.py
+=======
+        # self.last_data_refresh = self.get_last_email_date(
+        #     self.workflow_report_name,
+        #     self.email_folder,
+        #     self.search_email_address,
+        #     email_address=self.email_address,
+        #     email_password=self.email_password,
+        #     config_key=self.config_key,
+        # )
+        # super().__init__(self, self.last_data_refresh)
+>>>>>>> 0.3:grizly/orchestrate.py
 
     def __repr__(self):
         return f"{type(self).__name__}(notification_title={self.notification_title}, search_email_address={self.search_email_address}, email_folder={self.email_folder})"
@@ -435,8 +453,17 @@ class EmailListener(Listener):
         email_password=None,
         config_key="standard",
     ):
+<<<<<<< HEAD:grizly/scheduling/orchestrate.py
 
         account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
+=======
+        account = EmailAccount(
+            email_address,
+            email_password,
+            alias=self.search_email_address,
+            proxy=self.proxy,
+        ).account
+>>>>>>> 0.3:grizly/orchestrate.py
         self._validate_folder(account, email_folder)
         last_message = None
 
@@ -461,15 +488,40 @@ class EmailListener(Listener):
                     .only("datetime_received")[0]
                 )
             except IndexError:
+<<<<<<< HEAD:grizly/scheduling/orchestrate.py
                 self.logger.warning(f"No notifications for {self.name} were found in Inbox folder")
 
         if not last_message:
             return None
 
+=======
+                self.logger.warning(
+                    f"No notifications for {self.name} were found in Inbox folder"
+                )
+
+        if not last_message:
+            return None
+
+>>>>>>> 0.3:grizly/orchestrate.py
         d = last_message.datetime_received.date()
         last_received_date = date(d.year, d.month, d.day)
 
         return last_received_date
+<<<<<<< HEAD:grizly/scheduling/orchestrate.py
+=======
+
+
+class TriggerListener(Listener):
+    pass
+
+
+class FieldListener(Listener):
+    pass
+
+
+class QueryListener(Listener):
+    pass
+>>>>>>> 0.3:grizly/orchestrate.py
 
 
 class Workflow:
@@ -552,7 +604,7 @@ class Workflow:
         return deco_retry
 
     def __str__(self):
-        return self.tasks
+        return f"{self.tasks}"
 
     def visualize(self):
         return self.graph.visualize()
@@ -857,3 +909,13 @@ def retry(exceptions, tries=4, delay=3, backoff=2, logger=None):
 def get_con(engine):
     con = engine.connect().connection
     return con
+
+
+def execute_query(engine, query):
+    conn = engine.connect().connection
+    cursor = conn.cursor()
+    cursor.execute(query)
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return None

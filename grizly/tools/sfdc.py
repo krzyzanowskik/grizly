@@ -11,6 +11,7 @@ from ..config import Config
 from logging import Logger
 
 
+
 class SFDC:
     """A class for extracting with Salesforce data.
 
@@ -42,7 +43,9 @@ class SFDC:
     ):
         self.env = env
         try:
-            config = Config().get_service(config_key=config_key, service="sfdc", env=env)
+            config = Config().get_service(
+                config_key=config_key, service="sfdc", env=env
+            )
         except:
             config = None
         # first lookup in parameters, then config, then env variables
@@ -113,7 +116,9 @@ class SFDC:
         next_batch = self.get_next_batch(sf, raw_response)
 
         while next_batch:
-            self.logger.info(f"Batch of size {len(next_batch)} added. Loading next batch...")
+            self.logger.info(
+                f"Batch of size {len(next_batch)} added. Loading next batch..."
+            )
             raw_response.extend(next_batch)
             next_batch = self.get_next_batch(sf, next_batch)
 
