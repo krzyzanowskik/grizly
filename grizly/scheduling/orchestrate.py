@@ -11,7 +11,7 @@ from logging import Logger
 from time import sleep, time
 from typing import Any, Dict, Iterable, List
 from distributed import Client
-from grizly.tools.s3 import S3
+from ..tools.s3 import S3
 
 import dask
 import graphviz
@@ -38,6 +38,7 @@ if sys.platform.startswith("win"):
 LISTENER_STORE = os.path.join(workflows_dir, "workflows", "etc", "listener_store.json")
 
 # logger = logging.getLogger(__name__)
+
 
 def cast_to_date(maybe_date: Any) -> dt.date:
     """
@@ -194,7 +195,7 @@ class Listener:
 
     def __repr__(self):
         if self.query:
-            return f"{type(self).__name__}(query=\"\"\"{self.query}\"\"\")"
+            return f'{type(self).__name__}(query="""{self.query}""")'
         return f"{type(self).__name__}(db={self.db}, schema={self.schema}, table={self.table}, field={self.field})"
 
     def retry_task(exceptions, tries=4, delay=3, backoff=2, logger=None):
@@ -246,10 +247,14 @@ class Listener:
             listener_store = json.load(f)
             if not listener_store.get(self.name):
                 return None
-            last_json_refresh = listener_store[self.name].get(key)  # int or serialized date
+            last_json_refresh = listener_store[self.name].get(
+                key
+            )  # int or serialized date
             try:
                 # attempt to convert the serialized datetime to a date object
-                last_json_refresh = datetime.date(datetime.strptime(last_json_refresh, r"%Y-%m-%d"))
+                last_json_refresh = datetime.date(
+                    datetime.strptime(last_json_refresh, r"%Y-%m-%d")
+                )
             except:
                 pass
             return last_json_refresh
@@ -260,14 +265,22 @@ class Listener:
                 listener_store = json.load(json_file)
             except JSONDecodeError:
                 listener_store = {}
-        if not isinstance(self, EmailListener):  # to be done properly with TriggerListener subclass
+        if not isinstance(
+            self, EmailListener
+        ):  # to be done properly with TriggerListener subclass
             if self.trigger:
-                listener_store[self.name] = {"last_trigger_run": str(self.last_trigger_run)}
+                listener_store[self.name] = {
+                    "last_trigger_run": str(self.last_trigger_run)
+                }
             else:
                 if isinstance(self.last_data_refresh, dt.date):
-                    listener_store[self.name] = {"last_data_refresh": str(self.last_data_refresh)}
+                    listener_store[self.name] = {
+                        "last_data_refresh": str(self.last_data_refresh)
+                    }
                 else:
-                    listener_store[self.name] = {"last_data_refresh": self.last_data_refresh}
+                    listener_store[self.name] = {
+                        "last_data_refresh": self.last_data_refresh
+                    }
         else:
             if isinstance(self.last_data_refresh, dt.date):
                 listener_store[self.name] = {
@@ -309,14 +322,18 @@ class Listener:
 
     def should_trigger(self, table_refresh_date=None):
 
-        if not isinstance(self, EmailListener):  # to be done properly with TriggerListener subclass
+        if not isinstance(
+            self, EmailListener
+        ):  # to be done properly with TriggerListener subclass
             if self.trigger:
                 today = datetime.today().date()
                 if today == self.last_trigger_run:
                     return False  # workflow was already ran today
                 return self.trigger.should_run
 
-        self.logger.info(f"{self.name}: last data refresh: {self.last_data_refresh}, table_refresh_date: {table_refresh_date}")
+        self.logger.info(
+            f"{self.name}: last data refresh: {self.last_data_refresh}, table_refresh_date: {table_refresh_date}"
+        )
         # first run
         if not self.last_data_refresh:
             return True
@@ -343,7 +360,9 @@ class Listener:
             If neither of [field, query, trigger] is provided.
         """
 
-        if not isinstance(self, EmailListener):  # to be done properly with adding more subclasses
+        if not isinstance(
+            self, EmailListener
+        ):  # to be done properly with adding more subclasses
             if not any([self.field, self.query, self.trigger]):
                 raise ValueError("Please specify the trigger for the listener")
             if self.trigger:
@@ -360,7 +379,9 @@ class Listener:
                     f"Could not retrieve refresh date from {self.search_email_address}'s {self.email_folder} folder"
                 )
             else:
-                self.logger.exception(f"Connection or query error when connecting to {self.db}")
+                self.logger.exception(
+                    f"Connection or query error when connecting to {self.db}"
+                )
             table_refresh_date = None
 
         if self.should_trigger(table_refresh_date):
@@ -391,7 +412,9 @@ class EmailListener(Listener):
         proxy=None,
     ):
         self.name = workflow.name
-        self.notification_title = notification_title or workflow.name.lower().replace(" ", "_")
+        self.notification_title = notification_title or workflow.name.lower().replace(
+            " ", "_"
+        )
         self.db = db
         self.logger = logging.getLogger(__name__)
         self.engine = None
@@ -436,7 +459,12 @@ class EmailListener(Listener):
         config_key="standard",
     ):
 
-        account = EmailAccount(email_address, email_password, alias=self.search_email_address, proxy=self.proxy).account
+        account = EmailAccount(
+            email_address,
+            email_password,
+            alias=self.search_email_address,
+            proxy=self.proxy,
+        ).account
         self._validate_folder(account, email_folder)
         last_message = None
 
@@ -461,7 +489,9 @@ class EmailListener(Listener):
                     .only("datetime_received")[0]
                 )
             except IndexError:
-                self.logger.warning(f"No notifications for {self.name} were found in Inbox folder")
+                self.logger.warning(
+                    f"No notifications for {self.name} were found in Inbox folder"
+                )
 
         if not last_message:
             return None
@@ -499,7 +529,7 @@ class Workflow:
         priority=0,
         trigger=None,
         trigger_type="manual",
-        execution_options: dict = None
+        execution_options: dict = None,
     ):
         self.name = name
         self.owner_email = owner_email
@@ -507,7 +537,7 @@ class Workflow:
         self.tasks = [tasks]
         self.children = children
         self.execution_options = execution_options
-        self.graph = dask.delayed()(self.tasks, name=self.name+"_graph")
+        self.graph = dask.delayed()(self.tasks, name=self.name + "_graph")
         self.is_scheduled = False
         self.is_triggered = False
         self.is_manual = False
@@ -573,7 +603,9 @@ class Workflow:
         self.trigger = trigger
         self.trigger_type = type(trigger)
         if isinstance(trigger, Schedule):
-            self.next_run = self.trigger.next(1)[0] # should prbably keep in Scheduele and not propagate here
+            self.next_run = self.trigger.next(1)[
+                0
+            ]  # should prbably keep in Scheduele and not propagate here
 
     def add_schedule(self, schedule):
         self.schedule = schedule
@@ -584,7 +616,9 @@ class Workflow:
         self.listener = listener
         self.is_triggered = True
 
-    def submit(self, client: Client = None, client_address: str = None, priority: int = None) -> None:
+    def submit(
+        self, client: Client = None, client_address: str = None, priority: int = None
+    ) -> None:
 
         if not priority:
             priority = self.priority
@@ -594,7 +628,9 @@ class Workflow:
         computation = client.compute(self.graph, retries=3, priority=priority)
         fire_and_forget(computation)
         self.status = "submitted"
-        if not client:  # if cient is provided, we assume the user will close it on their end
+        if (
+            not client
+        ):  # if cient is provided, we assume the user will close it on their end
             client.close()
 
         schema = "administration"
@@ -624,7 +660,9 @@ class Workflow:
 class Runner:
     """Workflow runner"""
 
-    def __init__(self, client_address: str = None, logger: Logger = None, env: str = "prod") -> None:
+    def __init__(
+        self, client_address: str = None, logger: Logger = None, env: str = "prod"
+    ) -> None:
         self.client_address = client_address
         self.env = env
         self.logger = logging.getLogger(__name__)
@@ -648,7 +686,7 @@ class Runner:
         """
 
         if isinstance(workflow.trigger, Schedule):
-        # if workflow.is_scheduled:
+            # if workflow.is_scheduled:
             next_run_short = workflow.next_run.strftime("%Y-%m-%d %H:%M")
             now = datetime.now(timezone.utc)
 
@@ -661,26 +699,32 @@ class Runner:
 
             next_run = workflow.next_run
             if (
-                    (next_run.day == now.day) and
-                    (next_run.hour == now.hour) and
-                    (next_run.minute == now.minute + 1)  # if we don't add 1 here, cron will just skip to next date once it hits now
-                ): # minutes for precise scheduling - this assumes runner runs for less than 1 min
+                (next_run.day == now.day)
+                and (next_run.hour == now.hour)
+                and (
+                    next_run.minute == now.minute + 1
+                )  # if we don't add 1 here, cron will just skip to next date once it hits now
+            ):  # minutes for precise scheduling - this assumes runner runs for less than 1 min
                 # ideally, each listener should run in a separate thread so that this is guaranteed
                 # (now, if e.g. Denodo is not responding, a scheduled workflow that comes below the triggered one will not run)
                 workflow.next_run = workflow.trigger.next(1)[0]
                 return True
 
         elif isinstance(workflow.trigger, Listener):
-        # elif workflow.is_triggered:
+            # elif workflow.is_triggered:
 
-            #listener = workflow.listener
+            # listener = workflow.listener
             listener = workflow.trigger
 
             if isinstance(listener, EmailListener):
                 folder = listener.email_folder or "inbox"
-                self.logger.info(f"{listener.name}: listening for changes in {listener.search_email_address}'s {folder} folder")
+                self.logger.info(
+                    f"{listener.name}: listening for changes in {listener.search_email_address}'s {folder} folder"
+                )
             else:
-                self.logger.info(f"{listener.name}: listening for changes in {listener.table}...")
+                self.logger.info(
+                    f"{listener.name}: listening for changes in {listener.table}..."
+                )
 
             if listener.detect_change():
                 return True
@@ -689,7 +733,6 @@ class Runner:
             return True
 
         return False
-
 
     def overwrite_params(self, workflow: Workflow, params: Dict) -> None:
         """Overwrites specified workflow's parameters
@@ -729,7 +772,6 @@ class Runner:
             # modify Workflow object's parameters
             else:
                 setattr(workflow, param, params[param])
-
 
     def run(self, workflows: List[Workflow], overwrite_params: Dict = None) -> None:
         """[summary]

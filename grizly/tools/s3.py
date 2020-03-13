@@ -38,7 +38,7 @@ class S3:
     def __init__(
         self,
         file_name: str,
-        s3_key: str,
+        s3_key: str = None,
         bucket: str = None,
         file_dir: str = None,
         redshift_str: str = None,
@@ -46,22 +46,23 @@ class S3:
         logger=None,
     ):
         self.file_name = file_name
-        self.s3_key = s3_key
+        self.s3_key = s3_key if s3_key else ""
+        if not self.s3_key.endswith("/") and self.s3_key != "":
+            self.s3_key += "/"
+        self.full_s3_key = self.s3_key + self.file_name
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
-        self.redshift_str = redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
-        folders = s3_key.split("/")
-        self.full_s3_key = os.path.join(*folders, self.file_name).replace("\\", "/")
+        self.redshift_str = (
+            redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
+        )
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
-
-        if self.s3_key == "":
-            raise ValueError("s3_key not specified")
-
-        if not self.s3_key.endswith("/"):
-            self.s3_key += "/"
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
+
+    def __repr__(self):
+        info = f"""file_name: '{self.file_name}' \ns3_key: '{self.s3_key}' \nbucket: '{self.bucket}' \nfile_dir: '{self.file_dir}' \nredshift_str: '{self.redshift_str}'"""
+        return info
 
     def _check_if_s3_exists(f):
         @wraps(f)
@@ -80,7 +81,9 @@ class S3:
     def _can_upload(self):
 
         try:
-            last_modified = resource('s3').Object(self.bucket, self.full_s3_key).last_modified
+            last_modified = (
+                resource("s3").Object(self.bucket, self.full_s3_key).last_modified
+            )
         except:
             last_modified = None
 
@@ -106,17 +109,18 @@ class S3:
         file_dir:       'C:\\Users'
         redshift_str:   'mssql+pyodbc://redshift_acoe'
         """
-        print(f"file_name: \t'{self.file_name}'")
-        print(f"s3_key: \t'{self.s3_key}'")
-        print(f"bucket: \t'{self.bucket}'")
-        print(f"file_dir: \t'{self.file_dir}'")
-        # try:
-        #     print(
-        #         f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}"
-        #     )
-        # except:
-        #     pass
-        print(f"redshift_str: \t'{self.redshift_str}'")
+        # print(f"file_name: \t'{self.file_name}'")
+        # print(f"s3_key: \t'{self.s3_key}'")
+        # print(f"bucket: \t'{self.bucket}'")
+        # print(f"file_dir: \t'{self.file_dir}'")
+        # # try:
+        # #     print(
+        # #         f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}"
+        # #     )
+        # # except:
+        # #     pass
+        # print(f"redshift_str: \t'{self.redshift_str}'")
+        print(self.__repr__())
 
     def list(self):
         """Returns the list of files that are in S3.s3_key
@@ -180,15 +184,14 @@ class S3:
         Examples
         --------
         >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users')
-        >>> s3.info()
+        >>> s3
         file_name: 	    'test.csv'
         s3_key: 	    'bulk/'
         bucket: 	    'acoe-s3'
         file_dir: 	    'C:\\Users'
         redshift_str: 	'mssql+pyodbc://redshift_acoe'
         >>> s3 = s3.copy_to('test_old.csv', s3_key='bulk/test/')
-        'bulk/test.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'bulk/test/test_old.csv'
-        >>> s3.info()
+        >>> s3
         file_name: 	    'test_old.csv'
         s3_key: 	    'bulk/test/'
         bucket: 	    'acoe-s3'
@@ -229,7 +232,9 @@ class S3:
         copy_source = {"Key": source_s3_key, "Bucket": self.bucket}
 
         s3_file.copy(copy_source)
-        self.logger.info(f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'")
+        self.logger.info(
+            f"'{source_s3_key}' copied from '{self.bucket}' to '{bucket}' bucket as '{s3_key + file_name}'"
+        )
 
         if not keep_file:
             self.delete()
@@ -264,7 +269,6 @@ class S3:
         >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
         >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
         >>> s3 = s3.from_file()
-        'test_table.csv' uploaded to 'acoe-s3' bucket as 'analytics_project_starter/test/test_table.csv'
         """
         if if_exists not in ("fail", "skip", "replace", "archive"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -298,7 +302,9 @@ class S3:
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        self.logger.debug(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        self.logger.debug(
+            f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'"
+        )
 
         if not keep_file:
             os.remove(file_path)
@@ -323,8 +329,7 @@ class S3:
 
         Examples
         --------
-        >>> S3('test.csv', 'bulk/', file_dir='C:\\Users').to_file()
-        'bulk/test.csv' was successfully downloaded to 'C:\Users\test.csv'
+        >>> s3 = S3('test.csv', 'bulk/', file_dir='C:\\Users').to_file()
         >>> os.remove('C:\\Users\\test.csv')
         """
         if if_exists not in ("fail", "skip", "replace"):
@@ -338,7 +343,7 @@ class S3:
                 return None
 
         s3_key = self.s3_key + self.file_name
-        s3_file = resource('s3').Object(self.bucket, s3_key)
+        s3_file = resource("s3").Object(self.bucket, s3_key)
         s3_file.download_file(file_path)
 
         self.logger.info(f"'{s3_key}' was successfully downloaded to '{file_path}'")
@@ -373,16 +378,19 @@ class S3:
         chunksize: int = 10000,
         if_exists: {"fail", "skip", "replace", "archive"} = "replace",
     ):
-        """Saves DataFrame in S3.
+        r"""Saves DataFrame in S3.
 
         Examples
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
         >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
-        DataFrame saved in 'C:\\Users\\test.csv'
-        'test.csv' uploaded to 'acoe-s3' bucket as 'bulk/test.csv'
-        'C:\\Users\\test.csv' has been removed
+        >>> s3
+        file_name: 'test.csv'
+        s3_key: 'bulk/'
+        bucket: 'acoe-s3'
+        file_dir: 'C:\\Users'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
 
         Parameters
         ----------
@@ -535,10 +543,13 @@ class S3:
         --------
         >>> s3 = S3('test_old.csv', 'bulk/test/', file_dir=r'C:\\Users')
         >>> s3_arch = s3.archive()
-            'bulk/test/test_old.csv' copied from 'acoe-s3' to 'acoe-s3' bucket as 'archive/bulk/test/test_old(0).csv'
-            'bulk/test/test_old.csv' has been removed successfully
+        >>> s3_arch
+        file_name: 'test_old(0).csv'
+        s3_key: 'archive/bulk/test/'
+        bucket: 'acoe-s3'
+        file_dir: 'C:\\Users'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
         >>> s3_arch.delete()
-            'archive/bulk/test/test_old(0).csv' has been removed successfully
         """
         s3_archive = S3(
             file_name=self.file_name,

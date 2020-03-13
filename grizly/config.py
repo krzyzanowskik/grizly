@@ -17,7 +17,7 @@ class Config:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def from_dict(self, data:dict):
+    def from_dict(self, data: dict):
         """Overwrites Config.data using dictionary data
 
         Parameters
@@ -69,7 +69,6 @@ class Config:
         ...        }
         ...        }
         >>> conf = Config().from_dict(standard)
-        Config data has been saved.
 
         Returns
         -------
@@ -86,7 +85,7 @@ class Config:
                     data["config"][key], services=list(data["config"][key])
                 )
 
-            Config.data = data['config']
+            Config.data = data["config"]
             self.logger.debug("Config data has been saved.")
             return Config()
         else:
@@ -104,7 +103,6 @@ class Config:
         --------
         >>> json_path = get_path('dev', 'grizly', 'notebooks', 'config.json')
         >>> conf = Config().from_json(json_path)
-        Config data has been saved.
 
         Returns
         -------
@@ -112,14 +110,18 @@ class Config:
         """
         with open(json_path, "r") as json_file:
             data = json.load(json_file)
-        if 'config' in data:
-            if not isinstance(data['config'], dict): raise TypeError("config must be a dictionary")
-            if data['config'] == {}: raise ValueError("config is empty")
+        if "config" in data:
+            if not isinstance(data["config"], dict):
+                raise TypeError("config must be a dictionary")
+            if data["config"] == {}:
+                raise ValueError("config is empty")
 
-            for key in data['config'].keys():
-                _validate_config(data['config'][key], services = list(data['config'][key]))
+            for key in data["config"].keys():
+                _validate_config(
+                    data["config"][key], services=list(data["config"][key])
+                )
 
-            Config.data = data['config']
+            Config.data = data["config"]
             self.logger.debug("Config data has been saved.")
             return Config()
         else:
@@ -150,7 +152,8 @@ class Config:
         ...        }
         ...    }
         >>> conf = Config().add_keys(personal_john)
-        Key 'personal_john' has been added.
+        >>> Config.data["personal_john"]
+        {'email': {'email_address': 'john_snow@example.com', 'email_password': 'wolf123', 'send_as': 'John Snow'}}
 
         Returns
         -------
@@ -175,7 +178,7 @@ class Config:
             else:
                 _validate_config(data[key], services=list(data[key]))
                 Config.data[key] = data[key]
-                print(f"Key '{key}' has been added.")
+                self.logger.debug(f"Key '{key}' has been added.")
         return Config()
 
     def get_service(
@@ -209,7 +212,6 @@ class Config:
         --------
         >>> json_path = get_path('dev', 'grizly', 'notebooks', 'config.json')
         >>> conf = Config().from_json(json_path)
-        Config data has been saved.
         >>> conf.get_service(service='email')
         {'email_address': 'my_email@example.com',
         'email_password': 'my_password',
