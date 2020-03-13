@@ -19,10 +19,9 @@ from typing import Union, List
 
 class EmailAccount:
     def __init__(
-        self, email_address, email_password, alias=None, config_key=None, proxy=None
+        self, email_address=None, email_password=None, alias=None, config_key=None, proxy=None
     ):
-        if config_key:
-            config = Config().get_service(config_key=config_key, service="email")
+        config = Config().get_service(config_key=config_key, service="email") if config_key else {}
         self.logger = logging.getLogger(__name__)
         self.email_address = (
             email_address or os.getenv("EMAIL_ADDRESS") or config.get("email_address")
@@ -39,7 +38,7 @@ class EmailAccount:
             credentials=self.credentials,
             retry_policy=FaultTolerance(max_wait=2 * 60),
         )
-        self.proxy = proxy or os.getenv("HTTPS_PROXY")
+        self.proxy = proxy or os.getenv("HTTPS_PROXY") or Config().get_service(config_key=config_key, service="proxies").get("https")
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
         try:
@@ -54,7 +53,7 @@ class EmailAccount:
                 access_type=DELEGATE,
             )
         except:
-            self.logger.exception("Email account could not be accessed.")
+            self.logger.exception(f"Email account {self.email_address}, proxy: {self.proxy if self.proxy else ''} could not be accessed.")
             raise ConnectionError(
                 "Connection to Exchange server failed. Please check your credentials and/or proxy settings"
             )
