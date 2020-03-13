@@ -3,6 +3,8 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.engine import Engine
 from pandas import read_sql_query
 import os
+import sqlparse
+import logging
 
 from ..config import Config
 from ..utils import get_sfdc_columns
@@ -30,6 +32,8 @@ class SQLDB:
             )
         self.db = db
         self.engine_str = engine_str or config.get(db)
+        self.last_commit = ""
+        self.logger = logging.getLogger(__name__)
 
     def get_connection(self):
         """Returns sqlalchemy engine.
@@ -78,6 +82,13 @@ class SQLDB:
         """
         Creates a new table in Redshift if the table doesn't exist.
 
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb.create_table(table="test_k", columns=["col1", "col2"], types=["varchar", "int"], schema="sandbox")
+        >>> sqldb.check_if_exists(table="test_k", schema="sandbox")
+        True
+
         Parameters
         ----------
         columns : list
@@ -88,7 +99,7 @@ class SQLDB:
         table_name = f"{schema}.{table}" if schema else table
 
         if self.check_if_exists(table=table, schema=schema):
-            print("Table {} already exists...".format(table_name))
+            return self
         else:
             col_tuples = []
             for item in range(len(columns)):
@@ -102,9 +113,10 @@ class SQLDB:
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
             con = self.get_connection()
             con.execute(sql).commit()
+            self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
             con.close()
 
-            print("Table {} has been created successfully.".format(sql))
+            self.logger.debug("Table {} has been created successfully.".format(sql))
         return self
 
     def copy_table(
@@ -123,7 +135,7 @@ class SQLDB:
             con = self.get_connection()
             in_table_name = f"{in_schema}.{in_table}" if in_schema else in_table
             if not self.check_if_exists(table=in_table, schema=in_schema):
-                print(f"Table {in_table_name} doesn't exist.")
+                self.logger.debug(f"Table {in_table_name} doesn't exist.")
             else:
                 out_table_name = (
                     f"{out_schema}.{out_table}" if out_schema else out_table
@@ -139,6 +151,42 @@ class SQLDB:
                         SELECT * FROM {in_table_name}
                         """
                 con.execute(sql).commit()
+                self.last_commit = sqlparse.format(
+                    sql, reindent=True, keyword_case="upper"
+                )
+            con.close()
+        return self
+
+    def insert_into(self, table, columns, sql, schema=None):
+        """
+        Inserts records into redshift table.
+
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb.insert_into(table="test_k", columns=["col1"], sql="SELECT col1 from administration.table_tutorial", schema="sandbox")
+        >>> print(sqldb.last_commit)
+        INSERT INTO sandbox.test_k (col1)
+        SELECT col1
+        FROM administration.table_tutorial
+        >>> con = sqldb.get_connection()
+        >>> con.execute("SELECT * FROM sandbox.test_k").fetchall()
+        [('item2', None), ('item1', None)]
+        >>> con.close()
+
+        """
+        if self.db == "redshift":
+            con = self.get_connection()
+            if self.check_if_exists(table=table, schema=schema):
+                table_name = f"{schema}.{table}" if schema else table
+                columns = ", ".join(columns)
+                sql = f"INSERT INTO {table_name} ({columns}) {sql}"
+                con.execute(sql).commit()
+                self.last_commit = sqlparse.format(
+                    sql, reindent=True, keyword_case="upper"
+                )
+            else:
+                self.logger.debug(f"Table {table_name} doesn't exist.")
             con.close()
         return self
 
@@ -153,33 +201,23 @@ class SQLDB:
                 sql = f"DELETE FROM {table_name}"
                 if where is None:
                     con.execute(sql).commit()
-                    print(
+                    self.last_commit = sqlparse.format(
+                        sql, reindent=True, keyword_case="upper"
+                    )
+                    self.logger.debug(
                         f"Records from table {table_name} has been removed successfully."
                     )
                 else:
                     sql += f" WHERE {where} "
                     con.execute(sql).commit()
-                    print(
+                    self.last_commit = sqlparse.format(
+                        sql, reindent=True, keyword_case="upper"
+                    )
+                    self.logger.debug(
                         f"Records from table {table_name} where {where} has been removed successfully."
                     )
             else:
-                print(f"Table {table_name} doesn't exist.")
-            con.close()
-        return self
-
-    def insert_into(self, table, columns, sql, schema=None):
-        """
-        Inserts records into redshift table.
-        """
-        if self.db == "redshift":
-            con = self.get_connection()
-            if self.check_if_exists(table=table, schema=schema):
-                table_name = f"{schema}.{table}" if schema else table
-                columns = ", ".join(columns)
-                sql = f"INSERT INTO {table_name} ({columns}) {sql}"
-                con.execute(sql).commit()
-            else:
-                print(f"Table {table_name} doesn't exist.")
+                self.logger.debug(f"Table {table_name} doesn't exist.")
             con.close()
         return self
 
@@ -190,18 +228,20 @@ class SQLDB:
         if self.db == "redshift":
             if self.check_if_exists(table=table, schema=schema):
                 if if_exists == "replace":
+                    self.delete_from(table=table, schema=schema)
                     self.insert_into(
                         table=table, columns=columns, sql=sql, schema=schema
                     )
-                    self.delete_from(table=table, schema=schema)
-                    print(f"Data has been owerwritten into {schema}.{table}")
+                    self.logger.debug(
+                        f"Data has been owerwritten into {schema}.{table}"
+                    )
                 elif if_exists == "fail":
                     raise ValueError("Table already exists")
                 elif if_exists == "append":
                     self.insert_into(
                         table=table, columns=columns, sql=sql, schema=schema
                     )
-                    print(f"Data has been appended to {schema}.{table}")
+                    self.logger.debug(f"Data has been appended to {schema}.{table}")
             else:
                 raise ValueError("Table doesn't exist. Use create_table first")
 
@@ -248,6 +288,7 @@ class SQLDB:
         con = self.get_connection()
         cursor = con.cursor()
         cursor.execute(sql)
+        self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
         col_names = []
 
         if column_types == False:
@@ -321,6 +362,7 @@ class SQLDB:
             ORDER BY ordinal_position;
             """
         cursor.execute(sql)
+        self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
 
         col_names = []
 

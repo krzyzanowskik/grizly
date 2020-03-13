@@ -2,10 +2,16 @@ import os
 import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
-import logging
 from sys import platform
 import json
-from .config import read_config
+
+from functools import partial
+import deprecation
+import logging
+
+deprecation.deprecated = partial(
+    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -248,3 +254,21 @@ def clean(df):
     df[bool_cols] = df[bool_cols].astype(int)
 
     return df
+
+
+@deprecation.deprecated(
+    details="Use Config().from_json function or in case of AWS credentials - start using S3 class !!!",
+)
+def read_config():
+    if platform.startswith("linux"):
+        default_config_dir = "/root/.grizly"
+    else:
+        default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
+
+    try:
+        json_path = os.path.join(default_config_dir, "etl_config.json")
+        with open(json_path, "r") as f:
+            config = json.load(f)
+    except KeyError:
+        config = "Error with UserProfile"
+    return config

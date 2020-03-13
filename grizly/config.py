@@ -1,12 +1,6 @@
 import json
 from .utils import get_path
-from functools import partial
-import deprecation
 import logging
-
-deprecation.deprecated = partial(
-    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
-)
 
 
 class Config:
@@ -371,21 +365,3 @@ if platform.startswith("linux"):
     default_config_dir = "/root/.grizly"
 else:
     default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
-
-
-@deprecation.deprecated(
-    details="Use Config().from_json function or in case of AWS credentials - start using S3 class !!!",
-)
-def read_config():
-    if platform.startswith("linux"):
-        default_config_dir = "/root/.grizly"
-    else:
-        default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
-
-    try:
-        json_path = os.path.join(default_config_dir, "etl_config.json")
-        with open(json_path, "r") as f:
-            config = json.load(f)
-    except KeyError:
-        config = "Error with UserProfile"
-    return config
