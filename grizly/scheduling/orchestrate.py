@@ -442,11 +442,8 @@ class EmailListener(Listener):
     def get_table_refresh_date(self):
         return self.get_last_email_date(
             self.notification_title,
-            self.email_folder,
-            self.search_email_address,
-            self.email_address,
-            self.email_password,
-            self.config_key,
+            email_folder=self.email_folder,
+            search_email_address=self.search_email_address,
         )
 
     def get_last_email_date(
@@ -454,14 +451,12 @@ class EmailListener(Listener):
         notification_title,
         email_folder=None,
         search_email_address=None,
-        email_address=None,
-        email_password=None,
-        config_key="standard",
     ):
 
         account = EmailAccount(
-            email_address,
-            email_password,
+            self.email_address,
+            self.email_password,
+            config_key=self.config_key,
             alias=self.search_email_address,
             proxy=self.proxy,
         ).account
