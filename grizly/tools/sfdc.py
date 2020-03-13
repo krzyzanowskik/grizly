@@ -8,6 +8,7 @@ import pandas as pd
 from simple_salesforce import Salesforce
 from simple_salesforce.login import SalesforceAuthenticationFailed
 from ..config import Config
+from ..utils import get_path
 from logging import Logger
 
 

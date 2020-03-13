@@ -101,7 +101,7 @@ class SQLDB:
             columns_str = ", ".join(col_tuples)
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
             con = self.get_connection()
-            con.execute(sql)
+            con.execute(sql).commit()
             con.close()
 
             print("Table {} has been created successfully.".format(sql))
@@ -138,7 +138,7 @@ class SQLDB:
                         CREATE TABLE {out_table_name} AS
                         SELECT * FROM {in_table_name}
                         """
-                con.execute(sql)
+                con.execute(sql).commit()
             con.close()
         return self
 
@@ -152,13 +152,13 @@ class SQLDB:
                 table_name = f"{schema}.{table}" if schema else table
                 sql = f"DELETE FROM {table_name}"
                 if where is None:
-                    con.execute(sql)
+                    con.execute(sql).commit()
                     print(
                         f"Records from table {table_name} has been removed successfully."
                     )
                 else:
                     sql += f" WHERE {where} "
-                    con.execute(sql)
+                    con.execute(sql).commit()
                     print(
                         f"Records from table {table_name} where {where} has been removed successfully."
                     )
@@ -177,7 +177,7 @@ class SQLDB:
                 table_name = f"{schema}.{table}" if schema else table
                 columns = ", ".join(columns)
                 sql = f"INSERT INTO {table_name} ({columns}) {sql}"
-                con.execute(sql)
+                con.execute(sql).commit()
             else:
                 print(f"Table {table_name} doesn't exist.")
             con.close()
