@@ -830,7 +830,7 @@ class QFrame(Extract):
         self.sql = _get_sql(self.data)
         return self.sql
 
-    @deprecation.deprecated(details="Moved to SQLDB class",)
+    @deprecation.deprecated(details="Use SQLDB.create_table instead",)
     def create_table(self, table, schema="", char_size=500, engine_str=None):
         """Creates a new empty QFrame table in database if the table doesn't exist.
 
@@ -858,7 +858,7 @@ class QFrame(Extract):
         return self
 
     @deprecation.deprecated(
-        details="Use QFrame.to_csv and then S3 class to move S3 to redshift",
+        details="Use QFrame.to_csv, S3.from_file and S3.to_rds instead",
     )
     def to_rds(
         self,
@@ -874,7 +874,7 @@ class QFrame(Extract):
         redshift_str=None,
         bucket=None,
     ):
-        """Writes QFrame table to Redshift database.
+        """Writes QFrame table to Redshift database using S3.
 
         Parameters
         ----------
@@ -900,9 +900,9 @@ class QFrame(Extract):
         keep_csv : bool, optional
             Whether to keep the local csv copy after uploading it to Amazon S3, by default True
         redshift_str : str, optional
-            Redshift engine string to pass to s3_to_rds_qf, by default None
+            Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
         bucket : str, optional
-            Bucket name to pass to s3_to_rds_qf, by default None
+            Bucket name in S3, if None then 'acoe-s3'
 
         Examples
         --------
