@@ -377,6 +377,11 @@ else:
     details="Use Config().from_json function or in case of AWS credentials - start using S3 class !!!",
 )
 def read_config():
+    if platform.startswith("linux"):
+        default_config_dir = "/root/.grizly"
+    else:
+        default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
+
     try:
         json_path = os.path.join(default_config_dir, "etl_config.json")
         with open(json_path, "r") as f:
