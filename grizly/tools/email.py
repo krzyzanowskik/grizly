@@ -39,8 +39,7 @@ class EmailAccount:
             credentials=self.credentials,
             retry_policy=FaultTolerance(max_wait=2 * 60),
         )
-        # self.proxy = proxy or os.getenv("HTTPS_PROXY")
-        self.proxy=None
+        self.proxy = proxy or os.getenv("HTTPS_PROXY")
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
         try:
