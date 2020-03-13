@@ -62,7 +62,7 @@ class QFrame(Extract):
         if not isinstance(self.engine, str):
             raise ValueError("QFrame engine is not of type: str")
         self.data = data
-        self.sql = sql or ''
+        self.sql = sql or ""
         self.getfields = getfields
         self.fieldattrs = [
             "type",
@@ -277,7 +277,7 @@ class QFrame(Extract):
             if field not in sq_fields:
                 logger.debug(f"Field {field} not found")
 
-            elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
+            elif "select" in sq_fields[field] and sq_fields[field]["select"] == 0:
                 logger.debug(f"Field {field} is not selected in subquery.")
 
             else:
@@ -910,10 +910,7 @@ class QFrame(Extract):
         >>> playlist_track = {"select": {"fields":{"PlaylistId": {"type" : "dim"}, "TrackId": {"type" : "dim"}}, "table" : "PlaylistTrack"}}
         >>> qf = QFrame(engine=engine_string).read_dict(playlist_track).limit(5)
         >>> qf = qf.to_rds(table='test', csv_path=get_path('test.csv'), schema='sandbox', if_exists='replace', redshift_str='mssql+pyodbc://redshift_acoe', bucket='acoe-s3', keep_csv=False)
-        'test.csv' uploaded to 'acoe-s3' bucket as 'test.csv'
         Records from table sandbox.test has been removed successfully.
-        Loading test.csv data into sandbox.test ...
-        Data has been copied to sandbox.test
 
         Returns
         -------

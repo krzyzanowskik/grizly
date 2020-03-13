@@ -11,7 +11,6 @@ from ..config import Config
 from logging import Logger
 
 
-
 class SFDC:
     """A class for extracting with Salesforce data.
 
@@ -19,10 +18,8 @@ class SFDC:
     --------
     >>> from .s3 import S3
     >>> S3(file_name='acoe_config.json', s3_key='acoe_internal/', file_dir=r'C:\\Users').to_file()
-    'acoe_internal/acoe_config.json' was successfully downloaded to 'C:\\Users\\acoe_config.json'
     >>> config_path = get_path('.grizly', 'acoe_config.json') # contains SFDC username and password
     >>> config = Config().from_json(config_path)
-    Config data has been saved.
     >>> os.remove(r'C:\\Users\\acoe_config.json')
 
     Returns
@@ -65,7 +62,10 @@ class SFDC:
         if self.env == "prod":
             try:
                 sf_conn = Salesforce(
-                    username=self.username, password=self.password, organizationId=self.organization_id, proxies=self.proxies
+                    username=self.username,
+                    password=self.password,
+                    organizationId=self.organization_id,
+                    proxies=self.proxies,
                 )
             except SalesforceAuthenticationFailed:
                 self.logger.exception(
@@ -181,7 +181,9 @@ class SFDCResponse:
                 row.append(item[column])
             l.append(row)
 
-        df = pd.DataFrame(l, columns=self.columns, dtype=dtype).replace(to_replace=["None"], value=np.nan)
+        df = pd.DataFrame(l, columns=self.columns, dtype=dtype).replace(
+            to_replace=["None"], value=np.nan
+        )
 
         return df
 
@@ -212,7 +214,11 @@ class SFDCResponseBulk(SFDCResponse):
         self.logger = logger
 
     def to_df(self, dtype=None):
-        df = pd.DataFrame(self.data).drop("attributes", axis=1).replace(to_replace=["None"], value=np.nan)
+        df = (
+            pd.DataFrame(self.data)
+            .drop("attributes", axis=1)
+            .replace(to_replace=["None"], value=np.nan)
+        )
         return df
 
     def to_csv(self, file_path, sep="\t"):
