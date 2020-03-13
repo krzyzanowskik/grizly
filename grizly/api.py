@@ -1,10 +1,6 @@
-from .utils import (
-    set_cwd,
-    get_path,
-    file_extension,
-)
+from .utils import set_cwd, get_path, file_extension, read_config
 from .store import Store
-from .config import Config, read_config
+from .config import Config
 
 from .ui.start import UI
 
