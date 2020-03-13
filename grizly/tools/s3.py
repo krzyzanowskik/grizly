@@ -490,7 +490,8 @@ class S3:
         config.read(get_path(".aws", "credentials"))
         S3_access_key_id = config["default"]["aws_access_key_id"]
         S3_secret_access_key = config["default"]["aws_secret_access_key"]
-        S3_iam_role = config["default"]["iam_role"]
+        if file_extension(self.file_name) == "parquet":
+            S3_iam_role = config["default"]["iam_role"]
 
         if column_order != None:
             column_order = "(" + ", ".join(column_order) + ")"
