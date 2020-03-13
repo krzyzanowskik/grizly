@@ -85,7 +85,7 @@ class SQLDB:
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
-        >>> sqldb.create_table(table="test_k", columns=["col1", "col2"], types=["varchar", "int"], schema="sandbox")
+        >>> sqldb = sqldb.create_table(table="test_k", columns=["col1", "col2"], types=["varchar", "int"], schema="sandbox")
         >>> sqldb.check_if_exists(table="test_k", schema="sandbox")
         True
 
@@ -123,6 +123,8 @@ class SQLDB:
         self, in_table, out_table, in_schema=None, out_schema=None, if_exists="fail"
     ):
         """
+        Copies records from one table to another.
+
         Paramaters
         ----------
         if_exists : str, optional
@@ -164,14 +166,14 @@ class SQLDB:
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
-        >>> sqldb.insert_into(table="test_k", columns=["col1"], sql="SELECT col1 from administration.table_tutorial", schema="sandbox")
+        >>> sqldb = sqldb.insert_into(table="test_k", columns=["col1"], sql="SELECT col1 from administration.table_tutorial", schema="sandbox")
         >>> print(sqldb.last_commit)
         INSERT INTO sandbox.test_k (col1)
         SELECT col1
         FROM administration.table_tutorial
         >>> con = sqldb.get_connection()
         >>> con.execute("SELECT * FROM sandbox.test_k").fetchall()
-        [('item2', None), ('item1', None)]
+        [('item1', None), ('item2', None)]
         >>> con.close()
 
         """
@@ -193,6 +195,16 @@ class SQLDB:
     def delete_from(self, table, schema=None, where=None):
         """
         Removes records from Redshift table which satisfy where.
+
+
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb = sqldb.delete_from(table="test_k", schema="sandbox", where="col2 is NULL")
+        >>> con = sqldb.get_connection()
+        >>> con.execute("SELECT * FROM sandbox.test_k").fetchall()
+        []
+        >>> con.close()
         """
         if self.db == "redshift":
             con = self.get_connection()
@@ -245,7 +257,38 @@ class SQLDB:
             else:
                 raise ValueError("Table doesn't exist. Use create_table first")
 
-    def get_denodo_columns(
+    def get_columns(
+        self, table, schema=None, column_types=False, date_format="DATE", columns=None,
+    ):
+        """Retrieves column names and optionally other table metadata
+
+        Parameters
+        ----------
+        table: str
+            Name of table.
+        schema: str
+            Name of schema.
+        column_types: bool
+            True means user wants to get also data types.
+        columns: list
+            List of column names to retrive.
+        date_format: str
+            Denodo date format differs from those from other databases. User can choose which format is desired.
+        """
+        if self.db == "denodo":
+            return self._get_denodo_columns(
+                schema=schema,
+                table=table,
+                column_types=column_types,
+                date_format=date_format,
+                columns=columns,
+            )
+        elif self.db == "redshift":
+            return self._get_redshift_columns(
+                schema=schema, table=table, column_types=column_types, columns=columns
+            )
+
+    def _get_denodo_columns(
         self,
         table,
         schema: str = None,
@@ -325,7 +368,7 @@ class SQLDB:
                 col_types = [type for type in col_names_and_types.values()]
             return col_names, col_types
 
-    def get_redshift_columns(
+    def _get_redshift_columns(
         self,
         table,
         schema: str = None,
@@ -402,37 +445,6 @@ class SQLDB:
         con.close()
 
         return to_return
-
-    def get_columns(
-        self, table, schema=None, column_types=False, date_format="DATE", columns=None,
-    ):
-        """Retrieves column names and optionally other table metadata
-
-        Parameters
-        ----------
-        table: str
-            Name of table.
-        schema: str
-            Name of schema.
-        column_types: bool
-            True means user wants to get also data types.
-        columns: list
-            List of column names to retrive.
-        date_format: str
-            Denodo date format differs from those from other databases. User can choose which format is desired.
-        """
-        if self.db == "denodo":
-            return self.get_denodo_columns(
-                schema=schema,
-                table=table,
-                column_types=column_types,
-                date_format=date_format,
-                columns=columns,
-            )
-        elif self.db == "redshift":
-            return self.get_redshift_columns(
-                schema=schema, table=table, column_types=column_types, columns=columns
-            )
 
 
 def check_if_valid_type(type: str):
