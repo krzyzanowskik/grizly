@@ -220,7 +220,6 @@ class Email:
         ...        }
         ...    }
         >>> conf = Config().add_keys(personal)
-        Key 'personal' has been added.
         >>> attachment_path = get_path("dev", "grizly", "tests", "output.txt")
         >>> email = Email(subject="Test", body="Testing body.", attachment_paths=attachment_path, config_key="personal")
         >>> to = "test@example.com"
@@ -233,7 +232,9 @@ class Email:
         None
         """
 
-        BaseProtocol.HTTP_ADAPTER_CLS = NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        BaseProtocol.HTTP_ADAPTER_CLS = (
+            NoVerifyHTTPAdapter  # change this in the future to avoid warnings
+        )
 
         if self.proxy:
             os.environ["HTTPS_PROXY"] = self.proxy
