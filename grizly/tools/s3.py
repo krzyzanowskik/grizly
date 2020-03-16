@@ -109,17 +109,6 @@ class S3:
         file_dir:       'C:\\Users'
         redshift_str:   'mssql+pyodbc://redshift_acoe'
         """
-        # print(f"file_name: \t'{self.file_name}'")
-        # print(f"s3_key: \t'{self.s3_key}'")
-        # print(f"bucket: \t'{self.bucket}'")
-        # print(f"file_dir: \t'{self.file_dir}'")
-        # # try:
-        # #     print(
-        # #         f"last_modified: \t {resource('s3').Object(self.bucket, self.full_s3_key).last_modified}"
-        # #     )
-        # # except:
-        # #     pass
-        # print(f"redshift_str: \t'{self.redshift_str}'")
         print(self.__repr__())
 
     def list(self):
@@ -142,6 +131,11 @@ class S3:
         else:
             files = []
         return files
+
+    def exists(self):
+        """Check if the S3 file exists.
+        """
+        return self.file_name in self.list()
 
     @_check_if_s3_exists
     def delete(self):
@@ -216,7 +210,7 @@ class S3:
             file_dir=self.file_dir,
             redshift_str=self.redshift_str,
         )
-        exists = True if file_name in out_s3.list() else False
+        exists = self.exists()
 
         if exists:
             if if_exists == "fail":
@@ -544,6 +538,8 @@ class S3:
         --------
         >>> s3 = S3('test_old.csv', 'bulk/test/', file_dir=r'C:\\Users')
         >>> s3_arch = s3.archive()
+        >>> s3.exists()
+        False
         >>> s3_arch
         file_name: 'test_old(0).csv'
         s3_key: 'archive/bulk/test/'
