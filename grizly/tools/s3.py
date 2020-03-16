@@ -638,7 +638,7 @@ class S3:
 
         sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
         con = sqldb.get_connection()
-        con.execute(sql)
+        con.execute(sql).commit()
         con.close()
 
         self.logger.info("Table {table_name} has been created successfully.")
