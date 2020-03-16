@@ -78,6 +78,61 @@ class SQLDB:
         else:
             print("Works only with db='redshift'")
 
+    def copy_table(
+        self, in_table, out_table, in_schema=None, out_schema=None, if_exists="fail"
+    ):
+        """Copies records from one table to another.
+
+        Paramaters
+        ----------
+        if_exists : str, optional
+            How to behave if the output table already exists.
+
+            * fail: Raise a ValueError
+            * drop: Drop table
+
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb = sqldb.copy_table(
+        ...    in_table="table_tutorial",
+        ...    in_schema="administration",
+        ...    out_table="test_k",
+        ...    out_schema="sandbox",
+        ...    if_exists="drop",
+        ... )
+        >>> con = sqldb.get_connection()
+        >>> con.execute("SELECT * FROM sandbox.test_k ORDER BY 1").fetchall()
+        [('item1', 1.3, None, 3.5), ('item2', 0.0, None, None)]
+        >>> con.close()
+        >>> sqldb = sqldb.drop_table(table="test_k", schema="sandbox")
+        """
+        if self.db == "redshift":
+            con = self.get_connection()
+            in_table_name = f"{in_schema}.{in_table}" if in_schema else in_table
+            if not self.check_if_exists(table=in_table, schema=in_schema):
+                self.logger.debug(f"Table {in_table_name} doesn't exist.")
+            else:
+                out_table_name = (
+                    f"{out_schema}.{out_table}" if out_schema else out_table
+                )
+                if (
+                    self.check_if_exists(table=out_table, schema=out_schema)
+                    and if_exists == "fail"
+                ):
+                    raise ValueError(f"Table {in_table_name} already exists")
+                sql = f"""
+                        DROP TABLE IF EXISTS {out_table_name};
+                        CREATE TABLE {out_table_name} AS
+                        SELECT * FROM {in_table_name}
+                        """
+                con.execute(sql).commit()
+                self.last_commit = sqlparse.format(
+                    sql, reindent=True, keyword_case="upper"
+                )
+            con.close()
+        return self
+
     def create_table(self, table, columns, types, schema=None, char_size=500):
         """
         Creates a new table in Redshift if the table doesn't exist.
@@ -119,46 +174,6 @@ class SQLDB:
             self.logger.debug("Table {} has been created successfully.".format(sql))
         return self
 
-    def copy_table(
-        self, in_table, out_table, in_schema=None, out_schema=None, if_exists="fail"
-    ):
-        """
-        Copies records from one table to another.
-
-        Paramaters
-        ----------
-        if_exists : str, optional
-            How to behave if the output table already exists.
-
-            * fail: Raise a ValueError
-            * drop: Drop table
-        """
-        if self.db == "redshift":
-            con = self.get_connection()
-            in_table_name = f"{in_schema}.{in_table}" if in_schema else in_table
-            if not self.check_if_exists(table=in_table, schema=in_schema):
-                self.logger.debug(f"Table {in_table_name} doesn't exist.")
-            else:
-                out_table_name = (
-                    f"{out_schema}.{out_table}" if out_schema else out_table
-                )
-                if (
-                    self.check_if_exists(table=out_table, schema=out_schema)
-                    and if_exists == "fail"
-                ):
-                    raise ValueError(f"Table {in_table_name} already exists")
-                sql = f"""
-                        DROP TABLE IF EXISTS {out_table_name};
-                        CREATE TABLE {out_table_name} AS
-                        SELECT * FROM {in_table_name}
-                        """
-                con.execute(sql).commit()
-                self.last_commit = sqlparse.format(
-                    sql, reindent=True, keyword_case="upper"
-                )
-            con.close()
-        return self
-
     def insert_into(self, table, columns, sql, schema=None):
         """
         Inserts records into redshift table.
@@ -166,21 +181,18 @@ class SQLDB:
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb = sqldb.create_table(table="test_k", columns=["col1", "col2"], types=["varchar", "int"], schema="sandbox")
         >>> sqldb = sqldb.insert_into(table="test_k", columns=["col1"], sql="SELECT col1 from administration.table_tutorial", schema="sandbox")
-        >>> print(sqldb.last_commit)
-        INSERT INTO sandbox.test_k (col1)
-        SELECT col1
-        FROM administration.table_tutorial
         >>> con = sqldb.get_connection()
-        >>> con.execute("SELECT * FROM sandbox.test_k").fetchall()
+        >>> con.execute("SELECT * FROM sandbox.test_k ORDER BY 1").fetchall()
         [('item1', None), ('item2', None)]
         >>> con.close()
 
         """
         if self.db == "redshift":
             con = self.get_connection()
+            table_name = f"{schema}.{table}" if schema else table
             if self.check_if_exists(table=table, schema=schema):
-                table_name = f"{schema}.{table}" if schema else table
                 columns = ", ".join(columns)
                 sql = f"INSERT INTO {table_name} ({columns}) {sql}"
                 con.execute(sql).commit()
@@ -196,20 +208,19 @@ class SQLDB:
         """
         Removes records from Redshift table which satisfy where.
 
-
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
         >>> sqldb = sqldb.delete_from(table="test_k", schema="sandbox", where="col2 is NULL")
         >>> con = sqldb.get_connection()
-        >>> con.execute("SELECT * FROM sandbox.test_k").fetchall()
+        >>> con.execute("SELECT * FROM sandbox.test_k ORDER BY 1").fetchall()
         []
         >>> con.close()
         """
         if self.db == "redshift":
             con = self.get_connection()
+            table_name = f"{schema}.{table}" if schema else table
             if self.check_if_exists(table=table, schema=schema):
-                table_name = f"{schema}.{table}" if schema else table
                 sql = f"DELETE FROM {table_name}"
                 if where is None:
                     con.execute(sql).commit()
@@ -233,9 +244,44 @@ class SQLDB:
             con.close()
         return self
 
+    def drop_table(self, table, schema=None):
+        """ Drops Redshift table
+
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb = sqldb.drop_table(table="test_k", schema="sandbox")
+        >>> sqldb.check_if_exists(table="test_k", schema="sandbox")
+        False
+        """
+        if self.db == "redshift":
+            con = self.get_connection()
+            if self.check_if_exists(table=table, schema=schema):
+                table_name = f"{schema}.{table}" if schema else table
+                sql = f"DROP TABLE {table_name}"
+                con.execute(sql).commit()
+                self.last_commit = sqlparse.format(
+                    sql, reindent=True, keyword_case="upper"
+                )
+                self.logger.debug(f"Table {table_name} has been dropped successfully.")
+            else:
+                self.logger.debug(f"Table {table_name} doesn't exist.")
+            con.close()
+        return self
+
     def write_to(self, table, columns, sql, schema=None, if_exists="fail"):
         """
         Performs DELETE FROM (if table exists) and INSERT INTO queries in Redshift directly.
+        
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb = sqldb.write_to(table="test_k", columns=["col1"], sql="SELECT col1 from administration.table_tutorial", schema="sandbox", if_exists="replace")
+        >>> con = sqldb.get_connection()
+        >>> con.execute("SELECT * FROM sandbox.test_k ORDER BY 1").fetchall()
+        [('item1', None), ('item2', None)]
+        >>> con.close()
+        >>> sqldb = sqldb.drop_table(table="test_k", schema="sandbox")
         """
         if self.db == "redshift":
             if self.check_if_exists(table=table, schema=schema):
@@ -256,6 +302,7 @@ class SQLDB:
                     self.logger.debug(f"Data has been appended to {schema}.{table}")
             else:
                 raise ValueError("Table doesn't exist. Use create_table first")
+        return self
 
     def get_columns(
         self, table, schema=None, column_types=False, date_format="DATE", columns=None,
@@ -274,6 +321,16 @@ class SQLDB:
             List of column names to retrive.
         date_format: str
             Denodo date format differs from those from other databases. User can choose which format is desired.
+        
+        Examples
+        --------
+        >>> sqldb = SQLDB(db="redshift")
+        >>> sqldb.get_columns(table="table_tutorial", schema="administration", column_types=True)
+        (['col1', 'col2', 'col3', 'col4'],
+        ['character varying',
+        'double precision',
+        'character varying',
+        'double precision'])
         """
         if self.db == "denodo":
             return self._get_denodo_columns(
