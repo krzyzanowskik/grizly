@@ -1,5 +1,6 @@
 from boto3 import resource
 from botocore.exceptions import ClientError
+from botocore.config import Config
 import os
 from datetime import datetime, timezone
 from .sqldb import SQLDB
@@ -60,6 +61,9 @@ class S3:
         os.makedirs(self.file_dir, exist_ok=True)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
+        os.environ["HTTPS_PROXY"] = os.environ.get("HTTPS_PROXY") or os.environ.get(
+            "HTTP_PROXY"
+        )
 
     def __repr__(self):
         info = f"""file_name: '{self.file_name}' \ns3_key: '{self.s3_key}' \nbucket: '{self.bucket}' \nfile_dir: '{self.file_dir}' \nredshift_str: '{self.redshift_str}'"""
