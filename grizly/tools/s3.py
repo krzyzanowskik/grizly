@@ -16,6 +16,7 @@ deprecation.deprecated = partial(
     deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
 )
 
+logger = logging.getLogger(__name__)  # TODO: change to a single logger accross the who grizly library, so that it can be set in one place
 
 class S3:
 
@@ -144,7 +145,7 @@ class S3:
         s3_key = self.s3_key + self.file_name
         resource("s3").Object(self.bucket, s3_key).delete()
 
-        self.logger.info(f"'{s3_key}' has been removed successfully")
+        self.logger.debug(f"'{s3_key}' has been removed successfully")
 
     @_check_if_s3_exists
     def copy_to(
@@ -302,7 +303,7 @@ class S3:
 
         if not keep_file:
             os.remove(file_path)
-            self.logger.info(f"'{file_path}' has been removed")
+            self.logger.debug(f"'{file_path}' has been removed")
 
         return self
 
