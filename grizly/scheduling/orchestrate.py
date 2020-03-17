@@ -650,6 +650,55 @@ class Workflow:
 
         return None
 
+    @retry_task(Exception, tries=3, delay=300)
+    def write_status_to_rds(self, name, owner_email, backup_email, status, run_time, env, error_value=None, error_type=None):
+
+        schema = "administration"
+        table = "status"
+
+        last_run_date = pd.datetime.utcnow()
+
+        status_data = {
+            "workflow_name": [name],
+            "owner_email": [owner_email],
+            "backup_email": [backup_email],
+            "run_date": [last_run_date],
+            "workflow_status": [status],
+            "run_time": [run_time],
+            "env": [env],
+            "error_value": [error_value],
+            "error_type": [error_type],
+        }
+
+        status_data = pd.DataFrame(status_data)
+
+        try:
+            df_to_s3(
+                status_data,
+                table,
+                schema,
+                if_exists="append",
+                redshift_str="mssql+pyodbc://redshift_acoe",
+                s3_key="bulk",
+                bucket="acoe-s3",
+            )
+        except:
+            self.logger.exception(f"{self.name} status could not be uploaded to S3")
+            return None
+
+        s3_to_rds(
+            file_name=table + ".csv",
+            schema=schema,
+            if_exists="append",
+            redshift_str="mssql+pyodbc://redshift_acoe",
+            s3_key="bulk",
+            bucket="acoe-s3",
+        )
+
+        self.logger.info(f"{self.name} status successfully uploaded to Redshift")
+
+        return None
+    
     def gen_scheduled_wf_email_body(self):
         run_time_str = str(timedelta(seconds=self.run_time))
         email_body = f"Scheduled workflow {self.name} has finished in {run_time_str} with the status {self.status}"
@@ -739,22 +788,6 @@ class Workflow:
                 env=self.env,
                 error_value=self.error_value,
                 error_type=self.error_type,
-            )
-
-        if self.trigger_on_success:
-            triggered_wf = self.trigger_on_success
-            self.logger.info(f"Running {triggered_wf.name}...")
-            triggered_wf.run()
-            self.logger.info(f"Finished running {triggered_wf.name} with the status <{triggered_wf.status}>")
-            triggered_wf.write_status_to_rds(
-                triggered_wf.name,
-                triggered_wf.owner_email,
-                triggered_wf.backup_email,
-                triggered_wf.status,
-                triggered_wf.run_time,
-                env=self.env,
-                error_value=triggered_wf.error_value,
-                error_type=triggered_wf.error_type,
             )
 
         return self.status
