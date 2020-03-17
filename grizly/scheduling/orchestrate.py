@@ -166,7 +166,6 @@ class Listener:
     def __init__(
         self,
         workflow,
-        class_name="Listener",
         schema=None,
         table=None,
         field=None,
@@ -188,7 +187,6 @@ class Listener:
         self.logger = logging.getLogger(__name__)
         self.trigger = trigger
         self.last_data_refresh = self.get_last_json_refresh(key="last_data_refresh")
-        self.engine = self.get_engine()
         self.last_trigger_run = self.get_last_json_refresh(key="last_trigger_run")
         self.delay = delay
         self.config_key = "standard"
@@ -239,7 +237,7 @@ class Listener:
 
         return deco_retry
 
-    def get_engine(self):
+    def get_connection(self):
         return SQLDB(db=self.db, engine_str=self.engine_str).get_connection()
 
     def get_last_json_refresh(self, key):
@@ -304,7 +302,7 @@ class Listener:
         else:
             sql = f"SELECT {self.field} FROM {self.schema}.{self.table} ORDER BY {self.field} DESC LIMIT 1;"
 
-        con = get_con(engine=self.engine)
+        con = self.get_connection()
         cursor = con.cursor()
         cursor.execute(sql)
 
