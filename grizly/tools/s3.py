@@ -61,9 +61,11 @@ class S3:
         os.makedirs(self.file_dir, exist_ok=True)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
-        os.environ["HTTPS_PROXY"] = os.environ.get("HTTPS_PROXY") or os.environ.get(
-            "HTTP_PROXY"
-        )
+        https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
+        if http_proxy is not None:
+            os.environ["HTTPS_PROXY"] = https_proxy
+            os.environ["HTTP_PROXY"] = http_proxy
 
     def __repr__(self):
         info = f"""file_name: '{self.file_name}' \ns3_key: '{self.s3_key}' \nbucket: '{self.bucket}' \nfile_dir: '{self.file_dir}' \nredshift_str: '{self.redshift_str}'"""
