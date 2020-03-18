@@ -827,7 +827,7 @@ class Runner:
             now = datetime.now(timezone.utc)
 
             self.logger.info(
-                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {next_run_short})"
+                f"Determining whether scheduled workflow {workflow.name} should run... (next scheduled run: {next_run_short})"
             )
             # self.logger.info(f"Day: {type(workflow.next_run.day)}:{workflow.next_run.day} vs now: {type(now.day)}:{now.day}")
             # self.logger.info(f"Hour: {type(workflow.next_run.hour)}:{workflow.next_run.hour} vs now: {type(now.hour)}:{now.hour}")
