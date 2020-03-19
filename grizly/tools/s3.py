@@ -47,10 +47,10 @@ class S3:
         file_dir: str = None,
         redshift_str: str = None,
         min_time_window: int = 0,
-        id: int = None,
         logger=None,
     ):
-        self.file_name = file_name
+        self.id = next(self._ids)
+        self.file_name = file_name or f"s3_tmp_{self.id}.csv"
         self.s3_key = s3_key if s3_key else ""
         if not self.s3_key.endswith("/") and self.s3_key != "":
             self.s3_key += "/"
@@ -62,7 +62,6 @@ class S3:
         )
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
-        self.id = next(self._ids)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
         https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
@@ -420,11 +419,7 @@ class S3:
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
         
-        if not self.file_name:
-            self.file_name = f"s3_tmp_{self.id}.csv"
-
         file_path = os.path.join(self.file_dir, self.file_name)
-
         if not file_path.endswith(".csv"):
             raise ValueError(
                 "Invalid file extention - 'file_name' attribute must end with '.csv'"
