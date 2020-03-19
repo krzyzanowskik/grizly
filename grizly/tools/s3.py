@@ -11,6 +11,7 @@ from csv import reader
 from configparser import ConfigParser
 import logging
 from functools import wraps, partial
+from itertools import count
 import deprecation
 
 deprecation.deprecated = partial(
@@ -36,15 +37,17 @@ class S3:
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
         """
+    _ids = count(0)
 
     def __init__(
         self,
-        file_name: str,
+        file_name: str = None,
         s3_key: str = None,
         bucket: str = None,
         file_dir: str = None,
         redshift_str: str = None,
         min_time_window: int = 0,
+        id: int = None,
         logger=None,
     ):
         self.file_name = file_name
@@ -59,6 +62,7 @@ class S3:
         )
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
+        self.id = next(self._ids)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
         https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
@@ -415,6 +419,9 @@ class S3:
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
+        
+        if not self.file_name:
+            self.file_name = f"s3_tmp_{self.id}.csv"
 
         file_path = os.path.join(self.file_dir, self.file_name)
 
