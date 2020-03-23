@@ -10,6 +10,7 @@ from simple_salesforce.login import SalesforceAuthenticationFailed
 from ..config import Config
 from ..utils import get_path
 from logging import Logger
+from copy import deepcopy
 
 
 class SFDC:
@@ -49,7 +50,7 @@ class SFDC:
         # first lookup in parameters, then config, then env variables
         self.proxies = (
             proxies
-            or Config().get_service(config_key=config_key, service="proxies")
+            or deepcopy(Config().get_service(config_key=config_key, service="proxies"))
             or {"http": os.getenv("HTTP_PROXY"), "https": os.getenv("HTTPS_PROXY")}
         )
         self.username = username or config.get("username")
