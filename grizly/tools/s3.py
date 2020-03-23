@@ -296,7 +296,7 @@ class S3:
 
         if not self._can_upload():
             msg = (
-                f"File {self.file_name} was not uploaded because a recent version exists."
+                f"File {self.file_name} was not uploaded to {self.s3_key} because a recent version exists."
                 + f"\nSet S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window})."
             )
             self.logger.warning(msg)
@@ -473,6 +473,8 @@ class S3:
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
+        self.status = "initiated"
+
         sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
         table_name = f"{schema}.{table}" if schema else table
 
@@ -536,9 +538,15 @@ class S3:
 
         con = sqldb.get_connection()
         self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
-        con.execute(sql)
-        con.close()
-        self.logger.info(f"Data has been copied to {table_name}")
+        try:
+            con.execute(sql)
+        except:
+            self.logger.exception(f"Failed to upload {self.full_s3_key} to Redshift")
+            self.status = "failed"
+        finally:
+            con.close()
+        self.status = "success"
+        self.logger.debug(f"Data has been copied to {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
@@ -636,7 +644,8 @@ class S3:
             count += 1
         if types:
             other_cols = list(types.keys())
-            self.logger.info(f"Columns {other_cols} were not found.")
+            if other_cols:
+                self.logger.info(f"Columns {other_cols} were not found.")
 
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
