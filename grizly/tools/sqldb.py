@@ -36,7 +36,7 @@ class SQLDB:
         self.logger = logging.getLogger(__name__)
 
     def get_connection(self):
-        """Returns sqlalchemy engine.
+        """Returns sqlalchemy connection.
         
         Examples
         --------
@@ -45,11 +45,6 @@ class SQLDB:
         >>> con.execute("SELECT * FROM administration.table_tutorial").fetchall()
         [('item1', 1.3, None, 3.5), ('item2', 0.0, None, None)]
         >>> con.close()
-
-        Returns
-        -------
-        Engine
-            sqlalchemy Engine
         """
         engine = create_engine(self.engine_str, encoding="utf8", poolclass=NullPool)
         try:
@@ -134,8 +129,16 @@ class SQLDB:
         return self
 
     def create_table(self, table, columns, types, schema=None, char_size=500):
-        """
-        Creates a new table in Redshift if the table doesn't exist.
+        """Creates a new table in Redshift if the table doesn't exist.
+
+        Parameters
+        ----------
+        columns : list
+            Column names
+        types : list
+            Column types
+        char_size : int,
+            Size of the VARCHAR field in the database column
 
         Examples
         --------
@@ -143,13 +146,6 @@ class SQLDB:
         >>> sqldb = sqldb.create_table(table="test_k", columns=["col1", "col2"], types=["varchar", "int"], schema="sandbox")
         >>> sqldb.check_if_exists(table="test_k", schema="sandbox")
         True
-
-        Parameters
-        ----------
-        columns : list
-        types : list
-        char_size : int,
-            Size of the VARCHAR field in the database column
         """
         table_name = f"{schema}.{table}" if schema else table
 
@@ -175,8 +171,7 @@ class SQLDB:
         return self
 
     def insert_into(self, table, columns, sql, schema=None):
-        """
-        Inserts records into redshift table.
+        """Inserts records into redshift table.
 
         Examples
         --------
@@ -205,8 +200,7 @@ class SQLDB:
         return self
 
     def delete_from(self, table, schema=None, where=None):
-        """
-        Removes records from Redshift table which satisfy where.
+        """Removes records from Redshift table which satisfy where.
 
         Examples
         --------
@@ -245,7 +239,7 @@ class SQLDB:
         return self
 
     def drop_table(self, table, schema=None):
-        """ Drops Redshift table
+        """Drops Redshift table
 
         Examples
         --------
@@ -270,9 +264,17 @@ class SQLDB:
         return self
 
     def write_to(self, table, columns, sql, schema=None, if_exists="fail"):
-        """
-        Performs DELETE FROM (if table exists) and INSERT INTO queries in Redshift directly.
+        """Performs DELETE FROM (if table exists) and INSERT INTO queries in Redshift directly.
         
+        Parameters
+        ----------
+        if_exists : {'fail', 'replace', 'append'}, optional
+            How to behave if the table already exists, by default 'fail'
+
+            * fail: Raise a ValueError
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table
+
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
@@ -563,12 +565,18 @@ def check_if_exists(table, schema=""):
 
 @deprecation.deprecated(details="Use SQLDB.create_table function instead",)
 def create_table(table, columns, types, schema="", engine_str=None, char_size=500):
-    pass
+    sqldb = SQLDB(db="redshift", engine_str=engine_str)
+    sqldb.create_table(
+        table=table, columns=columns, types=types, schema=schema, char_size=char_size
+    )
 
 
 @deprecation.deprecated(details="Use SQLDB.write_to function instead",)
 def write_to(table, columns, sql, schema="", engine_str=None, if_exists="fail"):
-    pass
+    sqldb = SQLDB(db="redshift", engine_str=engine_str)
+    sqldb.write_to(
+        table=table, columns=columns, sql=sql, schema=schema, if_exists=if_exists
+    )
 
 
 @deprecation.deprecated(details="Use SQLDB.get_columns function instead",)
