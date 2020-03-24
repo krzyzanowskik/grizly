@@ -7,11 +7,6 @@
 - Changed folder structure. This may affect those of you who does for example `from grizly.orchestrate import ...`.
   Please check the new structure after dowloading 0.3 grizly to your local folder.
 
-### What can go wrong?
-
-- CONFIGURATION: For the S3 we use AWS configuration so if you don't have it in .aws folder please add it. Also for parquet files you need iam_role specified in .aws/credentials file. Config class deals with other configuration (for example Email configuration) so in each workflow you have to specify Config first (check docs).
-- PROXY: You can get some connection errors if you don't have at least one of HTTPS_PROXY or HTTP_PROXY specified in env variables. Some libraries may not be installed if you don't have HTTPS_PROXY specified.
-
 ### QFrame:
 
 - Changed get_sql() output, now it returns SQL string not QFrame
@@ -65,3 +60,8 @@
 - delete_where -> SQLDB.delete_where
 - copy_table -> SQLDB.copy_table
 - read_config -> Config().from_json function or in case of AWS credentials - start using S3 class !!!
+
+## What can go wrong?
+
+- CONFIGURATION: For the S3 we use AWS configuration so if you don't have it in .aws folder please add it. Also for parquet files you need iam_role specified in .aws/credentials file. Config class deals with other configuration (for example Email configuration) so in each workflow you have to specify Config first (check docs).
+- PROXY: You can get some connection errors if you don't have at least one of HTTPS_PROXY or HTTP_PROXY specified in env variables. Some libraries may not be installed if you don't have HTTPS_PROXY specified.
