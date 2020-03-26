@@ -241,21 +241,26 @@ class Listener:
         return SQLDB(db=self.db, engine_str=self.engine_str).get_connection()
 
     def get_last_json_refresh(self, key):
-        with open(LISTENER_STORE) as f:
-            listener_store = json.load(f)
-            if not listener_store.get(self.name):
-                return None
-            last_json_refresh = listener_store[self.name].get(
-                key
-            )  # int or serialized date
-            try:
-                # attempt to convert the serialized datetime to a date object
-                last_json_refresh = datetime.date(
-                    datetime.strptime(last_json_refresh, r"%Y-%m-%d")
-                )
-            except:
-                pass
-            return last_json_refresh
+        if os.path.exists(LISTENER_STORE):
+            with open(LISTENER_STORE) as f:
+                listener_store = json.load(f)
+        else:
+            listener_store = {}
+
+        if not listener_store.get(self.name):
+            return None
+
+        last_json_refresh = listener_store[self.name].get(
+            key
+        )  # int or serialized date
+        try:
+            # attempt to convert the serialized datetime to a date object
+            last_json_refresh = datetime.date(
+                datetime.strptime(last_json_refresh, r"%Y-%m-%d")
+            )
+        except:
+            pass
+        return last_json_refresh
 
     def update_json(self):
         with open(LISTENER_STORE) as json_file:
