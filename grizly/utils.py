@@ -157,12 +157,7 @@ def get_path(*args, from_where="python"):
                 f"Unable to retrieve home env variable for {platform}"
             )
 
-        home_path = os.getenv(home_env)
-
-        if not home_path:
-            raise ValueError(
-                f"{home_path}, {os.environ}, \nEnvironment variable {home_env} on platform {platform} is not set"
-            )
+        home_path = os.getenv(home_env) or "/root"
         cwd = os.path.join(home_path, *args)
         return cwd
 
