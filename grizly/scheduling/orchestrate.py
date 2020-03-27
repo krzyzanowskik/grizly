@@ -524,7 +524,7 @@ class Workflow:
         owner_email=None,
         backup_email=None,
         children=None,
-        priority=0,
+        priority=1,
         trigger=None,
         trigger_type="manual",
         execution_options: dict = None,

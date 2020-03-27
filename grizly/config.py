@@ -362,7 +362,7 @@ from sys import platform
 import os
 
 if platform.startswith("linux"):
-    home_env = "USER"
+    home_env = "HOME"
 else:
     home_env = "USERPROFILE"
 default_config_dir = os.path.join(os.environ[home_env], ".grizly")
