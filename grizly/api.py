@@ -15,14 +15,16 @@ from .tools.sqldb import SQLDB, check_if_exists, delete_where, get_columns, copy
 from .scheduling.orchestrate import Workflow, Listener, EmailListener, Schedule, Runner, retry
 
 
-from os import environ
+import os
 from sys import platform
 
 if platform.startswith("linux"):
     home_env = "HOME"
 else:
     home_env = "USERPROFILE"
+
+home_path = os.getenv(home_env) or "/root"
 try:
-    cwd = environ[home_env]
+    cwd = home_path
 except KeyError:
     pass

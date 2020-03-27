@@ -365,4 +365,5 @@ if platform.startswith("linux"):
     home_env = "HOME"
 else:
     home_env = "USERPROFILE"
-default_config_dir = os.path.join(os.environ[home_env], ".grizly")
+home_dir = os.getenv(home_env) or "/root"
+default_config_dir = os.path.join(home_dir, ".grizly")
