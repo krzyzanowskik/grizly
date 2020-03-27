@@ -150,8 +150,6 @@ def get_path(*args, from_where="python"):
     if from_where == "python":
         if platform.startswith("linux"):
             home_env = "HOME"
-            # temporary hack
-            return os.path.join("/root", *args)
         elif platform.startswith("win"):
             home_env = "USERPROFILE"
         else:
@@ -261,9 +259,10 @@ def clean(df):
 )
 def read_config():
     if platform.startswith("linux"):
-        default_config_dir = "/root/.grizly"
+        home_env = "HOME"
     else:
-        default_config_dir = os.path.join(os.environ["USERPROFILE"], ".grizly")
+        home_env = "USERPROFILE"
+    default_config_dir = os.path.join(os.environ[home_env], ".grizly")
 
     try:
         json_path = os.path.join(default_config_dir, "etl_config.json")
