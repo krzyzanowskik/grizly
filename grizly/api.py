@@ -16,8 +16,13 @@ from .scheduling.orchestrate import Workflow, Listener, EmailListener, Schedule,
 
 
 from os import environ
+from sys import platform
 
+if platform.startswith("linux"):
+    home_env = "HOME"
+else:
+    home_env = "USERPROFILE"
 try:
-    cwd = environ["USERPROFILE"]
+    cwd = environ[home_env]
 except KeyError:
     pass
