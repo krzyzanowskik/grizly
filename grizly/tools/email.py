@@ -49,6 +49,7 @@ class EmailAccount:
         )
         self.proxy = (
             proxy
+            or os.getenv("GRIZLY_PROXY")
             or os.getenv("HTTPS_PROXY")
             or Config()
             .get_service(config_key=config_key, service="proxies")
