@@ -504,7 +504,7 @@ class S3:
             column_order = ""
         remove_inside_quotes = "REMOVEQUOTES" if remove_inside_quotes else ""
         if file_extension(self.file_name) == "csv":
-            if remove_iside_quotes:
+            if remove_inside_quotes:
                 _format = ""
             else:    
                 _format = "FORMAT AS csv"
