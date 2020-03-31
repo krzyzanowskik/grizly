@@ -504,6 +504,10 @@ class S3:
             column_order = ""
         remove_inside_quotes = "REMOVEQUOTES" if remove_inside_quotes else ""
         if file_extension(self.file_name) == "csv":
+            if remove_iside_quotes:
+                _format = ""
+            else:    
+                _format = "FORMAT AS csv"
             sql = f"""
                 COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
                 access_key_id '{S3_access_key_id}'
@@ -512,15 +516,16 @@ class S3:
                 NULL ''
                 IGNOREHEADER 1
                 {remove_inside_quotes}
-                FORMAT AS {file_extension(self.file_name)}
+                {_format}
                 ;commit;
                 """
         else:
+            _format = "FORMAT AS PARQUET"
             sql = f"""
                 COPY {table_name}
                 FROM 's3://{self.bucket}/{s3_key}'
                 IAM_ROLE '{S3_iam_role}'
-                FORMAT AS PARQUET;
+                {_format};
                 ;commit;
                 """
         if time_format:
