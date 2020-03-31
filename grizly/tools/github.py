@@ -43,7 +43,7 @@ class GitHub(Extract):
         self.tool_name = "GitHub"
         self.df = None
 
-    def from_issues(self, org_name: str):
+    def from_issues(self, url: str):
         """Gets issues into a data frame extract
         
         Parameters
@@ -73,7 +73,7 @@ class GitHub(Extract):
         for page in range(self.pages):
             page += 1
             issues = (
-                f"https://api.github.com/orgs/{org_name}/issues?page={page}&filter=all"
+                f"{url}&page={page}"
             )
             data = requests.get(
                 issues,
