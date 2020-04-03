@@ -53,13 +53,12 @@ class Extract:
         Class
         """
         if self.tool_name == "QFrame":
-            self.create_sql_blocks()
-            self.sql = self.get_sql()
-            con = create_engine(self.engine, encoding="utf8", poolclass=NullPool)
-            self.df = pd.read_sql(sql=self.sql, con=con)
+            self.df = self.to_df()
             self.df.astype(dtype=self.dtypes).to_parquet(parquet_path)
         elif self.tool_name == "GitHub":
             self.df.astype(dtype=self.df.dtypes).to_parquet(parquet_path)
+        if debug:
+            return self.df.shape[0]
 
     def to_excel(
         self,
