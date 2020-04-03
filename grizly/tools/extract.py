@@ -45,9 +45,7 @@ class Extract:
         chunksize : str
             Not implemented
         debug : str, optional
-            Not implemented
-        cursor : int, optional
-            Not implemented
+            Whether to display the number of rows returned by the query
         Returns
         -------
         Class
