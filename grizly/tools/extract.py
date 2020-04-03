@@ -56,7 +56,7 @@ class Extract:
         elif self.tool_name == "GitHub":
             self.df.astype(dtype=self.df.dtypes).to_parquet(parquet_path)
         if debug:
-            return self.df.shape[0]
+            return self.df.shape[0] or 0
 
     def to_excel(
         self,
