@@ -5,6 +5,7 @@ from pandas import read_sql_query
 import os
 import sqlparse
 import logging
+from logging import Logger
 
 from ..config import Config
 from ..utils import get_sfdc_columns
@@ -18,7 +19,7 @@ deprecation.deprecated = partial(
 
 
 class SQLDB:
-    def __init__(self, db: str, engine_str: str = None, config_key: str = None):
+    def __init__(self, db: str, engine_str: str = None, config_key: str = None, logger: Logger = None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="sqldb")
         else:
@@ -33,7 +34,7 @@ class SQLDB:
         self.db = db
         self.engine_str = engine_str or config.get(db)
         self.last_commit = ""
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger or logging.getLogger(__name__)
 
     def get_connection(self):
         """Returns sqlalchemy connection.
@@ -50,6 +51,7 @@ class SQLDB:
         try:
             con = engine.connect().connection
         except:
+            self.logger.exception(f"Error connectig to {self.engine_str}. Retrying...")
             con = engine.connect().connection
         return con
 
@@ -167,7 +169,7 @@ class SQLDB:
             self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
             con.close()
 
-            self.logger.debug("Table {} has been created successfully.".format(sql))
+            self.logger.debug(f"Table {} has been created successfully.".format(sql))
         return self
 
     def insert_into(self, table, columns, sql, schema=None):
