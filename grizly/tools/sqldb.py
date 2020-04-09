@@ -1,11 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
-from sqlalchemy.engine import Engine
 from pandas import read_sql_query
 import os
 import sqlparse
 import logging
 from logging import Logger
+import re
 
 from ..config import Config
 from ..utils import get_sfdc_columns
@@ -19,6 +19,7 @@ deprecation.deprecated = partial(
 
 
 class SQLDB:
+    last_commit = ""
     def __init__(self, db: str, engine_str: str = None, config_key: str = None, logger: Logger = None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="sqldb")
@@ -33,7 +34,6 @@ class SQLDB:
             )
         self.db = db
         self.engine_str = engine_str or config.get(db)
-        self.last_commit = ""
         self.logger = logger or logging.getLogger(__name__)
 
     def get_connection(self):
@@ -123,10 +123,10 @@ class SQLDB:
                         CREATE TABLE {out_table_name} AS
                         SELECT * FROM {in_table_name}
                         """
-                con.execute(sql).commit()
-                self.last_commit = sqlparse.format(
+                SQLDB.last_commit = sqlparse.format(
                     sql, reindent=True, keyword_case="upper"
                 )
+                con.execute(sql).commit()
             con.close()
         return self
 
@@ -165,11 +165,11 @@ class SQLDB:
             columns_str = ", ".join(col_tuples)
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
             con = self.get_connection()
-            con.execute(sql).commit()
-            self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
+            SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
             con.close()
+            con.execute(sql).commit()
 
-            self.logger.debug(f"Table {} has been created successfully.".format(sql))
+            self.logger.debug(f"Table {sql} has been created successfully.")
         return self
 
     def insert_into(self, table, columns, sql, schema=None):
@@ -192,10 +192,10 @@ class SQLDB:
             if self.check_if_exists(table=table, schema=schema):
                 columns = ", ".join(columns)
                 sql = f"INSERT INTO {table_name} ({columns}) {sql}"
-                con.execute(sql).commit()
-                self.last_commit = sqlparse.format(
+                SQLDB.last_commit = sqlparse.format(
                     sql, reindent=True, keyword_case="upper"
                 )
+                con.execute(sql).commit()
             else:
                 self.logger.debug(f"Table {table_name} doesn't exist.")
             con.close()
@@ -219,19 +219,19 @@ class SQLDB:
             if self.check_if_exists(table=table, schema=schema):
                 sql = f"DELETE FROM {table_name}"
                 if where is None:
-                    con.execute(sql).commit()
-                    self.last_commit = sqlparse.format(
+                    SQLDB.last_commit = sqlparse.format(
                         sql, reindent=True, keyword_case="upper"
                     )
+                    con.execute(sql).commit()
                     self.logger.debug(
                         f"Records from table {table_name} has been removed successfully."
                     )
                 else:
                     sql += f" WHERE {where} "
-                    con.execute(sql).commit()
-                    self.last_commit = sqlparse.format(
+                    SQLDB.last_commit = sqlparse.format(
                         sql, reindent=True, keyword_case="upper"
                     )
+                    con.execute(sql).commit()
                     self.logger.debug(
                         f"Records from table {table_name} where {where} has been removed successfully."
                     )
@@ -252,13 +252,13 @@ class SQLDB:
         """
         if self.db == "redshift":
             con = self.get_connection()
+            table_name = f"{schema}.{table}" if schema else table
             if self.check_if_exists(table=table, schema=schema):
-                table_name = f"{schema}.{table}" if schema else table
                 sql = f"DROP TABLE {table_name}"
-                con.execute(sql).commit()
-                self.last_commit = sqlparse.format(
+                SQLDB.last_commit = sqlparse.format(
                     sql, reindent=True, keyword_case="upper"
                 )
+                con.execute(sql).commit()
                 self.logger.debug(f"Table {table_name} has been dropped successfully.")
             else:
                 self.logger.debug(f"Table {table_name} doesn't exist.")
@@ -391,8 +391,8 @@ class SQLDB:
         """
         con = self.get_connection()
         cursor = con.cursor()
+        SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
         cursor.execute(sql)
-        self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
         col_names = []
 
         if column_types == False:
@@ -465,8 +465,8 @@ class SQLDB:
             WHERE {where}
             ORDER BY ordinal_position;
             """
+        SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
         cursor.execute(sql)
-        self.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
 
         col_names = []
 
@@ -557,6 +557,29 @@ def check_if_valid_type(type: str):
         if type.upper().startswith(valid_type):
             return True
     return False
+
+def pyarrow_to_rds_type(dtype):
+    dtypes = {'bool': 'BOOL',
+     'int8': 'SMALLINT',
+     'int16': 'INT2',
+     'int32': 'INT4',
+     'int64': 'INT8',
+     'uint8': 'INT',
+     'uint16': 'INT',
+     'uint32': 'INT',
+     'uint64': 'INT',
+     'float32': 'FLOAT4',
+     'float64': 'FLOAT8',
+     'date': 'DATE',
+     'string': 'VARCHAR(500)',
+     'timestamp.*\s*': 'TIMESTAMP',
+     'datetime.*\s*': "DATETIME"}
+
+    for pyarrow_dtype in dtypes:
+        if re.search(pyarrow_dtype, dtype):
+            return dtypes[pyarrow_dtype]
+    else:
+        return 'VARCHAR(500)'
 
 
 @deprecation.deprecated(details="Use SQLDB.check_if_exists function instead",)

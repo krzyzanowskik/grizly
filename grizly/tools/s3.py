@@ -3,9 +3,10 @@ from botocore.exceptions import ClientError
 from botocore.config import Config
 import os
 from datetime import datetime, timezone
-from .sqldb import SQLDB
+from .sqldb import SQLDB, pyarrow_to_rds_type
 from ..utils import get_path, clean, clean_colnames, file_extension
 from pandas import DataFrame, read_csv, read_parquet
+import pyarrow.parquet as pq
 from io import StringIO
 from csv import reader
 from configparser import ConfigParser
@@ -14,11 +15,12 @@ from functools import wraps, partial
 from itertools import count
 import deprecation
 
-deprecation.deprecated = partial(
-    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
-)
+deprecation.deprecated = partial(deprecation.deprecated, deprecated_in="0.3", removed_in="0.4")
 
-logger = logging.getLogger(__name__)  # TODO: change to a single logger accross the who grizly library, so that it can be set in one place
+logger = logging.getLogger(
+    __name__
+)  # TODO: change to a single logger accross the who grizly library, so that it can be set in one place
+
 
 class S3:
 
@@ -37,6 +39,7 @@ class S3:
         redshift_str : str, optional
             Redshift engine string, if None then 'mssql+pyodbc://redshift_acoe'
         """
+
     _ids = count(0)
 
     def __init__(
@@ -57,9 +60,7 @@ class S3:
         self.full_s3_key = self.s3_key + self.file_name
         self.bucket = bucket if bucket else "acoe-s3"
         self.file_dir = file_dir if file_dir else get_path("s3_loads")
-        self.redshift_str = (
-            redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
-        )
+        self.redshift_str = redshift_str if redshift_str else "mssql+pyodbc://redshift_acoe"
         self.min_time_window = min_time_window
         os.makedirs(self.file_dir, exist_ok=True)
         self.logger = logger or logging.getLogger(__name__)
@@ -91,9 +92,7 @@ class S3:
     def _can_upload(self):
 
         try:
-            last_modified = (
-                resource("s3").Object(self.bucket, self.full_s3_key).last_modified
-            )
+            last_modified = resource("s3").Object(self.bucket, self.full_s3_key).last_modified
         except:
             last_modified = None
 
@@ -126,13 +125,9 @@ class S3:
         """
         files = []
         key_list = self.s3_key.split("/")[:-1]
-        data = resource("s3").meta.client.list_objects(
-            Bucket=self.bucket, Prefix=self.s3_key
-        )
+        data = resource("s3").meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)
         if "Contents" in data:
-            for file in resource("s3").meta.client.list_objects(
-                Bucket=self.bucket, Prefix=self.s3_key
-            )["Contents"]:
+            for file in resource("s3").meta.client.list_objects(Bucket=self.bucket, Prefix=self.s3_key)["Contents"]:
                 file_list = file["Key"].split("/")
                 for item in key_list:
                     file_list.pop(0)
@@ -214,11 +209,7 @@ class S3:
         bucket = bucket if bucket else self.bucket
 
         out_s3 = S3(
-            file_name=file_name,
-            s3_key=s3_key,
-            bucket=bucket,
-            file_dir=self.file_dir,
-            redshift_str=self.redshift_str,
+            file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=self.file_dir, redshift_str=self.redshift_str,
         )
         exists = self.exists()
 
@@ -246,9 +237,7 @@ class S3:
         return out_s3
 
     def from_file(
-        self,
-        keep_file: bool = True,
-        if_exists: {"fail", "skip", "replace", "archive"} = "replace",
+        self, keep_file: bool = True, if_exists: {"fail", "skip", "replace", "archive"} = "replace",
     ):
         """Writes local file to S3.
 
@@ -306,9 +295,7 @@ class S3:
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        self.logger.debug(
-            f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'"
-        )
+        self.logger.debug(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
@@ -355,9 +342,7 @@ class S3:
     def to_df(self, **kwargs):
 
         if not file_extension(self.file_name) in ["csv", "parquet"]:
-            raise NotImplementedError(
-                "Unsupported file format. Please use CSV or Parquet files."
-            )
+            raise NotImplementedError("Unsupported file format. Please use CSV or Parquet files.")
 
         file_path = os.path.join(self.file_dir, self.file_name)
         self.to_file(if_exists=kwargs.get("if_exists"))
@@ -418,12 +403,10 @@ class S3:
         """
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
-        
+
         file_path = os.path.join(self.file_dir, self.file_name)
         if not file_path.endswith(".csv"):
-            raise ValueError(
-                "Invalid file extention - 'file_name' attribute must end with '.csv'"
-            )
+            raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
 
         if clean_df:
             df = clean(df)
@@ -506,7 +489,7 @@ class S3:
         if file_extension(self.file_name) == "csv":
             if remove_inside_quotes:
                 _format = ""
-            else:    
+            else:
                 _format = "FORMAT AS csv"
             sql = f"""
                 COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
@@ -533,13 +516,7 @@ class S3:
             last_line_pos = len(sql) - len(";commit;") - indent
             spaces = indent * " "  # print formatting
             time_format_argument = f"timeformat '{time_format}'"
-            sql = (
-                sql[:last_line_pos]
-                + time_format_argument
-                + "\n"
-                + spaces[:-1]
-                + sql[last_line_pos:]
-            )
+            sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
 
         con = sqldb.get_connection()
         self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
@@ -570,87 +547,88 @@ class S3:
         redshift_str: 'mssql+pyodbc://redshift_acoe'
         >>> s3_arch.delete()
         """
-        s3_archive = S3(
-            file_name=self.file_name,
-            s3_key="archive/" + self.s3_key,
-            bucket=self.bucket,
-        )
+        s3_archive = S3(file_name=self.file_name, s3_key="archive/" + self.s3_key, bucket=self.bucket,)
 
         version = 0
         while True:
-            file_name = (
-                s3_archive.file_name.split(".")[0]
-                + f"({version})."
-                + s3_archive.file_name.split(".")[1]
-            )
+            file_name = s3_archive.file_name.split(".")[0] + f"({version})." + s3_archive.file_name.split(".")[1]
             if file_name not in s3_archive.list():
-                return self.copy_to(
-                    file_name=file_name,
-                    s3_key="archive/" + self.s3_key,
-                    keep_file=False,
-                )
+                return self.copy_to(file_name=file_name, s3_key="archive/" + self.s3_key, keep_file=False,)
             else:
                 version += 1
 
     def _create_table_like_s3(self, table_name, sep, types):
-        s3_client = resource("s3").meta.client
+        if file_extension(self.file_name) == "csv":
+            s3_client = resource("s3").meta.client
 
-        obj_content = s3_client.select_object_content(
-            Bucket=self.bucket,
-            Key=self.s3_key + self.file_name,
-            ExpressionType="SQL",
-            Expression="SELECT * FROM s3object LIMIT 21",
-            InputSerialization={
-                "CSV": {"FileHeaderInfo": "None", "FieldDelimiter": sep}
-            },
-            OutputSerialization={"CSV": {}},
-        )
+            obj_content = s3_client.select_object_content(
+                Bucket=self.bucket,
+                Key=self.s3_key + self.file_name,
+                ExpressionType="SQL",
+                Expression="SELECT * FROM s3object LIMIT 21",
+                InputSerialization={"CSV": {"FileHeaderInfo": "None", "FieldDelimiter": sep}},
+                OutputSerialization={"CSV": {}},
+            )
 
-        records = []
-        for event in obj_content["Payload"]:
-            if "Records" in event:
-                records.append(event["Records"]["Payload"])
+            records = []
+            for event in obj_content["Payload"]:
+                if "Records" in event:
+                    records.append(event["Records"]["Payload"])
 
-        file_str = "".join(r.decode("utf-8") for r in records)
-        csv_reader = reader(StringIO(file_str))
+            file_str = "".join(r.decode("utf-8") for r in records)
+            csv_reader = reader(StringIO(file_str))
 
-        def isfloat(s):
-            try:
-                float(s)
-                return not s.isdigit()
-            except ValueError:
-                return False
+            def isfloat(s):
+                try:
+                    float(s)
+                    return not s.isdigit()
+                except ValueError:
+                    return False
 
-        count = 0
-        for row in csv_reader:
-            if count == 0:
-                column_names = row
-                column_isfloat = [[] for i in row]
-            else:
-                i = 0
-                for item in row:
-                    column_isfloat[i].append(isfloat(item))
-                    i += 1
-            count += 1
-
-        columns = []
-
-        count = 0
-        for col in column_names:
-            if types and col in types:
-                col_type = types[col].upper()
-                types.pop(col)
-            else:
-                if True in set(column_isfloat[count]):
-                    col_type = "FLOAT"
+            count = 0
+            for row in csv_reader:
+                if count == 0:
+                    column_names = row
+                    column_isfloat = [[] for i in row]
                 else:
-                    col_type = "VARCHAR(500)"
-            columns.append(f"{col} {col_type}")
-            count += 1
-        if types:
-            other_cols = list(types.keys())
-            if other_cols:
-                self.logger.info(f"Columns {other_cols} were not found.")
+                    i = 0
+                    for item in row:
+                        column_isfloat[i].append(isfloat(item))
+                        i += 1
+                count += 1
+
+            columns = []
+
+            count = 0
+            for col in column_names:
+                if types and col in types:
+                    col_type = types[col].upper()
+                    types.pop(col)
+                else:
+                    if True in set(column_isfloat[count]):
+                        col_type = "FLOAT"
+                    else:
+                        col_type = "VARCHAR(500)"
+                columns.append(f"{col} {col_type}")
+                count += 1
+            if types:
+                other_cols = list(types.keys())
+                if other_cols:
+                    self.logger.info(f"Columns {other_cols} were not found.")
+
+        elif file_extension(self.file_name) == "parquet":
+            self.to_file()
+            pq_table = pq.read_table(os.path.join(self.file_dir, self.file_name))
+            columns = []
+            for col_name, dtype in zip(pq_table.schema.names, pq_table.schema.types):
+                dtype = str(dtype)
+                if types and col_name in types:
+                    col_type = types[col_name]
+                else:
+                    col_type = pyarrow_to_rds_type(dtype)
+                columns.append(f"{col_name} {col_type}")
+        else:
+            raise ValueError("Table cannot be created. File extension not supported.")
 
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
@@ -660,7 +638,7 @@ class S3:
         con.execute(sql).commit()
         con.close()
 
-        self.logger.info("Table {table_name} has been created successfully.")
+        self.logger.info(f"Table {table_name} has been created successfully.")
 
 
 @deprecation.deprecated(details="Use S3.to_file function instead",)
@@ -675,11 +653,7 @@ def s3_to_csv(csv_path, bucket: str = None):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    s3 = S3(
-        file_name=os.path.basename(csv_path),
-        bucket=bucket,
-        file_dir=os.path.dirname(csv_path),
-    )
+    s3 = S3(file_name=os.path.basename(csv_path), bucket=bucket, file_dir=os.path.dirname(csv_path),)
     s3.to_file()
 
 
@@ -697,12 +671,7 @@ def csv_to_s3(csv_path, s3_key: str = None, keep_csv=True, bucket: str = None):
     bucket : str, optional
         Bucket name, if None then 'teis-data'
     """
-    s3 = S3(
-        file_name=os.path.basename(csv_path),
-        s3_key=s3_key,
-        bucket=bucket,
-        file_dir=os.path.dirname(csv_path),
-    )
+    s3 = S3(file_name=os.path.basename(csv_path), s3_key=s3_key, bucket=bucket, file_dir=os.path.dirname(csv_path),)
     return s3.from_file(keep_file=keep_csv)
 
 
@@ -724,16 +693,10 @@ def df_to_s3(
     bucket=None,
 ):
     s3 = S3(
-        file_name=table_name + ".csv",
-        s3_key=s3_key,
-        bucket=bucket,
-        file_dir=os.getcwd(),
-        redshift_str=redshift_str,
+        file_name=table_name + ".csv", s3_key=s3_key, bucket=bucket, file_dir=os.getcwd(), redshift_str=redshift_str,
     )
 
-    return s3.from_df(
-        df=df, sep=sep, clean_df=clean_df, keep_file=keep_csv, chunksize=chunksize
-    )
+    return s3.from_df(df=df, sep=sep, clean_df=clean_df, keep_file=keep_csv, chunksize=chunksize)
 
 
 @deprecation.deprecated(details="Use S3.to_rds function instead.",)
@@ -754,9 +717,7 @@ def s3_to_rds(
         table = file_name.replace(".csv", "")
     else:
         table = table_name
-    s3 = S3(
-        file_name=file_name, s3_key=s3_key, bucket=bucket, redshift_str=redshift_str
-    )
+    s3 = S3(file_name=file_name, s3_key=s3_key, bucket=bucket, redshift_str=redshift_str)
     s3.to_rds(
         table=table,
         schema=schema,
