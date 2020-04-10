@@ -154,10 +154,10 @@ class SQLDB:
 
             columns_str = ", ".join(col_tuples)
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
-            con = self.get_connection()
             SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
-            con.close()
+            con = self.get_connection()
             con.execute(sql).commit()
+            con.close()
 
             self.logger.debug(f"Table {sql} has been created successfully.")
         return self
