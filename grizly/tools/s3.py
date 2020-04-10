@@ -516,6 +516,7 @@ class S3:
                 {_format};
                 ;commit;
                 """
+            print(sql)
         if time_format:
             indent = 9
             last_line_pos = len(sql) - len(";commit;") - indent
