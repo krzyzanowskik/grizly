@@ -404,15 +404,20 @@ class S3:
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
 
+        
         file_path = os.path.join(self.file_dir, self.file_name)
-        if not file_path.endswith(".csv"):
-            raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
+        # if not file_path.endswith(".csv"):
+        #     raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
 
         if clean_df:
             df = clean(df)
         df = clean_colnames(df)
 
-        df.to_csv(file_path, index=False, sep=sep, chunksize=chunksize)
+        extension = self.file_name.split(".")[-1]
+        if extension == "csv":
+            df.to_csv(file_path, index=False, sep=sep, chunksize=chunksize)
+        elif extension == "parquet":
+            df.to_parquet(file_path, index=False)
         self.logger.info(f"DataFrame saved in '{file_path}'")
 
         return self.from_file(keep_file=keep_file, if_exists=if_exists)
