@@ -1,7 +1,11 @@
-# 0.3 to 0.3.1
+# 0.3.1 to 0.3.2
 
-### Overall changes:
-This release contains mostly some bug fixes like hard-coded paths.
+### SQLDB:
+- Added parameter `logger` 
+- check_if_exists() - added option `column`
 
-### Github:
-- from_issues() - remove `org_name` parameter, added `url` parameter
+### S3:
+- to_rds() - works now with `.parquet` files
+
+### QFrame:
+- to_parquet() - fixed bugs
