@@ -52,9 +52,9 @@ class SQLDB:
             con = engine.connect().connection
         return con
 
-    def check_if_exists(self, table, schema=None):
+    def check_if_exists(self, table, schema=None, column=None):
         """Checks if a table exists in Redshift.
-        
+
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
@@ -63,12 +63,11 @@ class SQLDB:
         """
         if self.db == "redshift":
             con = self.get_connection()
-            if schema == None:
-                sql_exists = f"select * from information_schema.tables where table_name='{table}'"
-            else:
-                sql_exists = (
-                    f"select * from information_schema.tables where table_schema='{schema}' and table_name='{table}'"
-                )
+            sql_exists = f"select * from information_schema.columns where table_name='{table}'"
+            if schema != None:
+                sql_exists += f" and table_schema='{schema}'"
+            if column != None:
+                sql_exists += f" and column_name='{column}'"
 
             return not read_sql_query(sql=sql_exists, con=con).empty
         else:
