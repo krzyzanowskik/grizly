@@ -2,10 +2,10 @@ from pandas import read_sql
 import re
 import os
 import sqlparse
-import logging
 from copy import deepcopy
 import json
 import logging
+import pyarrow as pa
 
 from .s3 import S3
 from .sqldb import SQLDB, check_if_valid_type
@@ -56,7 +56,7 @@ class QFrame(Extract):
     """
 
     # KM: can we delete sql argument?
-    def __init__(self, data={}, engine: str = None, sql=None, getfields=[]):
+    def __init__(self, data={}, engine: str = None, sql=None, getfields=[], logger=None):
         self.tool_name = "QFrame"
         self.engine = engine if engine else "mssql+pyodbc://DenodoODBC"
         if not isinstance(self.engine, str):
@@ -76,6 +76,7 @@ class QFrame(Extract):
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
         self.dtypes = {}
+        self.logger = logger
         super().__init__()
 
     def create_sql_blocks(self):
@@ -344,6 +345,7 @@ class QFrame(Extract):
         >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
         >>> qf = qf.remove(['Sales'])
         >>> print(qf)
+
         SELECT CustomerId
         FROM schema.table
 
@@ -993,23 +995,45 @@ class QFrame(Extract):
         )
         return self
 
-    def to_df(self):
+    def to_df(self, db="redshift"):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
 
+        Parameters
+        ---------
+        db : not really used but has to be provided
+        
         Returns
         -------
         DataFrame
             Data generated from sql.
         """
         sql = self.get_sql()
-        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        sqldb = SQLDB(db=db, engine_str=self.engine, logger=self.logger)
         con = sqldb.get_connection()
         df = read_sql(sql=sql, con=con)
-        self.df = df
+        # self.df = df
         con.close()
+        del(sqldb)
         return df
+
+
+    def to_arrow(self, db="redshift", debug=False):
+        sql = self.get_sql()
+        sqldb = SQLDB(db=db, engine_str=self.engine, interface="turbodbc", logger=self.logger)
+        con = sqldb.get_connection()
+        cursor = con.cursor()
+        cursor.execute(sql)
+        rowcount = cursor.rowcount
+        batches = cursor.fetcharrowbatches(strings_as_dictionary=True)  # string_as.. - similar to pd.Categorical
+        arrow_table = pa.concat_tables(batches)
+        cursor.close()
+        con.close()
+        if debug:
+            return arrow_table, rowcount
+        return arrow_table
+
 
     def to_sql(
         self,
