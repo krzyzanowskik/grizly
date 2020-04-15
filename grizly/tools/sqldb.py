@@ -19,7 +19,7 @@ deprecation.deprecated = partial(deprecation.deprecated, deprecated_in="0.3", re
 class SQLDB:
     last_commit = ""
 
-    def __init__(self, db: str, engine_str: str = None, config_key: str = None, logger: Logger = None):
+    def __init__(self, db: str, engine_str: str = None, interface: str = "sqlalchemy", config_key: str = None, logger: Logger = None):
         if config_key:
             config = Config().get_service(config_key=config_key, service="sqldb")
         else:
@@ -31,6 +31,10 @@ class SQLDB:
             raise NotImplementedError(f"DB {db} not supported yet. Supported DB's: 'redshift', 'denodo'")
         self.db = db
         self.engine_str = engine_str or config.get(db)
+        if interface not in ("sqlalchemy", "turbodbc"):
+            raise ValueError(f"Interface {interface} is not supported. Choose one of: 'sqlalchemy', 'turbodbc'")
+        self.interface = interface
+        self.dsn = self.engine_str.split("/")[-1]
         self.logger = logger or logging.getLogger(__name__)
 
     def get_connection(self):
@@ -45,11 +49,20 @@ class SQLDB:
         >>> con.close()
         """
         engine = create_engine(self.engine_str, encoding="utf8", poolclass=NullPool)
-        try:
-            con = engine.connect().connection
-        except:
-            self.logger.exception(f"Error connectig to {self.engine_str}. Retrying...")
-            con = engine.connect().connection
+        if self.interface == "sqlalchemy":
+            try:
+                con = engine.raw_connection()
+            except:
+                self.logger.exception(f"Error connectig to {self.engine_str}. Retrying...")
+                con = engine.raw_connection()
+	elif self.interface == "turbodbc":
+            try:
+                con = turbodbc.connect(dsn=self.dsn)
+            except turbodbc.exceptions.Error:
+                self.logger.exception(error_msg)
+                raise
+        else:
+            raise ValueError("Interface not specified.") 
         return con
 
     def check_if_exists(self, table, schema=None):
@@ -69,8 +82,9 @@ class SQLDB:
                 sql_exists = (
                     f"select * from information_schema.tables where table_schema='{schema}' and table_name='{table}'"
                 )
-
-            return not read_sql_query(sql=sql_exists, con=con).empty
+            exists = not read_sql_query(sql=sql_exists, con=con).empty
+            con.close()
+            return exists
         else:
             print("Works only with db='redshift'")
 
@@ -109,6 +123,7 @@ class SQLDB:
             else:
                 out_table_name = f"{out_schema}.{out_table}" if out_schema else out_table
                 if self.check_if_exists(table=out_table, schema=out_schema) and if_exists == "fail":
+                    con.close()
                     raise ValueError(f"Table {in_table_name} already exists")
                 sql = f"""
                         DROP TABLE IF EXISTS {out_table_name};
@@ -522,7 +537,7 @@ def pyarrow_to_rds_type(dtype):
         "date": "DATE",
         "string": "VARCHAR(500)",
         "timestamp.*\s*": "TIMESTAMP",
-        "datetime.*\s*": "DATETIME",
+        "datetime.*\s*": "TIMESTAMP",
     }
 
     for pyarrow_dtype in dtypes:
