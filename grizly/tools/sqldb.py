@@ -56,6 +56,7 @@ class SQLDB:
                 self.logger.exception(f"Error connectig to {self.engine_str}. Retrying...")
                 con = engine.raw_connection()
 	elif self.interface == "turbodbc":
+            import turbodbc
             try:
                 con = turbodbc.connect(dsn=self.dsn)
             except turbodbc.exceptions.Error:
