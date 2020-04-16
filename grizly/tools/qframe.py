@@ -893,8 +893,7 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> engine_string = "sqlite:///" + get_path("grizly_dev", "grizly", "tests", "Chinook.sqlite")
-        >>> engine_string
+        >>> engine_string = "sqlite:///" + get_path("grizly_dev", "tests", "Chinook.sqlite")
         >>> playlist_track = {"select": {"fields":{"PlaylistId": {"type" : "dim"}, "TrackId": {"type" : "dim"}}, "table" : "PlaylistTrack"}}
         >>> qf = QFrame(engine=engine_string).read_dict(playlist_track).limit(5)
         >>> qf = qf.to_rds(table='test', csv_path=get_path('test.csv'), schema='sandbox', if_exists='replace', redshift_str='mssql+pyodbc://redshift_acoe', bucket='acoe-s3', keep_csv=False)
