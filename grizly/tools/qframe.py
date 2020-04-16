@@ -1,4 +1,5 @@
-from pandas import read_sql
+import pandas as pd
+
 import re
 import os
 import sqlparse
@@ -56,7 +57,7 @@ class QFrame(Extract):
     """
 
     # KM: can we delete sql argument?
-    def __init__(self, data={}, engine: str = None, sql=None, getfields=[], logger=None):
+    def __init__(self, data={}, engine: str = None, sql=None, getfields=[], chunksize=None, logger=None):
         self.tool_name = "QFrame"
         self.engine = engine if engine else "mssql+pyodbc://DenodoODBC"
         if not isinstance(self.engine, str):
@@ -76,6 +77,7 @@ class QFrame(Extract):
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
         self.dtypes = {}
+        self.chunksize = chunkszie
         self.logger = logger
         super().__init__()
 
@@ -744,6 +746,33 @@ class QFrame(Extract):
 
         return self
 
+    def offset(self, offset):
+        """Adds OFFSET statement.
+
+        Parameters
+        ----------
+        offset : int or str
+            The row from which to start the data.
+
+        Examples
+        --------
+        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf = qf.offset(100)
+        >>> print(qf)
+        SELECT CustomerId,
+            Sales
+        FROM schema.table
+        OFFSET 100
+
+        Returns
+        -------
+        QFrame
+        """
+        self.data["select"]["offset"] = str(offset)
+
+        return self
+
+
     def rearrange(self, fields):
         """Changes order of the columns.
 
@@ -1012,7 +1041,35 @@ class QFrame(Extract):
         sql = self.get_sql()
         sqldb = SQLDB(db=db, engine_str=self.engine, logger=self.logger)
         con = sqldb.get_connection()
-        df = read_sql(sql=sql, con=con)
+        offset = 0
+        dfs = []
+        if self.chunksize:
+            if not "limit" in sql.lower():  # respect existing LIMIT
+                while True:
+                    chunk_sql = sql + f"\nOFFSET {offset} LIMIT {self.chunksize}"
+                    chunk_df = pd.read_sql(chunk_sql, con)
+                    dfs.append(chunk_df)
+                    offset += self.chunksize
+                    if len(dfs[-1]) < chunksize:
+                        break
+                df = pd.concat(dfs)
+            else:
+                self.logger.warning(f"LIMIT already exists in query. Chunksize will not be applied")
+        else:
+            df = pd.read_sql(sql, con)
+
+        #df = read_sql(sql=sql, con=con)
+        # import io
+        # from sqlalchemy import create_engine
+        # copy_sql = f"COPY ({sql}) TO STDOUT WITH CSV HEADER"
+        # engine_str = "mssql+pyodbc://DenodoPROD"
+        # engine = create_engine(engine_str)
+        # conn = engine.raw_connection()
+        # cur = conn.cursor()
+        # store = io.StringIO()
+        # cur.copy_expert(copy_sql, store)
+        # store.seek(0)
+        # df = read_csv(store) 
         # self.df = df
         con.close()
         del(sqldb)
