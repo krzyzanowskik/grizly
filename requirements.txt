@@ -27,3 +27,4 @@ configparser
 fpdf
 jupyter_sphinx
 deprecation
+pyodbc

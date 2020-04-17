@@ -2,6 +2,7 @@
 
 ### SQLDB:
 - Added parameter `logger` 
+- Added parameter `interface` with options: "sqlalchemy", "turbodbc", "pyodbc"
 - check_if_exists() - added option `column`
 
 ### S3:
