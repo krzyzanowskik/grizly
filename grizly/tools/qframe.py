@@ -7,6 +7,7 @@ from copy import deepcopy
 import json
 import logging
 import pyarrow as pa
+import math
 
 from .s3 import S3
 from .sqldb import SQLDB, check_if_valid_type
@@ -75,9 +76,7 @@ class QFrame(Extract):
             "order_by",
         ]
         self.fieldtypes = ["dim", "num"]
-        self.metaattrs = ["limit", "where", "having"]
         self.dtypes = {}
-        self.chunksize = chunkszie
         self.logger = logger
         super().__init__()
 
@@ -772,6 +771,25 @@ class QFrame(Extract):
 
         return self
 
+    def window(self, offset: int = None, limit: int = None):
+        if offset:
+            self.offset(offset)
+        if limit:
+            self.limit(limit)
+        return self
+
+    def cut(self, chunksize: int):
+        """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows"""
+        db = "denodo" if "denodo" in self.engine else "redshift"
+        con = SQLDB(db=db, engine_str=self.engine).get_connection()
+        query = f"SELECT COUNT(*) FROM ({qf.get_sql()})"
+        no_rows = con.execute(sql).fetchval()
+        con.close()
+        qfs = []
+        for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
+            qf = qf.window(offset=chunk, limit=chunksize) 
+            qfs.append(qf)
+        return qfs
 
     def rearrange(self, fields):
         """Changes order of the columns.
@@ -1024,7 +1042,7 @@ class QFrame(Extract):
         )
         return self
 
-    def to_df(self, db="redshift"):
+    def to_df(self, db="redshift", chunksize: int = None):
         """Writes QFrame to DataFrame. Uses pandas.read_sql.
 
         TODO: DataFarme types should correspond to types defined in QFrame data.
@@ -1043,13 +1061,13 @@ class QFrame(Extract):
         con = sqldb.get_connection()
         offset = 0
         dfs = []
-        if self.chunksize:
+        if chunksize:
             if not "limit" in sql.lower():  # respect existing LIMIT
                 while True:
                     chunk_sql = sql + f"\nOFFSET {offset} LIMIT {self.chunksize}"
                     chunk_df = pd.read_sql(chunk_sql, con)
                     dfs.append(chunk_df)
-                    offset += self.chunksize
+                    offset += chunksize
                     if len(dfs[-1]) < chunksize:
                         break
                 df = pd.concat(dfs)
@@ -1629,6 +1647,15 @@ def _validate_data(data):
                 f"""Distinct attribute has invalid value: '{distinct}'.  Valid values: '', '1'"""
             )
 
+    if "offset" in select and select["offset"] != "":
+        offset = select["offset"]
+        try:
+            int(offset)
+        except:
+            raise ValueError(
+                f"""Limit attribute has invalid value: '{offset}'.  Valid values: '', integer """
+            )
+
     if "limit" in select and select["limit"] != "":
         limit = select["limit"]
         try:
@@ -1708,6 +1735,7 @@ def initiate(
             "where": "",
             "distinct": "",
             "having": "",
+            "offset": "",
             "limit": "",
         }
     }
@@ -1912,6 +1940,9 @@ def _get_sql(data):
     if data["select"]["sql_blocks"]["order_by"] != []:
         order_by = ", ".join(data["select"]["sql_blocks"]["order_by"])
         sql += f" ORDER BY {order_by}"
+
+    if "offset" in data["select"] and data["select"]["offset"] != "":
+        sql += " OFFSET {}".format(data["select"]["offset"])
 
     if "limit" in data["select"] and data["select"]["limit"] != "":
         sql += " LIMIT {}".format(data["select"]["limit"])
