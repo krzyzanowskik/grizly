@@ -75,7 +75,7 @@ class QFrame(Extract):
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
         self.dtypes = {}
-        self.chunksize = chunkszie
+        self.chunksize = chunksize
         self.logger = logger
         super().__init__()
 
@@ -730,7 +730,7 @@ class QFrame(Extract):
         >>> qf = qf.offset(100)
         >>> print(qf)
         SELECT CustomerId,
-            Sales
+               Sales
         FROM schema.table
         OFFSET 100
 
@@ -741,7 +741,6 @@ class QFrame(Extract):
         self.data["select"]["offset"] = str(offset)
 
         return self
-
 
     def rearrange(self, fields):
         """Changes order of the columns.
@@ -1018,7 +1017,7 @@ class QFrame(Extract):
         else:
             df = pd.read_sql(sql, con)
 
-        #df = read_sql(sql=sql, con=con)
+        # df = read_sql(sql=sql, con=con)
         # import io
         # from sqlalchemy import create_engine
         # copy_sql = f"COPY ({sql}) TO STDOUT WITH CSV HEADER"
@@ -1029,7 +1028,7 @@ class QFrame(Extract):
         # store = io.StringIO()
         # cur.copy_expert(copy_sql, store)
         # store.seek(0)
-        # df = read_csv(store) 
+        # df = read_csv(store)
         # self.df = df
         con.close()
         del sqldb

@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+import pyodbc
 from pandas import read_sql_query
 import os
 import sqlparse
@@ -13,9 +14,7 @@ from ..utils import get_sfdc_columns
 from functools import partial
 import deprecation
 
-deprecation.deprecated = partial(
-    deprecation.deprecated, deprecated_in="0.3", removed_in="0.4"
-)
+deprecation.deprecated = partial(deprecation.deprecated, deprecated_in="0.3", removed_in="0.4")
 
 
 class SQLDB:
@@ -37,14 +36,12 @@ class SQLDB:
                 "denodo": "mssql+pyodbc://DenodoPROD",
             }
         if db not in {"redshift", "denodo"}:
-            raise NotImplementedError(
-                f"DB {db} not supported yet. Supported DB's: 'redshift', 'denodo'"
-            )
+            raise NotImplementedError(f"DB {db} not supported yet. Supported DB's: 'redshift', 'denodo'")
         self.db = db
         self.engine_str = engine_str or config.get(db)
-        if interface not in ("sqlalchemy", "turbodbc"):
+        if interface not in ("sqlalchemy", "turbodbc", "pyodbc"):
             raise ValueError(
-                f"Interface {interface} is not supported. Choose one of: 'sqlalchemy', 'turbodbc'"
+                f"Interface {interface} is not supported. Choose one of: 'sqlalchemy', 'turbodbc', 'pyodbc'"
             )
         self.interface = interface
         self.dsn = self.engine_str.split("/")[-1]
@@ -66,9 +63,7 @@ class SQLDB:
             try:
                 con = engine.raw_connection()
             except:
-                self.logger.exception(
-                    f"Error connectig to {self.engine_str}. Retrying..."
-                )
+                self.logger.exception(f"Error connectig to {self.engine_str}. Retrying...")
                 con = engine.raw_connection()
         elif self.interface == "turbodbc":
             import turbodbc
@@ -76,6 +71,12 @@ class SQLDB:
             try:
                 con = turbodbc.connect(dsn=self.dsn)
             except turbodbc.exceptions.Error:
+                self.logger.exception(error_msg)
+                raise
+        elif self.interface == "pyodbc":
+            try:
+                con = pyodbc.connect(DSN=self.dsn)
+            except pyodbc.exceptions.Error:
                 self.logger.exception(error_msg)
                 raise
         else:
@@ -89,13 +90,11 @@ class SQLDB:
         --------
         >>> sqldb = SQLDB(db="redshift")
         >>> sqldb.check_if_exists(table="table_tutorial", schema="administration")
-            True
+        True
         """
         if self.db == "redshift":
             con = self.get_connection()
-            sql_exists = (
-                f"select * from information_schema.columns where table_name='{table}'"
-            )
+            sql_exists = f"select * from information_schema.columns where table_name='{table}'"
             if schema:
                 sql_exists += f" and table_schema='{schema}'"
             if column:
@@ -106,9 +105,7 @@ class SQLDB:
         else:
             print("Works only with db='redshift'")
 
-    def copy_table(
-        self, in_table, out_table, in_schema=None, out_schema=None, if_exists="fail"
-    ):
+    def copy_table(self, in_table, out_table, in_schema=None, out_schema=None, if_exists="fail"):
         """Copies records from one table to another.
 
         Paramaters
@@ -141,13 +138,8 @@ class SQLDB:
             if not self.check_if_exists(table=in_table, schema=in_schema):
                 self.logger.info(f"Table {in_table_name} doesn't exist.")
             else:
-                out_table_name = (
-                    f"{out_schema}.{out_table}" if out_schema else out_table
-                )
-                if (
-                    self.check_if_exists(table=out_table, schema=out_schema)
-                    and if_exists == "fail"
-                ):
+                out_table_name = f"{out_schema}.{out_table}" if out_schema else out_table
+                if self.check_if_exists(table=out_table, schema=out_schema) and if_exists == "fail":
                     con.close()
                     raise ValueError(f"Table {in_table_name} already exists")
                 sql = f"""
@@ -155,9 +147,7 @@ class SQLDB:
                         CREATE TABLE {out_table_name} AS
                         SELECT * FROM {in_table_name}
                         """
-                SQLDB.last_commit = sqlparse.format(
-                    sql, reindent=True, keyword_case="upper"
-                )
+                SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
                 con.execute(sql).commit()
             con.close()
         return self
@@ -196,9 +186,7 @@ class SQLDB:
 
             columns_str = ", ".join(col_tuples)
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
-            SQLDB.last_commit = sqlparse.format(
-                sql, reindent=True, keyword_case="upper"
-            )
+            SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
             con = self.get_connection()
             con.execute(sql).commit()
             con.close()
@@ -226,9 +214,7 @@ class SQLDB:
             if self.check_if_exists(table=table, schema=schema):
                 columns = ", ".join(columns)
                 sql = f"INSERT INTO {table_name} ({columns}) {sql}"
-                SQLDB.last_commit = sqlparse.format(
-                    sql, reindent=True, keyword_case="upper"
-                )
+                SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
                 con.execute(sql).commit()
             else:
                 self.logger.info(f"Table {table_name} doesn't exist.")
@@ -253,16 +239,12 @@ class SQLDB:
             if self.check_if_exists(table=table, schema=schema):
                 sql = f"DELETE FROM {table_name}"
                 if where is None:
-                    SQLDB.last_commit = sqlparse.format(
-                        sql, reindent=True, keyword_case="upper"
-                    )
+                    SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
                     con.execute(sql).commit()
                     self.logger.info(f"Records from table {table_name} has been removed successfully.")
                 else:
                     sql += f" WHERE {where} "
-                    SQLDB.last_commit = sqlparse.format(
-                        sql, reindent=True, keyword_case="upper"
-                    )
+                    SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
                     con.execute(sql).commit()
                     self.logger.info(f"Records from table {table_name} where {where} has been removed successfully.")
             else:
@@ -285,9 +267,7 @@ class SQLDB:
             table_name = f"{schema}.{table}" if schema else table
             if self.check_if_exists(table=table, schema=schema):
                 sql = f"DROP TABLE {table_name}"
-                SQLDB.last_commit = sqlparse.format(
-                    sql, reindent=True, keyword_case="upper"
-                )
+                SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
                 con.execute(sql).commit()
                 self.logger.info(f"Table {table_name} has been dropped successfully.")
             else:
@@ -354,32 +334,17 @@ class SQLDB:
         --------
         >>> sqldb = SQLDB(db="redshift")
         >>> sqldb.get_columns(table="table_tutorial", schema="administration", column_types=True)
-        (['col1', 'col2', 'col3', 'col4'],
-        ['character varying',
-        'double precision',
-        'character varying',
-        'double precision'])
+        (['col1', 'col2', 'col3', 'col4'], ['character varying', 'double precision', 'character varying', 'double precision'])
         """
         if self.db == "denodo":
             return self._get_denodo_columns(
-                schema=schema,
-                table=table,
-                column_types=column_types,
-                date_format=date_format,
-                columns=columns,
+                schema=schema, table=table, column_types=column_types, date_format=date_format, columns=columns,
             )
         elif self.db == "redshift":
-            return self._get_redshift_columns(
-                schema=schema, table=table, column_types=column_types, columns=columns
-            )
+            return self._get_redshift_columns(schema=schema, table=table, column_types=column_types, columns=columns)
 
     def _get_denodo_columns(
-        self,
-        table,
-        schema: str = None,
-        column_types: bool = False,
-        columns: list = None,
-        date_format: str = "DATE",
+        self, table, schema: str = None, column_types: bool = False, columns: list = None, date_format: str = "DATE",
     ):
         """Get column names (and optionally types) from Denodo view.
 
@@ -396,11 +361,7 @@ class SQLDB:
         date_format: str
             Denodo date format differs from those from other databases. User can choose which format is desired.
         """
-        where = (
-            f"view_name = '{table}' AND database_name = '{schema}' "
-            if schema
-            else f"view_name = '{table}' "
-        )
+        where = f"view_name = '{table}' AND database_name = '{schema}' " if schema else f"view_name = '{table}' "
         if column_types == False:
             sql = f"""
                 SELECT column_name
@@ -445,20 +406,14 @@ class SQLDB:
             con.close()
             if columns:
                 col_names_and_types = {
-                    col_name: col_type
-                    for col_name, col_type in zip(col_names, col_types)
-                    if col_name in columns
+                    col_name: col_type for col_name, col_type in zip(col_names, col_types) if col_name in columns
                 }
                 col_names = [col for col in col_names_and_types]
                 col_types = [type for type in col_names_and_types.values()]
             return col_names, col_types
 
     def _get_redshift_columns(
-        self,
-        table,
-        schema: str = None,
-        column_types: bool = False,
-        columns: list = None,
+        self, table, schema: str = None, column_types: bool = False, columns: list = None,
     ):
         """Get column names (and optionally types) from a Redshift table.
 
@@ -475,11 +430,7 @@ class SQLDB:
         """
         con = self.get_connection()
         cursor = con.cursor()
-        where = (
-            f"table_name = '{table}' AND table_schema = '{schema}' "
-            if schema
-            else f"table_name = '{table}' "
-        )
+        where = f"table_name = '{table}' AND table_schema = '{schema}' " if schema else f"table_name = '{table}' "
         sql = f"""
             SELECT ordinal_position AS position, column_name, data_type,
             CASE WHEN character_maximum_length IS NOT NULL
@@ -507,9 +458,7 @@ class SQLDB:
             # leave only the cols provided in the columns argument
             if columns:
                 col_names_and_types = {
-                    col_name: col_type
-                    for col_name, col_type in zip(col_names, col_types)
-                    if col_name in columns
+                    col_name: col_type for col_name, col_type in zip(col_names, col_types) if col_name in columns
                 }
                 col_names = [col for col in col_names_and_types]
                 col_types = [type for type in col_names_and_types.values()]
@@ -620,38 +569,24 @@ def check_if_exists(table, schema=""):
 @deprecation.deprecated(details="Use SQLDB.create_table function instead",)
 def create_table(table, columns, types, schema="", engine_str=None, char_size=500):
     sqldb = SQLDB(db="redshift", engine_str=engine_str)
-    sqldb.create_table(
-        table=table, columns=columns, types=types, schema=schema, char_size=char_size
-    )
+    sqldb.create_table(table=table, columns=columns, types=types, schema=schema, char_size=char_size)
 
 
 @deprecation.deprecated(details="Use SQLDB.write_to function instead",)
 def write_to(table, columns, sql, schema="", engine_str=None, if_exists="fail"):
     sqldb = SQLDB(db="redshift", engine_str=engine_str)
-    sqldb.write_to(
-        table=table, columns=columns, sql=sql, schema=schema, if_exists=if_exists
-    )
+    sqldb.write_to(table=table, columns=columns, sql=sql, schema=schema, if_exists=if_exists)
 
 
 @deprecation.deprecated(details="Use SQLDB.get_columns function instead",)
 def get_columns(
-    table,
-    schema=None,
-    column_types=False,
-    date_format="DATE",
-    db="denodo",
-    columns=None,
-    engine_str: str = None,
+    table, schema=None, column_types=False, date_format="DATE", db="denodo", columns=None, engine_str: str = None,
 ):
     db = db.lower()
     if db == "denodo" or db == "redshift":
         sqldb = SQLDB(db=db, engine_str=engine_str)
         return sqldb.get_columns(
-            table=table,
-            schema=schema,
-            column_types=column_types,
-            date_format=date_format,
-            columns=columns,
+            table=table, schema=schema, column_types=column_types, date_format=date_format, columns=columns,
         )
     elif db == "sfdc":
         return get_sfdc_columns(table=table, column_types=column_types, columns=columns)
@@ -672,7 +607,5 @@ def delete_where(table, schema="", redshift_str=None, *argv):
 @deprecation.deprecated(details="Use SQLDB.copy_table function instead",)
 def copy_table(schema, copy_from, to, redshift_str=None):
     sqldb = SQLDB(db="redshift", engine_str=redshift_str)
-    sqldb.copy_table(
-        in_table=copy_from, out_table=to, in_schema=schema, out_schema=schema
-    )
+    sqldb.copy_table(in_table=copy_from, out_table=to, in_schema=schema, out_schema=schema)
     return "Success"
