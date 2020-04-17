@@ -149,7 +149,7 @@ class S3:
         s3_key = self.s3_key + self.file_name
         resource("s3").Object(self.bucket, s3_key).delete()
 
-        self.logger.debug(f"'{s3_key}' has been removed successfully")
+        self.logger.info(f"'{s3_key}' has been removed successfully")
 
     @_check_if_s3_exists
     def copy_to(
@@ -295,11 +295,11 @@ class S3:
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        self.logger.debug(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        self.logger.info(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
-            self.logger.debug(f"'{file_path}' has been removed")
+            self.logger.info(f"'{file_path}' has been removed")
 
         return self
 
@@ -404,7 +404,6 @@ class S3:
         if not isinstance(df, DataFrame):
             raise ValueError("'df' must be DataFrame object")
 
-        
         file_path = os.path.join(self.file_dir, self.file_name)
         # if not file_path.endswith(".csv"):
         #     raise ValueError("Invalid file extention - 'file_name' attribute must end with '.csv'")
@@ -534,7 +533,7 @@ class S3:
         finally:
             con.close()
         self.status = "success"
-        self.logger.debug(f"Data has been copied to {table_name}")
+        self.logger.info(f"Data has been copied to {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...

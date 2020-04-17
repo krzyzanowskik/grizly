@@ -139,7 +139,7 @@ class SQLDB:
             con = self.get_connection()
             in_table_name = f"{in_schema}.{in_table}" if in_schema else in_table
             if not self.check_if_exists(table=in_table, schema=in_schema):
-                self.logger.debug(f"Table {in_table_name} doesn't exist.")
+                self.logger.info(f"Table {in_table_name} doesn't exist.")
             else:
                 out_table_name = (
                     f"{out_schema}.{out_table}" if out_schema else out_table
@@ -203,7 +203,7 @@ class SQLDB:
             con.execute(sql).commit()
             con.close()
 
-            self.logger.debug(f"Table {sql} has been created successfully.")
+            self.logger.info(f"Table {sql} has been created successfully.")
         return self
 
     def insert_into(self, table, columns, sql, schema=None):
@@ -231,7 +231,7 @@ class SQLDB:
                 )
                 con.execute(sql).commit()
             else:
-                self.logger.debug(f"Table {table_name} doesn't exist.")
+                self.logger.info(f"Table {table_name} doesn't exist.")
             con.close()
         return self
 
@@ -257,20 +257,16 @@ class SQLDB:
                         sql, reindent=True, keyword_case="upper"
                     )
                     con.execute(sql).commit()
-                    self.logger.debug(
-                        f"Records from table {table_name} has been removed successfully."
-                    )
+                    self.logger.info(f"Records from table {table_name} has been removed successfully.")
                 else:
                     sql += f" WHERE {where} "
                     SQLDB.last_commit = sqlparse.format(
                         sql, reindent=True, keyword_case="upper"
                     )
                     con.execute(sql).commit()
-                    self.logger.debug(
-                        f"Records from table {table_name} where {where} has been removed successfully."
-                    )
+                    self.logger.info(f"Records from table {table_name} where {where} has been removed successfully.")
             else:
-                self.logger.debug(f"Table {table_name} doesn't exist.")
+                self.logger.info(f"Table {table_name} doesn't exist.")
             con.close()
         return self
 
@@ -293,9 +289,9 @@ class SQLDB:
                     sql, reindent=True, keyword_case="upper"
                 )
                 con.execute(sql).commit()
-                self.logger.debug(f"Table {table_name} has been dropped successfully.")
+                self.logger.info(f"Table {table_name} has been dropped successfully.")
             else:
-                self.logger.debug(f"Table {table_name} doesn't exist.")
+                self.logger.info(f"Table {table_name} doesn't exist.")
             con.close()
         return self
 
@@ -325,19 +321,13 @@ class SQLDB:
             if self.check_if_exists(table=table, schema=schema):
                 if if_exists == "replace":
                     self.delete_from(table=table, schema=schema)
-                    self.insert_into(
-                        table=table, columns=columns, sql=sql, schema=schema
-                    )
-                    self.logger.debug(
-                        f"Data has been owerwritten into {schema}.{table}"
-                    )
+                    self.insert_into(table=table, columns=columns, sql=sql, schema=schema)
+                    self.logger.info(f"Data has been owerwritten into {schema}.{table}")
                 elif if_exists == "fail":
                     raise ValueError("Table already exists")
                 elif if_exists == "append":
-                    self.insert_into(
-                        table=table, columns=columns, sql=sql, schema=schema
-                    )
-                    self.logger.debug(f"Data has been appended to {schema}.{table}")
+                    self.insert_into(table=table, columns=columns, sql=sql, schema=schema)
+                    self.logger.info(f"Data has been appended to {schema}.{table}")
             else:
                 raise ValueError("Table doesn't exist. Use create_table first")
         return self
