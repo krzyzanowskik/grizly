@@ -743,22 +743,24 @@ class QFrame(Extract):
         return self
 
     def window(self, offset: int = None, limit: int = None):
+        qf = self.copy()
         if offset:
-            self.offset(offset)
+            qf.offset(offset)
         if limit:
-            self.limit(limit)
-        return self
+            qf.limit(limit)
+        return qf
 
     def cut(self, chunksize: int):
         """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows"""
         db = "denodo" if "denodo" in self.engine else "redshift"
         con = SQLDB(db=db, engine_str=self.engine).get_connection()
-        query = f"SELECT COUNT(*) FROM ({qf.get_sql()})"
-        no_rows = con.execute(sql).fetchval()
+        query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
+        no_rows = con.execute(query).fetchval()
         con.close()
+        self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
         for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
-            qf = qf.window(offset=chunk, limit=chunksize) 
+            qf = self.window(offset=chunk, limit=chunksize) 
             qfs.append(qf)
         return qfs
 
@@ -1212,7 +1214,8 @@ class QFrame(Extract):
         engine = deepcopy(self.engine)
         sql = deepcopy(self.sql)
         getfields = deepcopy(self.getfields)
-        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields)
+        logger = self.logger
+        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields, logger=self.logger)
 
     def __str__(self):
         sql = self.get_sql()
