@@ -72,7 +72,14 @@ class S3:
             os.environ["HTTP_PROXY"] = http_proxy
 
     def __repr__(self):
-        info = f"""file_name: '{self.file_name}' \ns3_key: '{self.s3_key}' \nbucket: '{self.bucket}' \nfile_dir: '{self.file_dir}' \nredshift_str: '{self.redshift_str}'"""
+        info_list = [
+            f"file_name: '{self.file_name}'",
+            f"s3_key: '{self.s3_key}'",
+            f"bucket: '{self.bucket}'",
+            f"file_dir: '{self.file_dir}'",
+            f"redshift_str: '{self.redshift_str}'",
+        ]
+        info = "\n".join(info_list)
         return info
 
     def _check_if_s3_exists(f):
@@ -111,12 +118,12 @@ class S3:
 
         Examples
         --------
-        >>> S3('test.csv', 'bulk/', file_dir=r'C:\\Users').info()
-        file_name:      'test.csv'
-        s3_key:         'bulk/'
-        bucket:         'acoe-s3'
-        file_dir:       'C:\\Users'
-        redshift_str:   'mssql+pyodbc://redshift_acoe'
+        >>> S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/').info()
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
         """
         print(self.__repr__())
 
@@ -182,20 +189,20 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users')
+        >>> s3 = S3('test_grizly.csv', 'test/test/', file_dir=r'/home/analyst/')
         >>> s3
-        file_name: 	    'test.csv'
-        s3_key: 	    'bulk/'
-        bucket: 	    'acoe-s3'
-        file_dir: 	    'C:\\Users'
-        redshift_str: 	'mssql+pyodbc://redshift_acoe'
-        >>> s3 = s3.copy_to('test_old.csv', s3_key='bulk/test/')
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
+        >>> s3 = s3.copy_to('test_old.csv', s3_key='test/')
         >>> s3
-        file_name: 	    'test_old.csv'
-        s3_key: 	    'bulk/test/'
-        bucket: 	    'acoe-s3'
-        file_dir: 	    'C:\\Users'
-        redshift_str: 	'mssql+pyodbc://redshift_acoe'
+        file_name: 'test_old.csv'
+        s3_key: 'test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
 
         Returns
         -------
@@ -259,8 +266,7 @@ class S3:
 
         Examples
         --------
-        >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
-        >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
+        >>> s3 = S3('test_grizly.csv', s3_key='test/test/', file_dir='/home/analyst/')
         >>> s3 = s3.from_file()
         """
         if if_exists not in ("fail", "skip", "replace", "archive"):
@@ -320,8 +326,8 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test.csv', 'bulk/', file_dir='C:\\Users').to_file()
-        >>> os.remove('C:\\Users\\test.csv')
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir='/home/analyst/').to_file()
+        >>> os.remove('/home/analyst/test_grizly.csv')
         """
         if if_exists not in ("fail", "skip", "replace"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -373,12 +379,12 @@ class S3:
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/').from_df(df, keep_file=True)
         >>> s3
-        file_name: 'test.csv'
-        s3_key: 'bulk/'
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/'
         bucket: 'acoe-s3'
-        file_dir: 'C:\\Users'
+        file_dir: '/home/analyst/'
         redshift_str: 'mssql+pyodbc://redshift_acoe'
 
         Parameters
@@ -540,15 +546,15 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test_old.csv', 'bulk/test/', file_dir=r'C:\\Users')
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/')
         >>> s3_arch = s3.archive()
         >>> s3.exists()
         False
         >>> s3_arch
-        file_name: 'test_old(0).csv'
-        s3_key: 'archive/bulk/test/'
+        file_name: 'test_grizly(0).csv'
+        s3_key: 'archive/test/'
         bucket: 'acoe-s3'
-        file_dir: 'C:\\Users'
+        file_dir: '/home/analyst/'
         redshift_str: 'mssql+pyodbc://redshift_acoe'
         >>> s3_arch.delete()
         """

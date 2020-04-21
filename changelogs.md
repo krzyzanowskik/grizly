@@ -10,5 +10,10 @@
 
 ### QFrame:
 - to_parquet() - fixed bugs
-- cut() - fixed bugs
 - copy() - logger is now copied as well
+#### new methods
+- to_arrow()
+- offset()
+- cut()
+- window()
+
