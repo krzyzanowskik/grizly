@@ -6,9 +6,11 @@
 - check_if_exists() - added option `column`
 
 ### S3:
+- Added parameter `interface`
 - to_rds() - works now with `.parquet` files
 
 ### QFrame:
+- Added parameter `interface`
 - to_parquet() - fixed bugs
 - copy() - logger is now copied as well
 #### new methods

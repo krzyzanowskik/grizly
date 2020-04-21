@@ -56,7 +56,9 @@ class QFrame(Extract):
     """
 
     # KM: can we delete sql argument?
-    def __init__(self, data={}, engine: str = None, sql=None, getfields=[], chunksize=None, logger=None):
+    def __init__(
+        self, data={}, engine: str = None, sql=None, getfields=[], chunksize=None, interface: str = None, logger=None
+    ):
         self.tool_name = "QFrame"
         self.engine = engine if engine else "mssql+pyodbc://DenodoODBC"
         if not isinstance(self.engine, str):
@@ -64,18 +66,10 @@ class QFrame(Extract):
         self.data = data
         self.sql = sql or ""
         self.getfields = getfields
-        self.fieldattrs = [
-            "type",
-            "as",
-            "group_by",
-            "expression",
-            "select",
-            "custom_type",
-            "order_by",
-        ]
         self.fieldtypes = ["dim", "num"]
         self.dtypes = {}
         self.chunksize = chunksize
+        self.interface = interface or "sqlalchemy"
         self.logger = logger
         super().__init__()
 
@@ -753,14 +747,14 @@ class QFrame(Extract):
     def cut(self, chunksize: int):
         """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows"""
         db = "denodo" if "denodo" in self.engine else "redshift"
-        con = SQLDB(db=db, engine_str=self.engine).get_connection()
+        con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
         query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
         no_rows = con.execute(query).fetchval()
         con.close()
         self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
         for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
-            qf = self.window(offset=chunk, limit=chunksize) 
+            qf = self.window(offset=chunk, limit=chunksize)
             qfs.append(qf)
         return qfs
 
@@ -886,7 +880,7 @@ class QFrame(Extract):
         """
         engine_str = engine_str or self.engine
         self.create_sql_blocks()
-        sqldb = SQLDB(db="redshift", engine_str=engine_str)
+        sqldb = SQLDB(db="redshift", engine_str=engine_str, interface=self.interface)
         sqldb.create_table(
             columns=self.get_fields(aliased=True),
             types=self.get_dtypes(),
@@ -992,7 +986,7 @@ class QFrame(Extract):
         QFrame
         """
         self.create_sql_blocks()
-        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        sqldb = SQLDB(db="redshift", engine_str=self.engine, interface=self.interface)
         sqldb.create_table(
             columns=self.get_fields(aliased=True),
             types=self.get_dtypes(),
@@ -1020,7 +1014,7 @@ class QFrame(Extract):
             Data generated from sql.
         """
         sql = self.get_sql()
-        sqldb = SQLDB(db=db, engine_str=self.engine, logger=self.logger)
+        sqldb = SQLDB(db=db, engine_str=self.engine, interface=self.interface, logger=self.logger)
         con = sqldb.get_connection()
         offset = 0
         dfs = []
@@ -1120,7 +1114,7 @@ class QFrame(Extract):
             * callable with signature ``(pd_table, conn, keys, data_iter)``.
         """
         df = self.to_df()
-        sqldb = SQLDB(db="redshift", engine_str=self.engine)
+        sqldb = SQLDB(db="redshift", engine_str=self.engine, interface=self.interface)
         con = sqldb.get_connection()
 
         df.to_sql(
@@ -1561,9 +1555,7 @@ def _validate_data(data):
         try:
             int(offset)
         except:
-            raise ValueError(
-                f"""Limit attribute has invalid value: '{offset}'.  Valid values: '', integer """
-            )
+            raise ValueError(f"""Limit attribute has invalid value: '{offset}'.  Valid values: '', integer """)
 
     if "limit" in select and select["limit"] != "":
         limit = select["limit"]

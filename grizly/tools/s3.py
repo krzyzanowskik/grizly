@@ -50,6 +50,7 @@ class S3:
         file_dir: str = None,
         redshift_str: str = None,
         min_time_window: int = 0,
+        interface: str = None,
         logger=None,
     ):
         self.id = next(self._ids)
@@ -65,6 +66,8 @@ class S3:
         os.makedirs(self.file_dir, exist_ok=True)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
+        self.interface = interface or "sqlalchemy"
+
         https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
         http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
         if http_proxy is not None:
@@ -468,7 +471,7 @@ class S3:
 
         self.status = "initiated"
 
-        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
+        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str, interface=self.interface)
         table_name = f"{schema}.{table}" if schema else table
 
         if sqldb.check_if_exists(table, schema):
@@ -644,7 +647,7 @@ class S3:
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
-        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
+        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str, interface=self.interface)
         con = sqldb.get_connection()
         con.execute(sql).commit()
         con.close()
