@@ -537,12 +537,12 @@ class S3:
         try:
             con.execute(sql)
         except:
-            self.logger.exception(f"Failed to upload {self.full_s3_key} to Redshift")
+            self.logger.exception(f"Failed to upload {self.file_name} to Redshift")
             self.status = "failed"
         finally:
             con.close()
         self.status = "success"
-        self.logger.info(f"Data has been copied to {table_name}")
+        self.logger.info(f"{self.file_name} has been successfully uploaded to Redshift [{table_name}]")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
