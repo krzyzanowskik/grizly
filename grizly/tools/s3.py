@@ -298,7 +298,7 @@ class S3:
                 + f"\nSet S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window})."
             )
             self.logger.warning(msg)
-            self.status = "failed"
+            self.status = "skipped"
             return self
 
         s3_file.upload_file(file_path)
@@ -309,7 +309,7 @@ class S3:
 
         if not keep_file:
             os.remove(file_path)
-            self.logger.debug(f"'{file_path}' has been removed")
+            self.logger.debug(f"Successfully removed '{file_path}'")
 
         return self
 
