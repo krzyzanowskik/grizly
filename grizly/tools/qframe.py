@@ -20,8 +20,6 @@ from functools import partial
 
 deprecation.deprecated = partial(deprecation.deprecated, deprecated_in="0.3", removed_in="0.4")
 
-logger = logging.getLogger(__name__)
-
 
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
@@ -70,7 +68,7 @@ class QFrame(Extract):
         self.dtypes = {}
         self.chunksize = chunksize
         self.interface = interface or "sqlalchemy"
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
         super().__init__()
 
     def create_sql_blocks(self):
@@ -745,7 +743,25 @@ class QFrame(Extract):
         return qf
 
     def cut(self, chunksize: int):
-        """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows"""
+        """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows
+
+        Examples
+        --------
+        >>> customers = {"select": {"fields": {"Country": {"type": "dim"}, "Customer": {"type": "dim"},},"table": "Customers",}}
+        >>> engine = "sqlite:///" + get_path("grizly_dev", "tests", "Chinook.sqlite")
+        >>> qf = QFrame(engine=engine).read_dict(data)
+        >>> qf.cut(10)
+
+        Parameters
+        ----------
+        chunksize : int
+            Size of a single chunk
+
+        Returns
+        -------
+        list
+            List of QFrames
+        """
         db = "denodo" if "denodo" in self.engine else "redshift"
         con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
         query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
