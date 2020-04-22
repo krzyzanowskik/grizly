@@ -4,7 +4,7 @@ import openpyxl
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 import logging
-
+from os.path import basename
 # Rename to Extract and remove existing Extract class
 class Extract:
     def __init__(self):
@@ -14,6 +14,7 @@ class Extract:
 
     def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False):
         self.logger.info(f"Downloading data into {csv_path}...")
+        
         if self.tool_name == "QFrame":
             self.sql = self.get_sql()
             if "denodo" in self.engine.lower():
@@ -26,6 +27,7 @@ class Extract:
                 sep=sep,
                 chunksize=chunksize,
             )
+            self.logger.info(f"Successfully wrote to '{basename(csv_path)}'")
             if debug:
                 return row_count
             return self
