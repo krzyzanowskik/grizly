@@ -305,7 +305,7 @@ class S3:
         self.status = "uploaded"
 
         self.logger.info(f"Successfully uploaded '{self.file_name}' to S3")
-        self.logger.debug(f"{file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
+        self.logger.debug(f"{self.file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
@@ -537,17 +537,17 @@ class S3:
             sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
 
         con = sqldb.get_connection()
-        self.logger.info(f"Inserting {self.file_name} into {table_name}...")
+        self.logger.info(f"Inserting '{self.file_name}' into {table_name}...")
         try:
             con.execute(sql)
         except:
-            self.logger.exception(f"Failed to insert {self.file_name} into Redshift [{table_name}]")
+            self.logger.exception(f"Failed to insert '{self.file_name}' into Redshift [{table_name}]")
             self.status = "failed"
         finally:
             con.close()
         self.status = "success"
-        self.logger.info(f"Successfully inserted {self.file_name} into Redshift")
-        self.logger.debug(f"{self.file_name}'s Redshift location: {table_name}")
+        self.logger.info(f"Successfully inserted '{self.file_name}' into Redshift")
+        self.logger.debug(f"'{self.file_name}''s Redshift location: {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
