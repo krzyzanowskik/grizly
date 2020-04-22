@@ -308,7 +308,7 @@ class S3:
 
         if not keep_file:
             os.remove(file_path)
-            self.logger.info(f"'{file_path}' has been removed")
+            self.logger.debug(f"'{file_path}' has been removed")
 
         return self
 
