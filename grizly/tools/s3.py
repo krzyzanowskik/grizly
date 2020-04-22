@@ -305,7 +305,7 @@ class S3:
         self.status = "uploaded"
 
         self.logger.info(f"Successfully uploaded '{self.file_name}' to S3")
-        self.logger.debug(f"{file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
+        self.logger.debug(f"{self.file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
