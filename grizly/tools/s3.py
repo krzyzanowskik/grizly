@@ -442,6 +442,7 @@ class S3:
         column_order: list = None,
         remove_inside_quotes: bool = False,
         time_format: str = None,
+        execute_on_skip: bool = False,
     ):
         """Writes S3 to Redshift table.
 
@@ -469,6 +470,10 @@ class S3:
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
+        
+        if not execute_on_skip:
+            if self.status == "skipped":
+                return None
 
         self.status = "initiated"
 

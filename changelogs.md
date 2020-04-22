@@ -8,7 +8,9 @@
 ### S3:
 - Added parameter `interface`
 - to_rds() - works now with `.parquet` files
-- breaking change: when skipping upload, s3.status is now 'skipped' rather than 'failed'
+- Changed - when skipping upload, `s3.status` is now 'skipped' rather than 'failed'
+- Changed - when skipping upload in `s3.from_file()` due to `time_window`, subsequent `self.to_rds()` is also not executed by default
+- Added `execute_on_skip` parameter to `to_rds()` to allow overriding above behavior
 
 ### QFrame:
 - Added parameter `interface`
