@@ -485,8 +485,6 @@ class S3:
         else:
             self._create_table_like_s3(table_name, sep, types)
 
-        s3_key = self.s3_key + self.file_name
-
         config = ConfigParser()
         config.read(get_path(".aws", "credentials"))
         S3_access_key_id = config["default"]["aws_access_key_id"]
@@ -505,7 +503,7 @@ class S3:
             else:
                 _format = "FORMAT AS csv"
             sql = f"""
-                COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
+                COPY {table_name} {column_order} FROM 's3://{self.bucket}/{self.full_s3_key}'
                 access_key_id '{S3_access_key_id}'
                 secret_access_key '{S3_secret_access_key}'
                 delimiter '{sep}'
@@ -519,7 +517,7 @@ class S3:
             _format = "FORMAT AS PARQUET"
             sql = f"""
                 COPY {table_name}
-                FROM 's3://{self.bucket}/{s3_key}'
+                FROM 's3://{self.bucket}/{self.full_s3_key}'
                 IAM_ROLE '{S3_iam_role}'
                 {_format};
                 ;commit;
@@ -533,16 +531,16 @@ class S3:
             sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
 
         con = sqldb.get_connection()
-        self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
+        self.logger.info(f"Inserting {self.file_name} into {table_name}...")
         try:
             con.execute(sql)
         except:
-            self.logger.exception(f"Failed to upload {self.file_name} to Redshift")
+            self.logger.exception(f"Failed to insert {self.file_name} into Redshift [{table_name}]")
             self.status = "failed"
         finally:
             con.close()
         self.status = "success"
-        self.logger.info(f"{self.file_name} has been successfully uploaded to Redshift [{table_name}]")
+        self.logger.info(f"{self.file_name} has been successfully inserted into Redshift [{table_name}]")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
