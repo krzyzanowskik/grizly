@@ -8,6 +8,7 @@
 ### S3:
 - Added parameter `interface`
 - to_rds() - works now with `.parquet` files
+- breaking change: when skipping upload, s3.status is now 'skipped' rather than 'failed'
 
 ### QFrame:
 - Added parameter `interface`
