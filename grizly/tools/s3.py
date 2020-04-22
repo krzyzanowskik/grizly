@@ -304,7 +304,8 @@ class S3:
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        self.logger.info(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        self.logger.info(f"Successfully uploaded '{self.file_name}' to S3")
+        self.logger.debug(f"{file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
@@ -540,7 +541,8 @@ class S3:
         finally:
             con.close()
         self.status = "success"
-        self.logger.info(f"{self.file_name} has been successfully inserted into Redshift [{table_name}]")
+        self.logger.info(f"Successfully inserted {self.file_name} into Redshift")
+        self.logger.debug(f"{self.file_name}'s Redshift location: {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...

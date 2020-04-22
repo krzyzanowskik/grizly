@@ -3,18 +3,21 @@ import pandas as pd
 import openpyxl
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+import logging
 
 # Rename to Extract and remove existing Extract class
 class Extract:
     def __init__(self):
         self.df = None
         self.path = None
+        self.logger = logging.getLogger(__name__)
 
-    def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False, cursor=None):
+    def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False):
+        self.logger.info(f"Downloading data into {csv_path}...")
         if self.tool_name == "QFrame":
             self.sql = self.get_sql()
             if "denodo" in self.engine.lower():
-                self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
+                self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '400', 'swapblocksize' = '1000', 'maxresultsize' = '100', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
             row_count = to_csv(
                 columns=self.get_fields(aliased=True),
                 csv_path=csv_path,
@@ -22,7 +25,6 @@ class Extract:
                 engine=self.engine,
                 sep=sep,
                 chunksize=chunksize,
-                cursor=cursor,
             )
             if debug:
                 return row_count
