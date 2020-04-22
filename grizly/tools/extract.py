@@ -13,7 +13,7 @@ class Extract:
         self.logger = logging.getLogger(__name__)
 
     def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False):
-        self.logger.info(f"Downloading data into {csv_path}...")
+        self.logger.info(f"Downloading data into '{basename(csv_path)}'...")
         
         if self.tool_name == "QFrame":
             self.sql = self.get_sql()
