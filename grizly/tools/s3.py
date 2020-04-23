@@ -470,7 +470,7 @@ class S3:
         """
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
-        
+
         if not execute_on_skip:
             if self.status == "skipped":
                 return None
@@ -736,7 +736,7 @@ def s3_to_rds(
         table = file_name.replace(".csv", "")
     else:
         table = table_name
-    s3 = S3(file_name=file_name, s3_key=s3_key, bucket=bucket, redshift_str=redshift_str)
+    s3 = S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=os.getcwd(), redshift_str=redshift_str)
     s3.to_rds(
         table=table,
         schema=schema,
