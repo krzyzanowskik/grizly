@@ -734,15 +734,32 @@ class QFrame(Extract):
 
         return self
 
-    def window(self, offset: int = None, limit: int = None):
+    def window(self, offset: int = None, limit: int = None, deterministic: bool = True):
+        """Adds LIMIT and OFFSET parameters to QFrame, creating a chunk.
+
+        Parameters
+        ----------
+        offset : int, optional
+            The row from which to start the data, by default None
+        limit : int, optional
+            Number of rows to select, by default None
+        deterministic : bool, optional
+            Whether the result should be deterministic, by default True
+
+        Returns
+        -------
+        QFrame
+        """
         qf = self.copy()
+        if deterministic:
+            qf.orderby(qf.get_fields())
         if offset:
             qf.offset(offset)
         if limit:
             qf.limit(limit)
         return qf
 
-    def cut(self, chunksize: int):
+    def cut(self, chunksize: int, deterministic: bool = True):
         """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows
 
         Examples
@@ -750,12 +767,14 @@ class QFrame(Extract):
         >>> customers = {"select": {"fields": {"Country": {"type": "dim"}, "Customer": {"type": "dim"},},"table": "Customers",}}
         >>> engine = "sqlite:///" + get_path("grizly_dev", "tests", "Chinook.sqlite")
         >>> qf = QFrame(engine=engine).read_dict(data)
-        >>> qf.cut(10)
+        >>> print(qf.cut(10))
 
         Parameters
         ----------
         chunksize : int
             Size of a single chunk
+        deterministic : bool, optional
+            Whether the result should be deterministic, by default True
 
         Returns
         -------
@@ -770,7 +789,7 @@ class QFrame(Extract):
         self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
         for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
-            qf = self.window(offset=chunk, limit=chunksize)
+            qf = self.window(offset=chunk, limit=chunksize, deterministic=deterministic)
             qfs.append(qf)
         return qfs
 
