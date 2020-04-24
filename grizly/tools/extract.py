@@ -3,18 +3,23 @@ import pandas as pd
 import openpyxl
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+import logging
+from os.path import basename
 
 # Rename to Extract and remove existing Extract class
 class Extract:
     def __init__(self):
         self.df = None
         self.path = None
+        self.logger = logging.getLogger(__name__)
 
     def to_csv(self, csv_path, sep="\t", chunksize=None, debug=False, cursor=None):
+        self.logger.info(f"Downloading data into '{basename(csv_path)}'...")
+
         if self.tool_name == "QFrame":
             self.sql = self.get_sql()
             if "denodo" in self.engine.lower():
-                self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
+                self.sql += " CONTEXT('swap' = 'ON', 'swapsize' = '400', 'swapblocksize' = '1000', 'maxresultsize' = '100', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'off')"
             row_count = to_csv(
                 columns=self.get_fields(aliased=True),
                 csv_path=csv_path,
@@ -24,6 +29,7 @@ class Extract:
                 chunksize=chunksize,
                 cursor=cursor,
             )
+            self.logger.info(f"Successfully wrote to '{basename(csv_path)}'")
             if debug:
                 return row_count
             return self
@@ -59,14 +65,7 @@ class Extract:
             return self.df.shape[0] or 0
 
     def to_excel(
-        self,
-        input_excel_path,
-        output_excel_path,
-        sheet_name="",
-        startrow=0,
-        startcol=0,
-        index=False,
-        header=False,
+        self, input_excel_path, output_excel_path, sheet_name="", startrow=0, startcol=0, index=False, header=False,
     ):
         """Saves data to Excel file.
 
@@ -104,14 +103,7 @@ class Extract:
 
 
 def copy_df_to_excel(
-    df,
-    input_excel_path,
-    output_excel_path,
-    sheet_name="",
-    startrow=0,
-    startcol=0,
-    index=False,
-    header=False,
+    df, input_excel_path, output_excel_path, sheet_name="", startrow=0, startcol=0, index=False, header=False,
 ):
     writer = pd.ExcelWriter(input_excel_path, engine="openpyxl")
     book = openpyxl.load_workbook(input_excel_path)
@@ -120,12 +112,7 @@ def copy_df_to_excel(
     writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
 
     df.to_excel(
-        writer,
-        sheet_name=sheet_name,
-        startrow=startrow,
-        startcol=startcol,
-        index=index,
-        header=header,
+        writer, sheet_name=sheet_name, startrow=startrow, startcol=startcol, index=index, header=header,
     )
 
     writer.path = output_excel_path
@@ -134,14 +121,7 @@ def copy_df_to_excel(
 
 
 def to_csv(
-    columns,
-    csv_path,
-    sql,
-    engine=None,
-    sep="\t",
-    chunksize=None,
-    debug=False,
-    cursor=None,
+    columns, csv_path, sql, engine=None, sep="\t", chunksize=None, debug=False, cursor=None,
 ):
     """
     Writes table to csv file.

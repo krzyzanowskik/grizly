@@ -50,6 +50,7 @@ class S3:
         file_dir: str = None,
         redshift_str: str = None,
         min_time_window: int = 0,
+        interface: str = None,
         logger=None,
     ):
         self.id = next(self._ids)
@@ -65,6 +66,8 @@ class S3:
         os.makedirs(self.file_dir, exist_ok=True)
         self.logger = logger or logging.getLogger(__name__)
         self.status = "initiated"
+        self.interface = interface or "sqlalchemy"
+
         https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
         http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
         if http_proxy is not None:
@@ -72,7 +75,14 @@ class S3:
             os.environ["HTTP_PROXY"] = http_proxy
 
     def __repr__(self):
-        info = f"""file_name: '{self.file_name}' \ns3_key: '{self.s3_key}' \nbucket: '{self.bucket}' \nfile_dir: '{self.file_dir}' \nredshift_str: '{self.redshift_str}'"""
+        info_list = [
+            f"file_name: '{self.file_name}'",
+            f"s3_key: '{self.s3_key}'",
+            f"bucket: '{self.bucket}'",
+            f"file_dir: '{self.file_dir}'",
+            f"redshift_str: '{self.redshift_str}'",
+        ]
+        info = "\n".join(info_list)
         return info
 
     def _check_if_s3_exists(f):
@@ -111,12 +121,12 @@ class S3:
 
         Examples
         --------
-        >>> S3('test.csv', 'bulk/', file_dir=r'C:\\Users').info()
-        file_name:      'test.csv'
-        s3_key:         'bulk/'
-        bucket:         'acoe-s3'
-        file_dir:       'C:\\Users'
-        redshift_str:   'mssql+pyodbc://redshift_acoe'
+        >>> S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/').info()
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
         """
         print(self.__repr__())
 
@@ -182,20 +192,20 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users')
+        >>> s3 = S3('test_grizly.csv', 'test/test/', file_dir=r'/home/analyst/')
         >>> s3
-        file_name: 	    'test.csv'
-        s3_key: 	    'bulk/'
-        bucket: 	    'acoe-s3'
-        file_dir: 	    'C:\\Users'
-        redshift_str: 	'mssql+pyodbc://redshift_acoe'
-        >>> s3 = s3.copy_to('test_old.csv', s3_key='bulk/test/')
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
+        >>> s3 = s3.copy_to('test_old.csv', s3_key='test/')
         >>> s3
-        file_name: 	    'test_old.csv'
-        s3_key: 	    'bulk/test/'
-        bucket: 	    'acoe-s3'
-        file_dir: 	    'C:\\Users'
-        redshift_str: 	'mssql+pyodbc://redshift_acoe'
+        file_name: 'test_old.csv'
+        s3_key: 'test/'
+        bucket: 'acoe-s3'
+        file_dir: '/home/analyst/'
+        redshift_str: 'mssql+pyodbc://redshift_acoe'
 
         Returns
         -------
@@ -259,8 +269,7 @@ class S3:
 
         Examples
         --------
-        >>> file_dir=get_path('acoe_projects', 'analytics_project_starter', '01_workflows')
-        >>> s3 = S3('test_table.csv', s3_key='analytics_project_starter/test/', file_dir=file_dir)
+        >>> s3 = S3('test_grizly.csv', s3_key='test/test/', file_dir='/home/analyst/')
         >>> s3 = s3.from_file()
         """
         if if_exists not in ("fail", "skip", "replace", "archive"):
@@ -289,17 +298,18 @@ class S3:
                 + f"\nSet S3.min_time_window to 0 to force the upload (currently set to: {self.min_time_window})."
             )
             self.logger.warning(msg)
-            self.status = "failed"
+            self.status = "skipped"
             return self
 
         s3_file.upload_file(file_path)
         self.status = "uploaded"
 
-        self.logger.info(f"'{self.file_name}' uploaded to '{self.bucket}' bucket as '{s3_key}'")
+        self.logger.info(f"Successfully uploaded '{self.file_name}' to S3")
+        self.logger.debug(f"{self.file_name}'s S3 location: 's3://{self.bucket}/{s3_key}'")
 
         if not keep_file:
             os.remove(file_path)
-            self.logger.info(f"'{file_path}' has been removed")
+            self.logger.debug(f"Successfully removed '{file_path}'")
 
         return self
 
@@ -320,8 +330,8 @@ class S3:
 
         Examples
         --------
-        >>> s3 = S3('test.csv', 'bulk/', file_dir='C:\\Users').to_file()
-        >>> os.remove('C:\\Users\\test.csv')
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir='/home/analyst/').to_file()
+        >>> os.remove('/home/analyst/test_grizly.csv')
         """
         if if_exists not in ("fail", "skip", "replace"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
@@ -373,12 +383,12 @@ class S3:
         --------
         >>> from pandas import DataFrame
         >>> df = DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-        >>> s3 = S3('test.csv', 'bulk/', file_dir=r'C:\\Users').from_df(df, keep_file=False)
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/').from_df(df, keep_file=True)
         >>> s3
-        file_name: 'test.csv'
-        s3_key: 'bulk/'
+        file_name: 'test_grizly.csv'
+        s3_key: 'test/'
         bucket: 'acoe-s3'
-        file_dir: 'C:\\Users'
+        file_dir: '/home/analyst/'
         redshift_str: 'mssql+pyodbc://redshift_acoe'
 
         Parameters
@@ -432,6 +442,7 @@ class S3:
         column_order: list = None,
         remove_inside_quotes: bool = False,
         time_format: str = None,
+        execute_on_skip: bool = False,
     ):
         """Writes S3 to Redshift table.
 
@@ -460,9 +471,13 @@ class S3:
         if if_exists not in ("fail", "replace", "append"):
             raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
+        if not execute_on_skip:
+            if self.status == "skipped":
+                return None
+
         self.status = "initiated"
 
-        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
+        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str, interface=self.interface)
         table_name = f"{schema}.{table}" if schema else table
 
         if sqldb.check_if_exists(table, schema):
@@ -475,8 +490,6 @@ class S3:
                 pass
         else:
             self._create_table_like_s3(table_name, sep, types)
-
-        s3_key = self.s3_key + self.file_name
 
         config = ConfigParser()
         config.read(get_path(".aws", "credentials"))
@@ -496,7 +509,7 @@ class S3:
             else:
                 _format = "FORMAT AS csv"
             sql = f"""
-                COPY {table_name} {column_order} FROM 's3://{self.bucket}/{s3_key}'
+                COPY {table_name} {column_order} FROM 's3://{self.bucket}/{self.full_s3_key}'
                 access_key_id '{S3_access_key_id}'
                 secret_access_key '{S3_secret_access_key}'
                 delimiter '{sep}'
@@ -510,7 +523,7 @@ class S3:
             _format = "FORMAT AS PARQUET"
             sql = f"""
                 COPY {table_name}
-                FROM 's3://{self.bucket}/{s3_key}'
+                FROM 's3://{self.bucket}/{self.full_s3_key}'
                 IAM_ROLE '{S3_iam_role}'
                 {_format};
                 ;commit;
@@ -524,31 +537,32 @@ class S3:
             sql = sql[:last_line_pos] + time_format_argument + "\n" + spaces[:-1] + sql[last_line_pos:]
 
         con = sqldb.get_connection()
-        self.logger.info("Loading {} data into {} ...".format(s3_key, table_name))
+        self.logger.info(f"Inserting '{self.file_name}' into {table_name}...")
         try:
             con.execute(sql)
         except:
-            self.logger.exception(f"Failed to upload {self.full_s3_key} to Redshift")
+            self.logger.exception(f"Failed to insert '{self.file_name}' into Redshift [{table_name}]")
             self.status = "failed"
         finally:
             con.close()
         self.status = "success"
-        self.logger.info(f"Data has been copied to {table_name}")
+        self.logger.info(f"Successfully inserted '{self.file_name}' into Redshift")
+        self.logger.debug(f"'{self.file_name}''s Redshift location: {table_name}")
 
     def archive(self):
         """Moves S3 to 'archive/' key. It adds also the versions of the file eg. file(0).csv, file(1).csv, ...
 
         Examples
         --------
-        >>> s3 = S3('test_old.csv', 'bulk/test/', file_dir=r'C:\\Users')
+        >>> s3 = S3('test_grizly.csv', 'test/', file_dir=r'/home/analyst/')
         >>> s3_arch = s3.archive()
         >>> s3.exists()
         False
         >>> s3_arch
-        file_name: 'test_old(0).csv'
-        s3_key: 'archive/bulk/test/'
+        file_name: 'test_grizly(0).csv'
+        s3_key: 'archive/test/'
         bucket: 'acoe-s3'
-        file_dir: 'C:\\Users'
+        file_dir: '/home/analyst/'
         redshift_str: 'mssql+pyodbc://redshift_acoe'
         >>> s3_arch.delete()
         """
@@ -638,7 +652,7 @@ class S3:
         column_str = ", ".join(columns)
         sql = "CREATE TABLE {} ({})".format(table_name, column_str)
 
-        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str)
+        sqldb = SQLDB(db="redshift", engine_str=self.redshift_str, interface=self.interface)
         con = sqldb.get_connection()
         con.execute(sql).commit()
         con.close()
@@ -722,7 +736,7 @@ def s3_to_rds(
         table = file_name.replace(".csv", "")
     else:
         table = table_name
-    s3 = S3(file_name=file_name, s3_key=s3_key, bucket=bucket, redshift_str=redshift_str)
+    s3 = S3(file_name=file_name, s3_key=s3_key, bucket=bucket, file_dir=os.getcwd(), redshift_str=redshift_str)
     s3.to_rds(
         table=table,
         schema=schema,

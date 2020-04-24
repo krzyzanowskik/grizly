@@ -70,15 +70,16 @@ class SQLDB:
 
             try:
                 con = turbodbc.connect(dsn=self.dsn)
-            except turbodbc.exceptions.Error:
+            except turbodbc.exceptions.Error as error_msg:
                 self.logger.exception(error_msg)
                 raise
         elif self.interface == "pyodbc":
             try:
                 con = pyodbc.connect(DSN=self.dsn)
-            except pyodbc.exceptions.Error:
-                self.logger.exception(error_msg)
-                raise
+            except pyodbc.InterfaceError:
+                e = f"Data source name '{self.dsn}' not found"
+                self.logger.exception(e)
+                raise OSError(e)
         else:
             raise ValueError("Interface not specified.")
         return con
