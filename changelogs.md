@@ -17,8 +17,8 @@
 - to_parquet() - fixed bugs
 - copy() - logger is now copied as well
 #### new methods
-- to_arrow()
-- offset()
-- cut()
-- window()
+- to_arrow() - writes QFrame records to pyarrow table
+- offset() - adds OFFSET statement
+- cut() - divides a QFrame into multiple smaller QFrames, each containing chunksize rows
+- window() - sorts records and adds LIMIT and OFFSET parameters to QFrame, creating a chunk
 

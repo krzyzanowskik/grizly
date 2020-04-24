@@ -207,7 +207,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> print(qf)
         SELECT CustomerId,
                Sales
@@ -217,7 +218,7 @@ class QFrame(Extract):
         -------
         QFrame
         """
-        self.data = self.validate_data(data)
+        self.data = self.validate_data(deepcopy(data))
         return self
 
     def select(self, fields):
@@ -228,7 +229,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim', 'as': 'Id'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim', 'as': 'Id'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> print(qf)
         SELECT CustomerId AS Id,
                Sales
@@ -297,7 +299,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.rename({'Sales': 'Billings'})
         >>> print(qf)
         SELECT CustomerId,
@@ -323,7 +326,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.remove(['Sales'])
         >>> print(qf)
         SELECT CustomerId
@@ -346,7 +350,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.distinct()
         >>> print(qf)
         SELECT DISTINCT CustomerId,
@@ -375,7 +380,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.query("Sales != 0")
         >>> print(qf)
         SELECT CustomerId,
@@ -415,7 +421,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.groupby(['CustomerId'])['Sales'].agg('sum')
         >>> qf = qf.having("sum(sales)>100")
         >>> print(qf)
@@ -469,7 +476,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.assign(Sales_Div="Sales/100", type='num')
         >>> print(qf)
         SELECT CustomerId,
@@ -477,7 +485,7 @@ class QFrame(Extract):
                Sales/100 AS Sales_Div
         FROM schema.table
 
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.assign(Sales_Positive="CASE WHEN Sales>0 THEN 1 ELSE 0 END")
         >>> print(qf)
         SELECT CustomerId,
@@ -535,7 +543,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.groupby(['CustomerId'])['Sales'].agg('sum')
         >>> print(qf)
         SELECT CustomerId,
@@ -735,7 +744,7 @@ class QFrame(Extract):
         return self
 
     def window(self, offset: int = None, limit: int = None, deterministic: bool = True):
-        """Adds LIMIT and OFFSET parameters to QFrame, creating a chunk.
+        """Sorts records and adds LIMIT and OFFSET parameters to QFrame, creating a chunk.
 
         Parameters
         ----------
@@ -745,6 +754,20 @@ class QFrame(Extract):
             Number of rows to select, by default None
         deterministic : bool, optional
             Whether the result should be deterministic, by default True
+
+        Examples
+        --------
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
+        >>> qf = qf.window(5, 10)
+        >>> print(qf)
+        SELECT CustomerId,
+               Sales
+        FROM schema.table
+        ORDER BY CustomerId,
+                 Sales
+        OFFSET 5
+        LIMIT 10
 
         Returns
         -------
@@ -760,14 +783,16 @@ class QFrame(Extract):
         return qf
 
     def cut(self, chunksize: int, deterministic: bool = True):
-        """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows
+        """Divides a QFrame into multiple smaller QFrames, each containing chunksize rows.
 
         Examples
         --------
-        >>> customers = {"select": {"fields": {"Country": {"type": "dim"}, "Customer": {"type": "dim"},},"table": "Customers",}}
+        >>> playlists = {"select": {"fields": {"PlaylistId": {"type": "dim"}, "Name": {"type": "dim"}}, "table": "Playlist",}}
         >>> engine = "sqlite:///" + get_path("grizly_dev", "tests", "Chinook.sqlite")
-        >>> qf = QFrame(engine=engine).read_dict(data)
-        >>> print(qf.cut(10))
+        >>> qf = QFrame(engine=engine).read_dict(playlists)
+        >>> qframes = qf.cut(5)
+        >>> len(qframes)
+        4
 
         Parameters
         ----------
@@ -784,7 +809,10 @@ class QFrame(Extract):
         db = "denodo" if "denodo" in self.engine else "redshift"
         con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
         query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
-        no_rows = con.execute(query).fetchval()
+        try:
+            no_rows = con.execute(query).fetchval()
+        except:
+            no_rows = con.execute(query).fetchone()[0]
         con.close()
         self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
@@ -803,7 +831,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf = qf.rearrange(['Sales', 'CustomerId'])
         >>> print(qf)
         SELECT Sales,
@@ -842,7 +871,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf.get_fields()
         ['CustomerId', 'Sales']
 
@@ -866,7 +896,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> qf.get_dtypes()
         ['VARCHAR(500)', 'FLOAT(53)']
 
@@ -884,7 +915,8 @@ class QFrame(Extract):
 
         Examples
         --------
-        >>> qf = QFrame().read_dict(data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}})
+        >>> data = {'select': {'fields': {'CustomerId': {'type': 'dim'}, 'Sales': {'type': 'num'}}, 'schema': 'schema', 'table': 'table'}}
+        >>> qf = QFrame().read_dict(data)
         >>> print(qf.get_sql())
         SELECT CustomerId,
                Sales
