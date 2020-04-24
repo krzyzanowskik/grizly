@@ -266,10 +266,10 @@ class QFrame(Extract):
 
         for field in fields:
             if field not in sq_fields:
-                logger.debug(f"Field {field} not found")
+                self.logger.debug(f"Field {field} not found")
 
             elif "select" in sq_fields[field] and sq_fields[field]["select"] == 0:
-                logger.debug(f"Field {field} is not selected in subquery.")
+                self.logger.debug(f"Field {field} is not selected in subquery.")
 
             else:
                 if "as" in sq_fields[field] and sq_fields[field]["as"] != "":
@@ -609,7 +609,7 @@ class QFrame(Extract):
                 if field in self.data["select"]["fields"]:
                     self.data["select"]["fields"][field]["group_by"] = aggtype
                 else:
-                    logger.debug("Field not found.")
+                    self.logger.debug("Field not found.")
 
         return self
 
@@ -685,7 +685,7 @@ class QFrame(Extract):
                 order = "ASC" if ascending[iterator] else "DESC"
                 self.data["select"]["fields"][field]["order_by"] = order
             else:
-                logger.debug(f"Field {field} not found.")
+                self.logger.debug(f"Field {field} not found.")
 
             iterator += 1
 
