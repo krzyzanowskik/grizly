@@ -881,9 +881,8 @@ class QFrame(Extract):
         list
             List of field names
         """
-
         if aliased:
-            self.get_sql(0)
+            self.create_sql_blocks()
             fields = self.data["select"]["sql_blocks"]["select_aliases"]
         else:
             fields = list(self.data["select"]["fields"].keys()) if self.data else []
@@ -906,7 +905,7 @@ class QFrame(Extract):
         list
             List of field data dtypes
         """
-        self.get_sql(0)
+        self.create_sql_blocks()
         dtypes = self.data["select"]["sql_blocks"]["types"]
         return dtypes
 
