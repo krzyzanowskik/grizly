@@ -21,7 +21,6 @@ openpyxl>=2.6.2
 pandas>=0.25.1
 pendulum>=2.0.5
 pyarrow
-pyodbc
 pytz>=2019.1
 pyzmq>=18.0.0
 simple-salesforce>=0.74.2

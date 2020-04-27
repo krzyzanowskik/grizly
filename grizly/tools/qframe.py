@@ -883,7 +883,6 @@ class QFrame(Extract):
         list
             List of field names
         """
-
         if aliased:
             self.create_sql_blocks()
             fields = self.data["select"]["sql_blocks"]["select_aliases"]
