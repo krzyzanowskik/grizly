@@ -548,7 +548,7 @@ def pyarrow_to_rds_type(dtype):
         "float32": "FLOAT4",
         "float64": "FLOAT8",
         "double": "FLOAT8",
-        "null": "FLOAT8",
+        "null": "VARCHAR(500)",
         "date": "DATE",
         "string": "VARCHAR(500)",
         "timestamp.*\s*": "TIMESTAMP",
