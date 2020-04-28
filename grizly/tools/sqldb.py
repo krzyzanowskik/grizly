@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
-import pyodbc
 from pandas import read_sql_query
 import os
 import sqlparse
@@ -74,6 +73,8 @@ class SQLDB:
                 self.logger.exception(error_msg)
                 raise
         elif self.interface == "pyodbc":
+            import pyodbc
+
             try:
                 con = pyodbc.connect(DSN=self.dsn)
             except pyodbc.InterfaceError:
@@ -547,7 +548,7 @@ def pyarrow_to_rds_type(dtype):
         "float32": "FLOAT4",
         "float64": "FLOAT8",
         "double": "FLOAT8",
-        "null": "FLOAT8",
+        "null": "VARCHAR(500)",
         "date": "DATE",
         "string": "VARCHAR(500)",
         "timestamp.*\s*": "TIMESTAMP",
