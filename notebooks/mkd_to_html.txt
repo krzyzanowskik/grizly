@@ -1,0 +1,24 @@
+# h1
+## h2
+### h3
+
+
+::block
+component: card
+title: a simple title
+subtitle: a simple subtitle
+::endblock
+
+# some header with h1
+## h2
+### h3
+
+::block
+title:
+subtitle:
+::endblock
+
+etc we do not know exactly what the meaning of life should be but we do know that etc. etc. etc. what ever else
+
+well what else
+etc
