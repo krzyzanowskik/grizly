@@ -51,7 +51,7 @@ class SFDC:
         self.proxies = (
             proxies
             or Config().get_service(config_key=config_key, service="proxies")
-            or {"http": os.getenv("HTTP_PROXY"), "https": os.getenv("HTTPS_PROXY"),}
+            or {"http": os.getenv("HTTP_PROXY"), "https": os.getenv("HTTPS_PROXY")}
         )
         self.username = username or config.get("username")
         self.password = password or config.get("password")

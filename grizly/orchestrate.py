@@ -251,8 +251,11 @@ class Listener:
         with open(LISTENER_STORE, "w") as f_write:
             json.dump(listener_store, f_write, indent=4)
 
-    @retry_task(TypeError, tries=3, delay=10)
+    @retry_task(TypeError, tries=3, delay=5)
     def get_table_refresh_date(self):
+
+        table_refresh_date = None
+
         if self.query:
             sql = self.query
         else:
@@ -264,15 +267,13 @@ class Listener:
 
         try:
             table_refresh_date = cursor.fetchone()[0]
+            # try casting to date
+            table_refresh_date = cast_to_date(table_refresh_date)
         except TypeError:
-            self.logger.exception(f"{self.name}'s trigger field is empty")
-            raise
-
-        cursor.close()
-        con.close()
-
-        # try casting to date
-        table_refresh_date = cast_to_date(table_refresh_date)
+            self.logger.warning(f"{self.name}'s trigger field is empty")
+        finally:
+            cursor.close()
+            con.close()
 
         return table_refresh_date
 
@@ -362,7 +363,7 @@ class EmailListener(Listener):
         db=None,
         trigger=None,
         trigger_type="default",
-        delay=300,
+        delay=0,
         notification_title=None,
         email_folder=None,
         search_email_address=None,
@@ -761,7 +762,7 @@ class Runner:
         if workflow.is_scheduled:
 
             self.logger.info(
-                f"Determining whether scheduled workflow {workflow.name} shuld run... (next scheduled run: {workflow.next_run})"
+                f"Determining whether scheduled workflow {workflow.name} should run... (next scheduled run: {workflow.next_run})"
             )
 
             now = datetime.now(timezone.utc)
