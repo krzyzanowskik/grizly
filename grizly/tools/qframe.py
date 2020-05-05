@@ -810,7 +810,7 @@ class QFrame(Extract):
         """
         db = "denodo" if "denodo" in self.engine else "redshift"
         con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
-        query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
+        query = f"SELECT COUNT(*) FROM ({self.get_sql()}) sq"
         try:
             no_rows = con.execute(query).fetchval()
         except:
