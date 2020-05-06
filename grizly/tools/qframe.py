@@ -810,7 +810,7 @@ class QFrame(Extract):
         """
         db = "denodo" if "denodo" in self.engine else "redshift"
         con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
-        query = f"SELECT COUNT(*) FROM ({self.get_sql()})"
+        query = f"SELECT COUNT(*) FROM ({self.get_sql()}) sq"
         try:
             no_rows = con.execute(query).fetchval()
         except:
@@ -818,7 +818,7 @@ class QFrame(Extract):
         con.close()
         self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
-        for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
+        for chunk in range(0, no_rows, chunksize):  # may need to use no_rows+1
             qf = self.window(offset=chunk, limit=chunksize, deterministic=deterministic)
             qfs.append(qf)
         return qfs
@@ -1082,6 +1082,8 @@ class QFrame(Extract):
             Data generated from sql.
         """
         sql = self.get_sql()
+        if "denodo" in self.engine.lower():
+           sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'on')"
         # sqldb = SQLDB(db=db, engine_str=self.engine, interface=self.interface, logger=self.logger)
         # con = sqldb.get_connection()
         # offset = 0
@@ -1278,11 +1280,12 @@ class QFrame(Extract):
         QFrame
         """
         data = deepcopy(self.data)
-        engine = deepcopy(self.engine)
-        sql = deepcopy(self.sql)
+        engine = self.engine
+        sql = self.sql
         getfields = deepcopy(self.getfields)
         logger = self.logger
-        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields, logger=self.logger)
+        interface = self.interface
+        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields, logger=logger, interface=interface)
 
     def __str__(self):
         sql = self.get_sql()

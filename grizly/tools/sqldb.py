@@ -188,7 +188,7 @@ class SQLDB:
 
             columns_str = ", ".join(col_tuples)
             sql = "CREATE TABLE {} ({})".format(table_name, columns_str)
-            SQLDB.last_commit = sqlparse.format(sql, reindent=True, keyword_case="upper")
+            SQLDB.last_commit = sql
             con = self.get_connection()
             con.execute(sql).commit()
             con.close()
@@ -455,6 +455,8 @@ class SQLDB:
                     break
                 col_name = column[1]
                 col_type = column[2]
+                if col_type.upper() == "VARCHAR":
+                    col_type =  f"{col_type}({column[3]})"
                 col_names.append(col_name)
                 col_types.append(col_type)
             # leave only the cols provided in the columns argument
@@ -548,7 +550,7 @@ def pyarrow_to_rds_type(dtype):
         "float32": "FLOAT4",
         "float64": "FLOAT8",
         "double": "FLOAT8",
-        "null": "FLOAT8",
+        "null": "VARCHAR(500)",
         "date": "DATE",
         "string": "VARCHAR(500)",
         "timestamp.*\s*": "TIMESTAMP",
