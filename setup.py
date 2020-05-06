@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-with open("requirements.txt", "r") as f:
-    requires = [line.strip() for line in f]
+# with open("requirements.txt", "r") as f:
+#     requires = [line.strip() for line in f]
 
 setuptools.setup(
     name="grizly",
@@ -21,5 +21,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=requires,
+    # install_requires=requires,
 )
