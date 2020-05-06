@@ -48,7 +48,7 @@ class SQLDB:
 
     def get_connection(self):
         """Returns sqlalchemy connection.
-        
+
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
@@ -279,7 +279,7 @@ class SQLDB:
 
     def write_to(self, table, columns, sql, schema=None, if_exists="fail"):
         """Performs DELETE FROM (if table exists) and INSERT INTO queries in Redshift directly.
-        
+
         Parameters
         ----------
         if_exists : {'fail', 'replace', 'append'}, optional
@@ -331,7 +331,7 @@ class SQLDB:
             List of column names to retrive.
         date_format: str
             Denodo date format differs from those from other databases. User can choose which format is desired.
-        
+
         Examples
         --------
         >>> sqldb = SQLDB(db="redshift")
@@ -434,10 +434,12 @@ class SQLDB:
         cursor = con.cursor()
         where = f"table_name = '{table}' AND table_schema = '{schema}' " if schema else f"table_name = '{table}' "
         sql = f"""
-            SELECT ordinal_position AS position, column_name, data_type,
-            CASE WHEN character_maximum_length IS NOT NULL
-            THEN character_maximum_length
-            ELSE numeric_precision END AS max_length
+            SELECT ordinal_position,
+                   column_name,
+                   data_type,
+                   character_maximum_length,
+                   numeric_precision,
+                   numeric_scale
             FROM information_schema.columns
             WHERE {where}
             ORDER BY ordinal_position;
@@ -455,8 +457,10 @@ class SQLDB:
                     break
                 col_name = column[1]
                 col_type = column[2]
-                if col_type.upper() == "VARCHAR":
-                    col_type =  f"{col_type}({column[3]})"
+                if column[3] is not None:
+                    col_type = f"{col_type}({column[3]})"
+                elif col_type.upper() in ["DECIMAL", "NUMERIC"]:
+                    col_type = f"{col_type}({column[4]}, {column[5]})"
                 col_names.append(col_name)
                 col_types.append(col_type)
             # leave only the cols provided in the columns argument
