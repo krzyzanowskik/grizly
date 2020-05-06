@@ -818,7 +818,7 @@ class QFrame(Extract):
         con.close()
         self.logger.debug(f"Retrieving {no_rows} rows...")
         qfs = []
-        for chunk in range(1, no_rows, chunksize):  # may need to use no_rows+1
+        for chunk in range(0, no_rows, chunksize):  # may need to use no_rows+1
             qf = self.window(offset=chunk, limit=chunksize, deterministic=deterministic)
             qfs.append(qf)
         return qfs
@@ -1278,11 +1278,12 @@ class QFrame(Extract):
         QFrame
         """
         data = deepcopy(self.data)
-        engine = deepcopy(self.engine)
-        sql = deepcopy(self.sql)
+        engine = self.engine
+        sql = self.sql
         getfields = deepcopy(self.getfields)
         logger = self.logger
-        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields, logger=self.logger)
+        interface = self.interface
+        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields, logger=logger, interface=interface)
 
     def __str__(self):
         sql = self.get_sql()
