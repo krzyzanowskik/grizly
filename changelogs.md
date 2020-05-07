@@ -8,3 +8,28 @@
 
 ## SQLDB
 - `get_columns()` - added `varchar` precision while retriving the types from redshift
+
+## Page
+- `to_html()` 
+- `write_out()`
+
+## Layout
+- `to_html()`
+
+## FinanceLayout
+- `to_html()`
+
+## GridLayout
+- `to_html()`
+
+## GridCardItem
+- `to_html()`
+
+## Text
+- `to_html()`
+
+## Row
+- `to_html()`
+
+## Column
+- `to_html()`
