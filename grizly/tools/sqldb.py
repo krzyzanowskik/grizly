@@ -336,7 +336,7 @@ class SQLDB:
         --------
         >>> sqldb = SQLDB(db="redshift")
         >>> sqldb.get_columns(table="table_tutorial", schema="administration", column_types=True)
-        (['col1', 'col2', 'col3', 'col4'], ['character varying', 'double precision', 'character varying', 'double precision'])
+        (['col1', 'col2', 'col3', 'col4'], ['character varying(500)', 'double precision', 'character varying(500)', 'double precision'])
         """
         if self.db == "denodo":
             return self._get_denodo_columns(
