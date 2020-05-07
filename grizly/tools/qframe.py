@@ -1082,6 +1082,8 @@ class QFrame(Extract):
             Data generated from sql.
         """
         sql = self.get_sql()
+        if "denodo" in self.engine.lower():
+           sql += " CONTEXT('swap' = 'ON', 'swapsize' = '500', 'i18n' = 'us_est', 'queryTimeout' = '9000000000', 'simplify' = 'on')"
         # sqldb = SQLDB(db=db, engine_str=self.engine, interface=self.interface, logger=self.logger)
         # con = sqldb.get_connection()
         # offset = 0

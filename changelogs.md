@@ -9,3 +9,29 @@
 
 ## SQLDB
 - `get_columns()` - added char and numeric precision while retriving types from redshift
+
+## Page
+- `to_html()` 
+- `write_out()`
+
+## Layout
+- `to_html()`
+
+## FinanceLayout
+- `to_html()`
+
+## GridLayout
+- `to_html()`
+
+## GridCardItem
+- `to_html()`
+
+## Text
+- `to_html()`
+
+## Row
+- `to_html()`
+
+## Column
+- `to_html()`
+
