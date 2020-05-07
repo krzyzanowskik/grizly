@@ -5,7 +5,7 @@
 - For more info about these changes check `README.md`
 
 ### QFrame
-- `cut()` - fixed bug with omitting first row #408
+- `cut()` - fixed bug with omitting first row [#408](https://github.com/kfk/grizly/issues/408)
 - `copy()` - interface is now copied as well
 - `to_csv()` - interface parameter is now used if specified
 - Added possibility to check what is row count of generated SQL by doing `len(qf)`
