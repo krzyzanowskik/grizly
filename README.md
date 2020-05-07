@@ -8,14 +8,21 @@ https://grizly-docs.readthedocs.io/en/0.3/index.html
 
 
 ## Installation
+### - Installation with setuptools
+```
+> git clone https://github.com/kfk/grizly.git
+> cd grizly
+> pip install -r requirements.txt
+> pip install grizly
+```
 
-You can install grizly by cloning this repository
-
-```git clone https://github.com/kfk/grizly.git```
-
-```cd grizly```
-
-```python setup.py install```
+### - Installation with setuptools
+```
+> git clone https://github.com/kfk/grizly.git
+> cd grizly
+> pip install -r requirements.txt
+> python setup.py install
+```
 
 ## How to contribute?
 
