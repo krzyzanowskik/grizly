@@ -8,7 +8,8 @@ https://grizly-docs.readthedocs.io/en/0.3/index.html
 
 
 ## Installation
-### - Installation with setuptools
+There are two ways to install grizly
+### Installation with pip
 ```
 > git clone https://github.com/kfk/grizly.git
 > cd grizly
@@ -16,7 +17,7 @@ https://grizly-docs.readthedocs.io/en/0.3/index.html
 > pip install grizly
 ```
 
-### - Installation with setuptools
+### Installation with setuptools
 ```
 > git clone https://github.com/kfk/grizly.git
 > cd grizly
