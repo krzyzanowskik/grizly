@@ -13,6 +13,7 @@ deprecation
 exchangelib>=2.0.1
 fpdf
 graphviz>=0.12
+html5print==0.1.2
 ipython>=7.6.1
 ipywidgets>=7.5.0
 jupyter_sphinx
@@ -29,3 +30,5 @@ sphinx_rtd_theme
 sqlparse>=0.3.0
 xlrd>=1.2.0
 xlwt>=1.3.0
+yattag==1.13.2
+
