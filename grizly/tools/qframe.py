@@ -776,11 +776,11 @@ class QFrame(Extract):
         QFrame
         """
         qf = self.copy()
-        if deterministic:
+        if deterministic is not None:
             qf.orderby(qf.get_fields())
-        if offset:
+        if offset is not None:
             qf.offset(offset)
-        if limit:
+        if limit is not None:
             qf.limit(limit)
         return qf
 
@@ -1290,6 +1290,16 @@ class QFrame(Extract):
     def __str__(self):
         sql = self.get_sql()
         return sql
+
+    def __len__(self):
+        db = "denodo" if "denodo" in self.engine else "redshift"
+        con = SQLDB(db=db, engine_str=self.engine, interface=self.interface).get_connection()
+        query = f"SELECT COUNT(*) FROM ({self.get_sql()}) sq"
+        try:
+            no_rows = con.execute(query).fetchval()
+        except:
+            no_rows = con.execute(query).fetchone()[0]
+        return no_rows
 
     def __getitem__(self, getfields):
         if isinstance(getfields, str):

@@ -5,9 +5,10 @@
 - `cut()` - fixed bug with omitting first row #408
 - `copy()` - interface is now copied as well
 - `to_csv()` - interface parameter is now used if specified
+- Added possibility to check what is row count of generated SQL by doing `len(qf)`
 
 ## SQLDB
-- `get_columns()` - added `varchar` precision while retriving the types from redshift
+- `get_columns()` - added char and numeric precision while retriving types from redshift
 
 ## Page
 - `to_html()` 
@@ -33,3 +34,4 @@
 
 ## Column
 - `to_html()`
+
